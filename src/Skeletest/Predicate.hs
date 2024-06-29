@@ -1,0 +1,2 @@
+module Skeletest.Predicate (
+) where

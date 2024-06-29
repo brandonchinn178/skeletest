@@ -1,0 +1,47 @@
+cabal-version: 3.0
+
+name: skeletest
+version: 0.1.0
+build-type: Simple
+
+library
+  hs-source-dirs: src
+  exposed-modules:
+    Skeletest
+    Skeletest.Internal.Constants
+    Skeletest.Internal.Error
+    Skeletest.Internal.Plugin
+    Skeletest.Internal.Preprocessor
+    Skeletest.Predicate
+    Skeletest.Prop.Gen
+    Skeletest.Prop.Internal
+    Skeletest.Prop.Range
+  build-depends:
+      base
+    , directory
+    , filepath
+    , ghc
+    , text
+    , transformers
+  default-language: GHC2021
+
+executable skeletest
+  main-is: src/Main.hs
+  build-depends:
+      base
+    , skeletest
+    , text
+  default-language: GHC2021
+
+test-suite skeletest-tests
+  type: exitcode-stdio-1.0
+  ghc-options: -F -pgmF=skeletest
+  build-tool-depends: skeletest:skeletest
+  hs-source-dirs: test
+  main-is: Main.hs
+  other-modules:
+    ExampleTest
+  build-depends:
+      base
+    , skeletest
+  default-language: GHC2021

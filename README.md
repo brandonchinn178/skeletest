@@ -49,11 +49,11 @@ spec = do
   describe "ioFunc" $ do
     it "returns the correct string" $ do
       DbConnFixture conn <- getFixture
-      ioFunc conn 1 `shouldSatisfy` P.returns "hello world"
+      ioFunc conn 1 `shouldSatisfy` P.returns (P.eq "hello world")
 
     it "errors on bad input" $ do
       DbConnFixture conn <- getFixture
-      ioFunc conn (-1) `shouldSatisfy` P.throws MyException
+      ioFunc conn (-1) `shouldSatisfy` P.throws (P.eq MyException)
 
     it "returns the expected result" $ do
       DbConnFixture conn <- getFixture

@@ -7,7 +7,7 @@ module Skeletest.Internal.Plugin (
 import Data.Function ((&))
 
 import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
-import Skeletest.Internal.Error (skeletestError)
+import Skeletest.Internal.Error (skeletestPluginError)
 import Skeletest.Internal.GHC
 
 -- | The plugin to convert a module in the tests directory.
@@ -60,7 +60,7 @@ transformTestModule modl
         & addModuleExport (ModuleExportVar "spec")
   -- if spec is defined but not exported, error
   | not isSpecExported =
-      skeletestError . unlines $
+      skeletestPluginError . unlines $
         [ "`spec` is defined as a top-level value but not exported."
         , "If this is a test file, export it. Otherwise, rename it."
         ]

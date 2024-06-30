@@ -13,7 +13,7 @@ import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (makeRelative, splitExtensions, takeDirectory, (</>))
 
 import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
-import Skeletest.Internal.Error (skeletestError)
+import Skeletest.Internal.Error (skeletestPluginError)
 
 -- | Preprocess the given Haskell file. See Main.hs
 processFile :: FilePath -> Text -> IO Text
@@ -100,7 +100,7 @@ insertImports :: [Text] -> Text -> Text
 insertImports moduleNames file =
   let (pre, post) = break isSkeletestImport $ Text.lines file
    in if null post
-        then skeletestError "Could not find Skeletest.Main import in Main module"
+        then skeletestPluginError "Could not find Skeletest.Main import in Main module"
         else Text.unlines $ pre <> importTests <> post
   where
     isSkeletestImport line =

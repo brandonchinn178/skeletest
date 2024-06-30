@@ -8,10 +8,13 @@ library
   hs-source-dirs: src
   exposed-modules:
     Skeletest
+    Skeletest.Assertions
     Skeletest.Internal.Constants
     Skeletest.Internal.Error
+    Skeletest.Internal.Fixtures
     Skeletest.Internal.GHC
     Skeletest.Internal.Plugin
+    Skeletest.Internal.Predicate
     Skeletest.Internal.Preprocessor
     Skeletest.Internal.Spec
     Skeletest.Main
@@ -24,6 +27,7 @@ library
     , directory
     , filepath
     , ghc
+    , ordered-containers
     , text
     , transformers
   default-language: GHC2021

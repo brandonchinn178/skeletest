@@ -26,7 +26,7 @@ spec = do
       myFunc 1 2 `shouldSatisfy` P.any (P.eq "a")
 
     it "returns a list matching the given predicates" $
-      myFunc 1 2 `shouldMatch` [P.eq "a", P.anything, P.anything]
+      myFunc 1 2 `shouldSatisfy` P.list [P.eq "a", P.anything, P.anything]
 
     prop "myFunc 0 x == []" $ do
       x <- gen $ Gen.int $ Range.between (0, 100)

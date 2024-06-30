@@ -10,8 +10,11 @@ library
     Skeletest
     Skeletest.Internal.Constants
     Skeletest.Internal.Error
+    Skeletest.Internal.GHC
     Skeletest.Internal.Plugin
     Skeletest.Internal.Preprocessor
+    Skeletest.Internal.Spec
+    Skeletest.Main
     Skeletest.Predicate
     Skeletest.Prop.Gen
     Skeletest.Prop.Internal
@@ -24,6 +27,7 @@ library
     , text
     , transformers
   default-language: GHC2021
+  ghc-options: -Wall -Wcompat
 
 executable skeletest
   main-is: src/Main.hs
@@ -32,6 +36,7 @@ executable skeletest
     , skeletest
     , text
   default-language: GHC2021
+  ghc-options: -Wall -Wcompat
 
 test-suite skeletest-tests
   type: exitcode-stdio-1.0
@@ -45,3 +50,4 @@ test-suite skeletest-tests
       base
     , skeletest
   default-language: GHC2021
+  ghc-options: -Wall -Wcompat

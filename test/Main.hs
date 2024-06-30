@@ -1,1 +1,1 @@
-import Skeletest
+import Skeletest.Main

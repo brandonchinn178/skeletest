@@ -6,6 +6,7 @@ Features:
 * Seamless experience writing unit tests, property tests, and snapshot tests
 * Descriptive failure messages
 * Automatic fixtures management
+* Rich plugin + hooks functionality
 
 ## Example
 

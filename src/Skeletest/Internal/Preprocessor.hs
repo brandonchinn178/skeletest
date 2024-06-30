@@ -83,29 +83,32 @@ addSpecsList :: [Text] -> Text -> Text
 addSpecsList moduleNames file =
   Text.unlines
     [ file
-    , mainFileSpecsListIdentifier <> " = " <> Text.pack (show specsList)
+    , mainFileSpecsListIdentifier <> " :: [Spec]"
+    , mainFileSpecsListIdentifier <> " = " <> renderList specsList
     ]
   where
     specsList =
       [ name <> ".spec"
       | name <- moduleNames
       ]
+    renderList xs = "[" <> Text.intercalate ", " xs <> "]"
 
+-- | Add imports after the Skeletest.Main import, which should always be present in the Main module.
+--
+-- TODO: handle user using explicit multiline import list in Skeletest.Main import
 insertImports :: [Text] -> Text -> Text
 insertImports moduleNames file =
   let (pre, post) = break isSkeletestImport $ Text.lines file
    in if null post
-        then
-          -- The Main file should always contain a Skeletest import
-          skeletestError "Could not find Skeletest import in Main module"
-        else Text.unlines $ pre <> importLines <> post
+        then skeletestError "Could not find Skeletest.Main import in Main module"
+        else Text.unlines $ pre <> importTests <> post
   where
     isSkeletestImport line =
       case Text.words line of
-        "import" : "Skeletest" : _ -> True
+        "import" : "Skeletest.Main" : _ -> True
         _ -> False
 
-    importLines =
+    importTests =
       [ "import qualified " <> name
       | name <- moduleNames
       ]

@@ -30,6 +30,7 @@ library
     , ordered-containers
     , text
     , transformers
+    , unliftio
   default-language: GHC2021
   ghc-options: -Wall -Wcompat
 

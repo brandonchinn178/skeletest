@@ -83,15 +83,16 @@ addSpecsList :: [Text] -> Text -> Text
 addSpecsList moduleNames file =
   Text.unlines
     [ file
-    , mainFileSpecsListIdentifier <> " :: [Spec]"
+    , mainFileSpecsListIdentifier <> " :: [(String, Spec)]"
     , mainFileSpecsListIdentifier <> " = " <> renderList specsList
     ]
   where
     specsList =
-      [ name <> ".spec"
+      [ (Text.pack (show name), name <> ".spec")
       | name <- moduleNames
       ]
-    renderList xs = "[" <> Text.intercalate ", " xs <> "]"
+    renderList xs = "[" <> (Text.intercalate ", " . map renderPair) xs <> "]"
+    renderPair (a, b) = "(" <> a <> ", " <> b <> ")"
 
 -- | Add imports after the Skeletest.Main import, which should always be present in the Main module.
 --

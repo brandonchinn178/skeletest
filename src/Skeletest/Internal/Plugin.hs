@@ -24,8 +24,6 @@ plugin =
       }
 
 -- | Add 'main' function.
--- TODO: find plugins list
--- TODO: add `main = runSkeletest SkeletestOptions{plugins} tests`
 transformMainModule :: ParsedModule -> ParsedModule
 transformMainModule modl = addModuleFun mainFun modl
   where
@@ -54,7 +52,6 @@ transformMainModule modl = addModuleFun mainFun modl
 
 -- | If a module does not export a 'spec' identifier (e.g. if the module
 -- only contains test utilities), add an empty spec.
--- TODO: add `spec :: Spec = pure ()`
 transformTestModule :: ParsedModule -> ParsedModule
 transformTestModule modl
   -- if spec is not defined, generate one

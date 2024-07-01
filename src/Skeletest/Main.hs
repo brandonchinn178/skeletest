@@ -9,6 +9,9 @@ module Skeletest.Main (
   -- * Plugins
   Plugin,
 
+  -- * Snapshots
+  SnapshotRenderer (..),
+
   -- * Re-exports
   Spec,
 ) where
@@ -16,6 +19,7 @@ module Skeletest.Main (
 import Data.Maybe (fromMaybe)
 import Data.Text qualified as Text
 
+import Skeletest.Internal.Snapshot (SnapshotRenderer (..))
 import Skeletest.Internal.Spec (Spec, SpecTree (..), filterSpec, runSpec)
 import Skeletest.Internal.Spec qualified as Spec
 
@@ -25,12 +29,14 @@ type Plugin = ()
 
 data SkeletestOptions = SkeletestOptions
   { plugins :: [Plugin]
+  , snapshotRenderers :: [SnapshotRenderer]
   }
 
 defaultOptions :: SkeletestOptions
 defaultOptions =
   SkeletestOptions
     { plugins = []
+    , snapshotRenderers = []
     }
 
 -- TODO: handle plugins

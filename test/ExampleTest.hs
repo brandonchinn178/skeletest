@@ -3,6 +3,7 @@ module ExampleTest (
 ) where
 
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
+import Data.Text qualified as Text
 
 import Skeletest
 import Skeletest.Predicate qualified as P
@@ -19,11 +20,25 @@ spec = do
       x `shouldSatisfy` P.approx P.tol{P.rel = Nothing} 0.3
       x `shouldSatisfy` P.approx P.tol{P.rel = Nothing, P.abs = 1e-12} 0.3
 
+    it "matches snapshots" $ do
+      (1 :: Int) `shouldSatisfy` P.matchesSnapshot
+      "a \"quoted\" string" `shouldSatisfy` P.matchesSnapshot
+      Text.pack "a \"quoted\" text" `shouldSatisfy` P.matchesSnapshot
+
+    it "matches snapshots without Show instance" $
+      UserNoShow{name = "user1", age = 18} `shouldSatisfy` P.matchesSnapshot
+
   describe "fixtures example" $ do
     it "allows using fixtures inside fixtures" $ do
       FixtureD <- getFixture
       TraceFixture traceRef <- getFixture
       readIORef traceRef `shouldSatisfy` P.returns (P.eq ["A", "B", "C", "D"])
+
+-- Do not add a Show instance
+data UserNoShow = UserNoShow
+  { name :: String
+  , age :: Int
+  }
 
 -- | A helper for tracing fixtures
 newtype TraceFixture = TraceFixture (IORef [String])

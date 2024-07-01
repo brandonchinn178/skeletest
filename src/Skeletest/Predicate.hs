@@ -1,12 +1,5 @@
 module Skeletest.Predicate (
-  Predicate,
-  eq,
-  approx,
-  returns,
-
-  -- * Tolerance
-  tol,
-  Tolerance (..),
+  module Skeletest.Internal.Predicate,
 ) where
 
 import Skeletest.Internal.Predicate

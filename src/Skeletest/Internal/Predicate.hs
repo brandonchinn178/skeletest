@@ -1,29 +1,77 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeData #-}
 
 module Skeletest.Internal.Predicate (
-  Predicate (..),
-  eq,
-  approx,
-  returns,
+  Predicate,
+  runPredicate,
+  purePred,
+  ioPred,
 
-  -- * Tolerance
+  -- * General
+  eq,
+  anything,
+
+  -- * Data types
+  just,
+  -- TODO: nothing,
+  -- TODO: tup2,
+  -- TODO: tup3,
+  -- TODO: tup4,
+
+  -- * Numeric
+  approx,
   tol,
   Tolerance (..),
+
+  -- * Combinators
+  not,
+  -- TODO: P.any, P.all
+
+  -- * IO
+  returns,
+  -- TODO: throws
+
+  -- * Snapshot testing
+  matchesSnapshot,
 ) where
 
-import Prelude hiding (abs)
+import Data.Typeable (Typeable)
+import Prelude hiding (abs, not)
 import Prelude qualified
+
+import Skeletest.Internal.Snapshot (
+  defaultSnapshotRenderers,
+  renderVal,
+ )
 
 newtype Predicate a = Predicate (a -> IO Bool)
 
+runPredicate :: Predicate a -> a -> IO Bool
+runPredicate (Predicate p) = p
+
+purePred :: (a -> Bool) -> Predicate a
+purePred f = Predicate $ pure . f
+
+ioPred :: (a -> IO Bool) -> Predicate a
+ioPred = Predicate
+
+{----- General -----}
+
 eq :: Eq a => a -> Predicate a
-eq expected = Predicate $ pure . (== expected)
+eq expected = purePred (== expected)
 
-returns :: Predicate a -> Predicate (IO a)
-returns (Predicate p) = Predicate (p =<<)
+anything :: Predicate a
+anything = purePred (const True)
 
-{----- approx -----}
+{----- Data types -----}
+
+just :: Predicate a -> Predicate (Maybe a)
+just (Predicate p) = Predicate $ \case
+  Just a -> p a
+  Nothing -> pure False
+
+{----- Numeric -----}
 
 -- | A predicate for checking that a value is equal within some tolerance.
 --
@@ -57,3 +105,27 @@ data Tolerance = Tolerance
 
 tol :: Tolerance
 tol = Tolerance{rel = Just 1e-6, abs = 1e-12}
+
+{----- Combinators -----}
+
+not :: Predicate a -> Predicate a
+not (Predicate p) = Predicate (fmap Prelude.not . p)
+
+{----- IO -----}
+
+returns :: Predicate a -> Predicate (IO a)
+returns (Predicate p) = ioPred (p =<<)
+
+{----- Snapshot -----}
+
+-- TODO: --update to update snapshots
+-- TODO: if no filters were added, error if outdated snapshot files (--update to remove)
+-- TODO: if all tests in file were run, error if snapshot file contains outdated tests (--update to remove)
+matchesSnapshot :: Typeable a => Predicate a
+matchesSnapshot = Predicate $ \a -> do
+  -- TODO: check snapshot file
+  _ <- pure $ renderVal (customRenderers <> defaultSnapshotRenderers) a
+  pure True
+  where
+    -- TODO: load from SkeletestOptions
+    customRenderers = []

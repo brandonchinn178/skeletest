@@ -29,8 +29,11 @@ plugin =
 transformMainModule :: ParsedModule -> ParsedModule
 transformMainModule modl = addModuleFun mainFun modl
   where
-    -- TODO: if plugins list exists in `getModuleVals modl`, use `HsExprVar "plugins"`
+    -- TODO: if `plugins` value exists in `getModuleVals modl`, use `HsExprVar "plugins"`
     pluginsExpr = HsExprList []
+
+    -- TODO: if `snapshotRenderers` value exists in `getModuleVals modl`, use `HsExprVar "snapshotRenderers"`
+    snapshotRenderersExpr = HsExprList []
 
     mainFun =
       FunDef
@@ -43,6 +46,7 @@ transformMainModule modl = addModuleFun mainFun modl
               [ HsExprRecordCon
                   "SkeletestOptions"
                   [ ("plugins", pluginsExpr)
+                  , ("snapshotRenderers", snapshotRenderersExpr)
                   ]
               , HsExprVar mainFileSpecsListIdentifier
               ]

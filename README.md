@@ -57,7 +57,7 @@ spec = do
 
     it "returns the expected result" $ do
       DbConnFixture conn <- getFixture
-      ioFunc conn 100 `shouldMatch` P.snapshot
+      ioFunc conn 100 `shouldSatisfy` P.matchesSnapshot
 
 newtype DbConnFixture = DbConnFixture Connection
 

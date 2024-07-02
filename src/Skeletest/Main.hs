@@ -23,8 +23,7 @@ import Skeletest.Internal.Snapshot (SnapshotRenderer (..))
 import Skeletest.Internal.Spec (Spec, SpecTree (..), filterSpec, runSpec)
 import Skeletest.Internal.Spec qualified as Spec
 
--- TODO: enable users to define plugins that modify command line options,
--- test execution, etc.
+-- TODO: a plugin should return a SkeletestOptions to merge with the other options
 type Plugin = ()
 
 data SkeletestOptions = SkeletestOptions
@@ -32,6 +31,7 @@ data SkeletestOptions = SkeletestOptions
   , snapshotRenderers :: [SnapshotRenderer]
   }
 
+-- TODO: allow modifying command line options, test execution, etc.
 defaultOptions :: SkeletestOptions
 defaultOptions =
   SkeletestOptions

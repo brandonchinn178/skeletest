@@ -77,3 +77,31 @@ instance Fixture DbConnFixture where
 ## Quickstart
 
 TODO
+
+## Guide
+
+<!-- TODO: Move to website? -->
+
+### Defining tests
+
+TODO - describe, it, xfail, skip
+
+### Unit tests
+
+TODO
+
+### Property tests
+
+TODO
+
+### Snapshot tests
+
+TODO
+
+### Fixtures
+
+TODO
+
+### Markers
+
+TODO

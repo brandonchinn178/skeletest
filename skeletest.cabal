@@ -18,6 +18,7 @@ library
     Skeletest.Internal.Preprocessor
     Skeletest.Internal.Snapshot
     Skeletest.Internal.Spec
+    Skeletest.Internal.State
     Skeletest.Main
     Skeletest.Predicate
     Skeletest.Prop.Gen
@@ -25,6 +26,7 @@ library
     Skeletest.Prop.Range
   build-depends:
       base
+    , containers
     , directory
     , filepath
     , ghc

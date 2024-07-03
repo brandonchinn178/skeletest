@@ -37,8 +37,8 @@ library
   default-language: GHC2021
   ghc-options: -Wall -Wcompat
 
-executable skeletest
-  main-is: src/Main.hs
+executable skeletest-preprocessor
+  main-is: src/bin/skeletest-preprocessor.hs
   build-depends:
       base
     , skeletest
@@ -48,8 +48,8 @@ executable skeletest
 
 test-suite skeletest-tests
   type: exitcode-stdio-1.0
-  ghc-options: -F -pgmF=skeletest
-  build-tool-depends: skeletest:skeletest
+  ghc-options: -F -pgmF=skeletest-preprocessor
+  build-tool-depends: skeletest:skeletest-preprocessor
   hs-source-dirs: test
   main-is: Main.hs
   other-modules:

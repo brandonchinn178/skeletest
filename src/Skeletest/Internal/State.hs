@@ -3,8 +3,6 @@
 module Skeletest.Internal.State (
   -- * Fixtures
   FixtureRegistry (..),
-  FixtureState (..),
-  FixtureScope (..),
   FixtureStatus (..),
   FixtureCleanup (..),
   withFixtureRegistry,
@@ -42,7 +40,7 @@ globalStateRef = unsafePerformIO $ newIORef newState
   where
     newState =
       GlobalState
-        { fixturesRegistry = FixtureRegistry OMap.empty
+        { fixturesRegistry = emptyFixtureRegistry
         , cliOptions = ()
         , testInfoMap = Map.empty
         }
@@ -51,27 +49,25 @@ globalStateRef = unsafePerformIO $ newIORef newState
 {----- Fixtures -----}
 
 -- | The registry of active fixtures, in order of activation.
-newtype FixtureRegistry = FixtureRegistry {unFixtureRegistry :: OMap TypeRep FixtureState}
+data FixtureRegistry = FixtureRegistry
+  { sessionFixtures :: OMap TypeRep FixtureStatus
+  , testFixtures :: OMap (TypeRep, ThreadId) FixtureStatus
+  }
 
-data FixtureState =
-  forall a.
-  Typeable a =>
-  FixtureState
-    { fixtureStateScope :: FixtureScope
-    , fixtureStatus :: FixtureStatus a
-    }
-
-data FixtureScope
-  = PerTestFixture
-  | PerSessionFixture
-
-data FixtureStatus a
+data FixtureStatus
   = FixtureInProgress
-  | FixtureLoaded (a, FixtureCleanup)
+  | forall a. Typeable a => FixtureLoaded (a, FixtureCleanup)
 
 data FixtureCleanup
   = NoCleanup
   | CleanupFunc (IO ())
+
+emptyFixtureRegistry :: FixtureRegistry
+emptyFixtureRegistry =
+  FixtureRegistry
+    { sessionFixtures = OMap.empty
+    , testFixtures = OMap.empty
+    }
 
 withFixtureRegistry :: (FixtureRegistry -> (FixtureRegistry, a)) -> IO a
 withFixtureRegistry f =

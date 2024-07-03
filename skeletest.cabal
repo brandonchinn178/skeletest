@@ -54,8 +54,8 @@ test-suite skeletest-tests
   hs-source-dirs: test
   main-is: Main.hs
   other-modules:
-    ExampleTest
-    Skeletest.Internal.PluginTest
+    ExampleSpec
+    Skeletest.Internal.PluginSpec
   build-depends:
       base
     , skeletest

@@ -78,7 +78,7 @@ findTestModules path = mapMaybe toTestModule <$> listDirectoryRecursive testDir
       (first, rest) <- Text.uncons name
       guard $ isUpper first
       guard $ Text.all (\c -> isUpper c || isLower c || isDigit c || c == '\'') rest
-      Just name
+      pure name
 
 addSpecsList :: [(FilePath, Text)] -> Text -> Text
 addSpecsList testModules file =

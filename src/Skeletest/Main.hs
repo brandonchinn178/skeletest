@@ -45,7 +45,7 @@ runSkeletest _ testModules = do
   runSpecs . pruneSpec . selectTests $ initialSpecs
   where
     mkSpec (fp, name, spec) =
-      let name' = stripSuffix "Test" $ Text.pack name
+      let name' = stripSuffix "Spec" $ Text.pack name
        in (fp, name', spec)
 
     -- TODO: allow filtering test tree by filepath, name of test, etc. in CLI arguments

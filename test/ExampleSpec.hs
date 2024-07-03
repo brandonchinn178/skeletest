@@ -1,4 +1,4 @@
-module ExampleTest (
+module ExampleSpec (
   spec,
 ) where
 

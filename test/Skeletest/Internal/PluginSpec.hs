@@ -1,4 +1,4 @@
-module Skeletest.Internal.PluginTest (spec) where
+module Skeletest.Internal.PluginSpec (spec) where
 
 import Skeletest
 

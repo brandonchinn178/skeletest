@@ -79,7 +79,9 @@ withFixtureRegistry f =
 
 data TestInfo = TestInfo
   { testContexts :: [Text]
-  , testName :: [Text]
+  , testName :: Text
+  , testFile :: FilePath
+    -- ^ Relative to CWD
   }
 
 withTestInfo :: TestInfo -> IO a -> IO a

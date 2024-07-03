@@ -7,10 +7,12 @@ module Skeletest.Internal.Spec (
   SpecTree (..),
   getSpecTrees,
   filterSpec,
-  runSpec,
+  runSpecs,
 
   -- ** Defining a Spec
   describe,
+  Testable (..),
+  test,
   it,
   prop,
 
@@ -33,6 +35,7 @@ import Data.Typeable (Typeable)
 import UnliftIO.Exception (SomeException, displayException, trySyncOrAsync)
 
 import Skeletest.Internal.Fixtures (FixtureScope (..), cleanupFixtures)
+import Skeletest.Internal.State (TestInfo (..), withTestInfo)
 import Skeletest.Prop.Internal (Property, runProperty)
 
 type Spec = Spec' ()
@@ -59,23 +62,34 @@ filterSpec f = Spec . tell . go . getSpecTrees
       SpecTest name io -> SpecTest name io
 
 -- TODO: allow running tests in parallel
-runSpec :: Spec -> IO ()
-runSpec spec = do
-  go 0 $ getSpecTrees spec
+runSpecs :: [(FilePath, Spec)] -> IO ()
+runSpecs specs = do
+  sequence_
+    [ go fp [] 0 $ getSpecTrees spec
+    | (fp, spec) <- specs
+    ]
   cleanupFixtures PerSessionFixture
   where
     -- TODO: colors
-    go !lvl = mapM_ $ \case
+    go fp ctx !lvl = mapM_ $ \case
       SpecGroup name trees -> do
         Text.putStrLn $ indent lvl name
-        go (lvl + 1) trees
+        go fp (ctx <> [name]) (lvl + 1) trees
       SpecTest name io -> do
         Text.putStr $ indent lvl (name <> ": ")
 
         -- TODO: timeout
-        result <- trySyncOrAsync $ do
-          io
-          cleanupFixtures PerTestFixture
+        let testInfo =
+              TestInfo
+                { testContexts = ctx
+                , testName = name
+                , testFile = fp
+                }
+        result <-
+          trySyncOrAsync $
+            withTestInfo testInfo $ do
+              io
+              cleanupFixtures PerTestFixture
 
         case result of
           Right () -> do
@@ -92,11 +106,23 @@ runSpec spec = do
 describe :: String -> Spec -> Spec
 describe name spec = Spec $ tell [SpecGroup (Text.pack name) (getSpecTrees spec)]
 
+class Testable a where
+  runTest :: a -> IO ()
+
+instance Testable (IO ()) where
+  runTest = id
+
+instance Testable Property where
+  runTest = runProperty
+
+test :: Testable a => String -> a -> Spec
+test name t = Spec $ tell [SpecTest (Text.pack name) (runTest t)]
+
 it :: String -> IO () -> Spec
-it name action = Spec $ tell [SpecTest (Text.pack name) action]
+it = test
 
 prop :: String -> Property -> Spec
-prop name p = Spec $ tell [SpecTest (Text.pack name) (runProperty p)]
+prop = test
 
 {----- Modifiers -----}
 

@@ -54,6 +54,7 @@ test-suite skeletest-tests
   main-is: Main.hs
   other-modules:
     ExampleTest
+    Skeletest.Internal.PluginTest
   build-depends:
       base
     , skeletest

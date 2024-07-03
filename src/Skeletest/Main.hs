@@ -20,7 +20,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text qualified as Text
 
 import Skeletest.Internal.Snapshot (SnapshotRenderer (..))
-import Skeletest.Internal.Spec (Spec, SpecTree (..), filterSpec, runSpec)
+import Skeletest.Internal.Spec (Spec, SpecTree (..), filterSpec, runSpecs)
 import Skeletest.Internal.Spec qualified as Spec
 
 -- TODO: a plugin should return a SkeletestOptions to merge with the other options
@@ -40,20 +40,24 @@ defaultOptions =
     }
 
 -- TODO: handle plugins
-runSkeletest :: SkeletestOptions -> [(String, Spec)] -> IO ()
-runSkeletest _ specs = do
-  let fullSpec = mapM_ mkSpec specs
-  let specToRun = pruneSpec . selectTests $ fullSpec
-  runSpec specToRun
+runSkeletest :: SkeletestOptions -> [(FilePath, String, Spec)] -> IO ()
+runSkeletest _ testModules = do
+  let initialSpecs = map mkSpec testModules
+  runSpecs . pruneSpec . selectTests $ initialSpecs
   where
-    mkSpec (name, spec) =
+    mkSpec (fp, name, spec) =
       let name' = fromMaybe name $ (fmap Text.unpack . Text.stripSuffix "Test" . Text.pack) name
-       in Spec.describe name' spec
+       in (fp, Spec.describe name' spec)
 
     -- TODO: allow filtering test tree by filepath, name of test, etc. in CLI arguments
     selectTests = id
 
     -- remove empty specs
-    pruneSpec = filterSpec $ \case
-      SpecGroup _ [] -> False
-      _ -> True
+    pruneSpec specs =
+      [ (fp, filterSpec (not . isEmptySpec) spec)
+      | (fp, spec) <- specs
+      , let
+          isEmptySpec = \case
+            SpecGroup _ [] -> True
+            _ -> False
+      ]

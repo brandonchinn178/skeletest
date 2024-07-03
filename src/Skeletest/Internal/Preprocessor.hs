@@ -59,7 +59,7 @@ updateMainFile path file = do
 --
 -- >>> findTestModules "test/Main.hs"
 -- ["My.Module.Test1", "My.Module.Test2", ...]
-findTestModules :: FilePath -> IO [Text]
+findTestModules :: FilePath -> IO [(FilePath, Text)]
 findTestModules path = mapMaybe toTestModule <$> listDirectoryRecursive testDir
   where
     testDir = takeDirectory path
@@ -67,7 +67,8 @@ findTestModules path = mapMaybe toTestModule <$> listDirectoryRecursive testDir
     toTestModule fp = do
       guard (fp /= path)
       (fpNoExt, ".hs") <- pure $ splitExtensions fp
-      moduleNameFromPath $ Text.pack $ makeRelative testDir fpNoExt
+      name <- moduleNameFromPath $ Text.pack $ makeRelative testDir fpNoExt
+      pure (fp, name)
 
     moduleNameFromPath = fmap (Text.intercalate ".") . mapM validateModuleName . Text.splitOn "/"
 
@@ -79,26 +80,27 @@ findTestModules path = mapMaybe toTestModule <$> listDirectoryRecursive testDir
       guard $ Text.all (\c -> isUpper c || isLower c || isDigit c || c == '\'') rest
       Just name
 
-addSpecsList :: [Text] -> Text -> Text
-addSpecsList moduleNames file =
+addSpecsList :: [(FilePath, Text)] -> Text -> Text
+addSpecsList testModules file =
   Text.unlines
     [ file
-    , mainFileSpecsListIdentifier <> " :: [(String, Spec)]"
-    , mainFileSpecsListIdentifier <> " = " <> renderList specsList
+    , mainFileSpecsListIdentifier <> " :: [(FilePath, String, Spec)]"
+    , mainFileSpecsListIdentifier <> " = " <> renderSpecList specsList
     ]
   where
     specsList =
-      [ (Text.pack (show name), name <> ".spec")
-      | name <- moduleNames
+      [ (quote $ Text.pack fp, quote modName, modName <> ".spec")
+      | (fp, modName) <- testModules
       ]
-    renderList xs = "[" <> (Text.intercalate ", " . map renderPair) xs <> "]"
-    renderPair (a, b) = "(" <> a <> ", " <> b <> ")"
+    quote s = "\"" <> s <> "\""
+    renderSpecList xs = "[" <> (Text.intercalate ", " . map renderSpecInfo) xs <> "]"
+    renderSpecInfo (fp, name, spec) = "(" <> fp <> ", " <> name <> ", " <> spec <> ")"
 
 -- | Add imports after the Skeletest.Main import, which should always be present in the Main module.
 --
 -- TODO: handle user using explicit multiline import list in Skeletest.Main import
-insertImports :: [Text] -> Text -> Text
-insertImports moduleNames file =
+insertImports :: [(FilePath, Text)] -> Text -> Text
+insertImports testModules file =
   let (pre, post) = break isSkeletestImport $ Text.lines file
    in if null post
         then skeletestPluginError "Could not find Skeletest.Main import in Main module"
@@ -111,7 +113,7 @@ insertImports moduleNames file =
 
     importTests =
       [ "import qualified " <> name
-      | name <- moduleNames
+      | (_, name) <- testModules
       ]
 
 {----- Helpers -----}

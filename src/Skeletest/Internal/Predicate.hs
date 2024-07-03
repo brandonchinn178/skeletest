@@ -44,6 +44,7 @@ import Skeletest.Internal.Snapshot (
   defaultSnapshotRenderers,
   renderVal,
  )
+import Skeletest.Internal.State (TestInfo (..), getTestInfo)
 
 newtype Predicate a = Predicate (a -> IO Bool)
 
@@ -124,7 +125,9 @@ returns (Predicate p) = ioPred (p =<<)
 matchesSnapshot :: Typeable a => Predicate a
 matchesSnapshot = Predicate $ \a -> do
   -- TODO: check snapshot file
-  _ <- pure $ renderVal (customRenderers <> defaultSnapshotRenderers) a
+  TestInfo{..} <- getTestInfo
+  print (testFile, testContexts, testName)
+  let _ = renderVal (customRenderers <> defaultSnapshotRenderers) a
   pure True
   where
     -- TODO: load from SkeletestOptions

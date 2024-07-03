@@ -27,6 +27,7 @@ module Skeletest.Internal.Spec (
   withMarkers,
 ) where
 
+import Control.Monad (forM_)
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -62,32 +63,32 @@ filterSpec f = Spec . tell . go . getSpecTrees
       SpecTest name io -> SpecTest name io
 
 -- TODO: allow running tests in parallel
-runSpecs :: [(FilePath, Spec)] -> IO ()
+runSpecs :: [(FilePath, Text, Spec)] -> IO ()
 runSpecs specs =
   (`finally` cleanupFixtures PerSessionFixture) $
-    sequence_
-      [ go fp [] 0 $ getSpecTrees spec
-      | (fp, spec) <- specs
-      ]
+    forM_ specs $ \(testFile, testModule, spec) -> do
+      let emptyTestInfo =
+            TestInfo
+              { testModule
+              , testContexts = []
+              , testName = ""
+              , testFile
+              }
+      Text.putStrLn testModule
+      go emptyTestInfo $ getSpecTrees spec
   where
     -- TODO: colors
-    go fp ctx !lvl = mapM_ $ \case
+    go testInfo = mapM_ $ \case
       SpecGroup name trees -> do
-        Text.putStrLn $ indent lvl name
-        go fp (ctx <> [name]) (lvl + 1) trees
+        Text.putStrLn $ indent testInfo name
+        go testInfo{testContexts = testContexts testInfo <> [name]} trees
       SpecTest name io -> do
-        Text.putStr $ indent lvl (name <> ": ")
+        Text.putStr $ indent testInfo (name <> ": ")
 
         -- TODO: timeout
-        let testInfo =
-              TestInfo
-                { testContexts = ctx
-                , testName = name
-                , testFile = fp
-                }
         result <-
           trySyncOrAsync $
-            withTestInfo testInfo $ do
+            withTestInfo testInfo{testName = name} $ do
               io `finally` cleanupFixtures PerTestFixture
 
         case result of
@@ -96,9 +97,11 @@ runSpecs specs =
           Left (e :: SomeException) -> do
             -- TODO: catch Skeletest failure, show FAIL
             Text.putStrLn "ERROR"
-            Text.putStrLn $ indent lvl (Text.pack $ displayException e)
+            Text.putStrLn $ indent testInfo (Text.pack $ displayException e)
 
-    indent lvl = Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"
+    indent testInfo =
+      let lvl = length (testContexts testInfo) + 1 -- +1 to include the module name
+       in Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"
 
 {----- Defining a Spec -----}
 

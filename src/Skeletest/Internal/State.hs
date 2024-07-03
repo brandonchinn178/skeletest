@@ -78,7 +78,8 @@ withFixtureRegistry f =
 {----- Test info -----}
 
 data TestInfo = TestInfo
-  { testContexts :: [Text]
+  { testModule :: Text
+  , testContexts :: [Text]
   , testName :: Text
   , testFile :: FilePath
     -- ^ Relative to CWD

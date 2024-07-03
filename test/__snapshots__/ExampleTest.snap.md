@@ -1,4 +1,4 @@
-# ExampleTest
+# Example
 
 ## predicates / matches snapshot
 
@@ -17,5 +17,5 @@ a "quoted" text
 ## predicates / matches snapshots without Show instance
 
 ```
-User{name = "user1", age = 30}
+UserNoShow "user1" 18
 ```

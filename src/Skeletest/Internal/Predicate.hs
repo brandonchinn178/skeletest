@@ -41,10 +41,11 @@ import Prelude hiding (abs, not)
 import Prelude qualified
 
 import Skeletest.Internal.Snapshot (
+  SnapshotResult (..),
+  checkSnapshot,
   defaultSnapshotRenderers,
-  renderVal,
  )
-import Skeletest.Internal.State (TestInfo (..), getTestInfo)
+import Skeletest.Internal.State (getTestInfo)
 
 newtype Predicate a = Predicate (a -> IO Bool)
 
@@ -124,11 +125,9 @@ returns (Predicate p) = ioPred (p =<<)
 -- TODO: if all tests in file were run, error if snapshot file contains outdated tests (--update to remove)
 matchesSnapshot :: Typeable a => Predicate a
 matchesSnapshot = Predicate $ \a -> do
-  -- TODO: check snapshot file
-  TestInfo{..} <- getTestInfo
-  print (testFile, testContexts, testName)
-  let _ = renderVal (customRenderers <> defaultSnapshotRenderers) a
-  pure True
+  testInfo <- getTestInfo
+  result <- checkSnapshot (customRenderers <> defaultSnapshotRenderers) testInfo a
+  pure $ result == SnapshotMatches || True -- TODO: show better error message
   where
     -- TODO: load from SkeletestOptions
     customRenderers = []

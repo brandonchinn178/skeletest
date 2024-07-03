@@ -32,7 +32,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Data.Typeable (Typeable)
-import UnliftIO.Exception (SomeException, displayException, trySyncOrAsync)
+import UnliftIO.Exception (SomeException, displayException, finally, trySyncOrAsync)
 
 import Skeletest.Internal.Fixtures (FixtureScope (..), cleanupFixtures)
 import Skeletest.Internal.State (TestInfo (..), withTestInfo)
@@ -63,12 +63,12 @@ filterSpec f = Spec . tell . go . getSpecTrees
 
 -- TODO: allow running tests in parallel
 runSpecs :: [(FilePath, Spec)] -> IO ()
-runSpecs specs = do
-  sequence_
-    [ go fp [] 0 $ getSpecTrees spec
-    | (fp, spec) <- specs
-    ]
-  cleanupFixtures PerSessionFixture
+runSpecs specs =
+  (`finally` cleanupFixtures PerSessionFixture) $
+    sequence_
+      [ go fp [] 0 $ getSpecTrees spec
+      | (fp, spec) <- specs
+      ]
   where
     -- TODO: colors
     go fp ctx !lvl = mapM_ $ \case
@@ -88,8 +88,7 @@ runSpecs specs = do
         result <-
           trySyncOrAsync $
             withTestInfo testInfo $ do
-              io
-              cleanupFixtures PerTestFixture
+              io `finally` cleanupFixtures PerTestFixture
 
         case result of
           Right () -> do

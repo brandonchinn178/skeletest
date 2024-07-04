@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Skeletest.Internal.Spec (
   -- * Spec interface
@@ -33,8 +34,16 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Data.Typeable (Typeable)
-import UnliftIO.Exception (SomeException, displayException, finally, trySyncOrAsync)
+import GHC.Stack qualified as GHC
+import UnliftIO.Exception (
+  SomeException,
+  displayException,
+  finally,
+  fromException,
+  trySyncOrAsync,
+ )
 
+import Skeletest.Assertions (TestFailure (..))
 import Skeletest.Internal.Fixtures (FixtureScope (..), cleanupFixtures)
 import Skeletest.Internal.State (TestInfo (..), withTestInfo)
 import Skeletest.Prop.Internal (Property, runProperty)
@@ -80,10 +89,12 @@ runSpecs specs =
     -- TODO: colors
     go testInfo = mapM_ $ \case
       SpecGroup name trees -> do
-        Text.putStrLn $ indent testInfo name
+        let lvl = getIndentLevel testInfo
+        Text.putStrLn $ indent lvl name
         go testInfo{testContexts = testContexts testInfo <> [name]} trees
       SpecTest name io -> do
-        Text.putStr $ indent testInfo (name <> ": ")
+        let lvl = getIndentLevel testInfo
+        Text.putStr $ indent lvl (name <> ": ")
 
         -- TODO: timeout
         result <-
@@ -94,14 +105,17 @@ runSpecs specs =
         case result of
           Right () -> do
             Text.putStrLn "OK"
-          Left (e :: SomeException) -> do
-            -- TODO: catch Skeletest failure, show FAIL
-            Text.putStrLn "ERROR"
-            Text.putStrLn $ indent testInfo (Text.pack $ displayException e)
+          Left (e :: SomeException)
+            | Just TestFailure{testInfo = _, ..} <- fromException e -> do
+                Text.putStrLn "FAIL"
+                Text.putStrLn $ indent (lvl + 1) testFailMessage
+                Text.putStrLn $ indent (lvl + 1) (Text.pack $ GHC.prettyCallStack callStack)
+            | otherwise -> do
+                Text.putStrLn "ERROR"
+                Text.putStrLn $ indent lvl (Text.pack $ displayException e)
 
-    indent testInfo =
-      let lvl = length (testContexts testInfo) + 1 -- +1 to include the module name
-       in Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"
+    getIndentLevel testInfo = length (testContexts testInfo) + 1 -- +1 to include the module name
+    indent lvl = Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"
 
 {----- Defining a Spec -----}
 

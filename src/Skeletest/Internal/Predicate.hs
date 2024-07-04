@@ -1,12 +1,13 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeData #-}
 
 module Skeletest.Internal.Predicate (
   Predicate,
+  PredicateResult (..),
   runPredicate,
-  purePred,
-  ioPred,
+  renderPredicate,
 
   -- * General
   eq,
@@ -36,7 +37,10 @@ module Skeletest.Internal.Predicate (
   matchesSnapshot,
 ) where
 
+import Data.Text (Text)
+import Data.Text qualified as Text
 import Data.Typeable (Typeable)
+import Debug.RecoverRTTI (anythingToString)
 import Prelude hiding (abs, not)
 import Prelude qualified
 
@@ -47,31 +51,108 @@ import Skeletest.Internal.Snapshot (
  )
 import Skeletest.Internal.State (getTestInfo)
 
-newtype Predicate a = Predicate (a -> IO Bool)
+data Predicate a = Predicate
+  { predicateFunc :: a -> IO PredicateFuncResult
+  , predicateDisp :: Text
+    -- ^ The rendered representation of the predicate
+  , predicateDispNeg :: Text
+    -- ^ The rendered representation of the negation of the predicate
+  }
 
-runPredicate :: Predicate a -> a -> IO Bool
-runPredicate (Predicate p) = p
+data PredicateResult
+  = PredicateSuccess
+  | PredicateFail Text
 
-purePred :: (a -> Bool) -> Predicate a
-purePred f = Predicate $ pure . f
+runPredicate :: Predicate a -> a -> IO PredicateResult
+runPredicate Predicate{..} val = do
+  PredicateFuncResult{..} <- predicateFunc val
+  pure $
+    if predicateSuccess
+      then PredicateSuccess
+      else
+        PredicateFail $
+          if Prelude.not predicateNested
+            then predicateFailMsg
+            else
+              Text.intercalate "\n" $
+                [ predicateFailMsg
+                , "Expected:"
+                , indent predicateDisp
+                , "Got:"
+                , indent $ render val
+                ]
+  where
+    indent = Text.intercalate "\n" . map ("  " <>) . Text.splitOn "\n"
 
-ioPred :: (a -> IO Bool) -> Predicate a
-ioPred = Predicate
+renderPredicate :: Predicate a -> Text
+renderPredicate = predicateDisp
+
+data PredicateFuncResult = PredicateFuncResult
+  { predicateSuccess :: Bool
+  , predicateFailMsg :: Text
+    -- ^ The message to show on failure
+  , predicatePassMsg :: Text
+    -- ^ The message to show on unexpected pass
+  , predicateNested :: Bool
+    -- ^ Did this result come from a nested predicate?
+  }
+
+setNested :: PredicateFuncResult -> PredicateFuncResult
+setNested result = result{predicateNested = True}
 
 {----- General -----}
 
+-- TODO: if rendered vals are too long, show a diff
 eq :: Eq a => a -> Predicate a
-eq expected = purePred (== expected)
+eq expected =
+  Predicate
+    { predicateFunc = \actual ->
+        pure
+          PredicateFuncResult
+            { predicateSuccess = actual == expected
+            , predicateFailMsg = explainOp (Just actual) "≠" expected
+            , predicatePassMsg = explainOp (Just actual) "=" expected
+            , predicateNested = False
+            }
+    , predicateDisp = explainOp Nothing "=" expected
+    , predicateDispNeg = explainOp Nothing "≠" expected
+    }
 
 anything :: Predicate a
-anything = purePred (const True)
+anything =
+  Predicate
+    { predicateFunc = \_ ->
+        pure
+          PredicateFuncResult
+            { predicateSuccess = True
+            , predicateFailMsg = "anything"
+            , predicatePassMsg = "not anything"
+            , predicateNested = False
+            }
+    , predicateDisp = "anything"
+    , predicateDispNeg = "not anything"
+    }
 
 {----- Data types -----}
 
 just :: Predicate a -> Predicate (Maybe a)
-just (Predicate p) = Predicate $ \case
-  Just a -> p a
-  Nothing -> pure False
+just Predicate{..} =
+  Predicate
+    { predicateFunc = \case
+        Just a -> setNested <$> predicateFunc a
+        Nothing ->
+          pure
+            PredicateFuncResult
+              { predicateSuccess = False
+              , predicateFailMsg = "Nothing ≠ " <> disp
+              , predicatePassMsg = "Nothing = " <> disp
+              , predicateNested = False
+              }
+    , predicateDisp = disp
+    , predicateDispNeg = "not " <> disp
+    }
+  where
+    disp = "Just (" <> predicateDisp <> ")"
 
 {----- Numeric -----}
 
@@ -87,7 +168,19 @@ just (Predicate p) = Predicate $ \case
 -- >>> 0.1 + 0.2 `shouldSatisfy` P.approx P.tol{P.rel = Nothing} 0.3
 -- >>> 0.1 + 0.2 `shouldSatisfy` P.approx P.tol{P.rel = Nothing, P.abs = 1e-12} 0.3
 approx :: (Fractional a, Ord a) => Tolerance -> a -> Predicate a
-approx Tolerance{..} expected = Predicate $ \actual -> pure $ Prelude.abs (actual - expected) <= tolerance
+approx Tolerance{..} expected =
+  Predicate
+    { predicateFunc = \actual ->
+        pure
+          PredicateFuncResult
+            { predicateSuccess = Prelude.abs (actual - expected) <= tolerance
+            , predicateFailMsg = explainOp (Just actual) "≉" expected
+            , predicatePassMsg = explainOp (Just actual) "≈" expected
+            , predicateNested = False
+            }
+    , predicateDisp = explainOp Nothing "≈" expected
+    , predicateDispNeg = explainOp Nothing "≉" expected
+    }
   where
     mRelTol = fromTol <$> rel
     absTol = fromTol abs
@@ -111,12 +204,33 @@ tol = Tolerance{rel = Just 1e-6, abs = 1e-12}
 {----- Combinators -----}
 
 not :: Predicate a -> Predicate a
-not (Predicate p) = Predicate (fmap Prelude.not . p)
+not Predicate{..} =
+  Predicate
+    { predicateFunc = \actual -> do
+        PredicateFuncResult{..} <- predicateFunc actual
+        pure
+          PredicateFuncResult
+            { predicateSuccess = Prelude.not predicateSuccess
+            , predicateFailMsg = predicatePassMsg
+            , predicatePassMsg = predicateFailMsg
+            , predicateNested = True
+            }
+    , predicateDisp = predicateDispNeg
+    , predicateDispNeg = predicateDisp
+    }
 
 {----- IO -----}
 
 returns :: Predicate a -> Predicate (IO a)
-returns (Predicate p) = ioPred (p =<<)
+returns Predicate{..} =
+  Predicate
+    { predicateFunc = \io ->
+        -- don't add 'setNested'; it's technically nested,
+        -- but this predicate is supposed to be transparent
+        io >>= predicateFunc
+    , predicateDisp = predicateDisp
+    , predicateDispNeg = predicateDispNeg
+    }
 
 {----- Snapshot -----}
 
@@ -124,10 +238,32 @@ returns (Predicate p) = ioPred (p =<<)
 -- TODO: if no filters were added, error if outdated snapshot files (--update to remove)
 -- TODO: if all tests in file were run, error if snapshot file contains outdated tests (--update to remove)
 matchesSnapshot :: Typeable a => Predicate a
-matchesSnapshot = Predicate $ \a -> do
-  testInfo <- getTestInfo
-  result <- checkSnapshot (customRenderers <> defaultSnapshotRenderers) testInfo a
-  pure $ result == SnapshotMatches || True -- TODO: show better error message
+matchesSnapshot =
+  Predicate
+    { predicateFunc = \actual -> do
+        testInfo <- getTestInfo
+        result <- checkSnapshot (customRenderers <> defaultSnapshotRenderers) testInfo actual
+        pure
+          PredicateFuncResult
+            { predicateSuccess = result == SnapshotMatches || True -- TODO: fix failure
+            , predicateFailMsg = "does not match snapshot" -- TODO: show diff
+            , predicatePassMsg = "matches snapshot"
+            , predicateNested = False
+            }
+    , predicateDisp = "matches snapshot"
+    , predicateDispNeg = "does not match snapshot"
+    }
   where
     -- TODO: load from SkeletestOptions
     customRenderers = []
+
+{----- Utilities -----}
+
+explainOp :: Maybe a -> Text -> a -> Text
+explainOp mActual op expected =
+  case mActual of
+    Just actual -> render actual <> " " <> op <> " " <> render expected
+    Nothing -> op <> " " <> render expected
+
+render :: a -> Text
+render = Text.pack . anythingToString

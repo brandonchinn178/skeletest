@@ -84,6 +84,7 @@ data TestInfo = TestInfo
   , testFile :: FilePath
     -- ^ Relative to CWD
   }
+  deriving (Show)
 
 withTestInfo :: TestInfo -> IO a -> IO a
 withTestInfo info m = do

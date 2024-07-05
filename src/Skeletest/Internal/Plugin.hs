@@ -1,16 +1,22 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskellQuotes #-}
 
 module Skeletest.Internal.Plugin (
   plugin,
 ) where
 
 import Data.Function ((&))
+import Data.Functor.Const (Const (..))
 import Data.Text qualified as Text
 
 import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
 import Skeletest.Internal.Error (skeletestPluginError)
 import Skeletest.Internal.GHC
+import Skeletest.Internal.Predicate qualified as P
+import Skeletest.Internal.Spec (Spec)
+import Skeletest.Internal.Utils.HList (HList (..))
+import Skeletest.Main qualified as Main
 
 -- | The plugin to convert a module in the tests directory.
 -- Injected by the preprocessor.
@@ -37,18 +43,18 @@ transformMainModule modl = addModuleFun mainFun modl
 
     mainFun =
       FunDef
-        { funName = hsName "main"
-        , funType = HsTypeApp (HsTypeCon $ hsName "IO") [HsTypeTuple []]
+        { funName = "main"
+        , funType = HsTypeApp (HsTypeCon $ hsName ''IO) [HsTypeTuple []]
         , funPats = []
         , funBody =
             hsApps
-              (HsExprVar $ hsName "runSkeletest")
+              (HsExprVar $ hsName 'Main.runSkeletest)
               [ HsExprRecordCon
-                  (hsName "SkeletestOptions")
-                  [ (hsName "plugins", pluginsExpr)
-                  , (hsName "snapshotRenderers", snapshotRenderersExpr)
+                  (hsName 'Main.SkeletestOptions)
+                  [ (hsName 'Main.plugins, pluginsExpr)
+                  , (hsName 'Main.snapshotRenderers, snapshotRenderersExpr)
                   ]
-              , HsExprVar $ hsName mainFileSpecsListIdentifier
+              , HsExprVar $ hsNewName mainFileSpecsListIdentifier
               ]
         }
 
@@ -82,32 +88,34 @@ replaceConMatch :: ParsedModule -> ParsedModule
 replaceConMatch = modifyModuleExprs go
   where
     go = \case
-      HsExprApp (HsExprVar name) arg | getHsName name == "con" ->
+      HsExprApp (HsExprVar name) arg | isCon name ->
         case arg of
           _ | (HsExprCon conName, preds) <- collectApps arg -> do
-            let exprNames = zipWith (\_ i -> hsName . Text.pack . show $ i) preds [0 :: Int ..]
-            Just . hsApps (HsExprVar $ hsQualName "P" "conMatches") $
-              [ HsExprLitString $ getHsName conName
-              , HsExprCon $ hsName "Nothing"
+            let exprNames = zipWith (\_ i -> hsNewName . Text.pack . show $ i) preds [0 :: Int ..]
+            Just . hsApps (HsExprVar $ hsName 'P.conMatches) $
+              [ HsExprLitString $ renderHsName conName
+              , HsExprCon $ hsName 'Nothing
               , mkDeconstruct (HsPatCon conName $ map HsPatVar exprNames) exprNames
               , mkPredList preds
               ]
           HsExprRecordCon conName fields -> do
             let (fieldNames, preds) = unzip fields
                 fieldPats = [(field, HsPatVar field) | field <- fieldNames]
-            -- TODO: don't assume imported as P? use `mkOrigName` with `Module` from plugin?
-            Just . hsApps (HsExprVar $ hsQualName "P" "conMatches") $
-              [ HsExprLitString $ getHsName conName
-              , HsExprApp (HsExprCon $ hsName "Just") (mkNamesList fieldNames)
+            Just . hsApps (HsExprVar $ hsName 'P.conMatches) $
+              [ HsExprLitString $ renderHsName conName
+              , HsExprApp (HsExprCon $ hsName 'Just) (mkNamesList fieldNames)
               , mkDeconstruct (HsPatRecord conName fieldPats) fieldNames
               , mkPredList preds
               ]
           _ -> skeletestPluginError "P.con must be applied to a constructor"
       -- Check if P.con is being applied more than once
-      -- TODO: make this more precisely match Skeletest.Predicates.con
-      HsExprApp (HsExprApp (HsExprVar name) _) _ | getHsName name == "con" ->
+      HsExprApp (HsExprApp (HsExprVar name) _) _ | isCon name ->
         skeletestPluginError "P.con must be applied to exactly one argument"
       _ -> Nothing
+
+    -- TODO: Make this more precise. It seems like the only information we get here is P.con,
+    -- but it might be possible to look up what modules were imported as "P".
+    isCon n = getHsName n == "con" && getHsNameMod n == Just "P"
 
     -- Create the deconstruction function:
     --
@@ -124,21 +132,21 @@ replaceConMatch = modifyModuleExprs go
     --     Just User{name} -> Just (HCons (pure name) HNil)
     --     _ -> Nothing
     mkDeconstruct pat argNames =
-      HsExprLam (HsPatVar $ hsName "actual") $
-        HsExprCase (HsExprVar (hsName "pure") `HsExprApp` HsExprVar (hsName "actual")) $
-          [ (HsPatCon (hsName "Just") [pat], HsExprApp (HsExprCon $ hsName "Just") (mkValsList argNames))
-          , (HsPatWild, HsExprCon $ hsName "Nothing")
+      HsExprLam (HsPatVar $ hsNewName "actual") $
+        HsExprCase (HsExprVar (hsName 'pure) `HsExprApp` HsExprVar (hsNewName "actual")) $
+          [ (HsPatCon (hsName 'Just) [pat], HsExprApp (HsExprCon $ hsName 'Just) (mkValsList argNames))
+          , (HsPatWild, HsExprCon $ hsName 'Nothing)
           ]
 
     mkHList f = \case
-      [] -> HsExprCon (hsQualName "P" "HNil")
+      [] -> HsExprCon (hsName 'HNil)
       x : xs ->
-        HsExprCon (hsQualName "P" "HCons")
+        HsExprCon (hsName 'HCons)
           `HsExprApp` f x
           `HsExprApp` mkHList f xs
 
-    mkNamesList = mkHList $ \name -> HsExprApp (HsExprCon (hsQualName "P" "Const")) (HsExprLitString $ getHsName name)
-    mkValsList = mkHList $ \val -> HsExprApp (HsExprVar (hsName "pure")) (HsExprVar val)
+    mkNamesList = mkHList $ \name -> HsExprApp (HsExprCon $ hsName 'Const) (HsExprLitString $ renderHsName name)
+    mkValsList = mkHList $ \val -> HsExprApp (HsExprVar $ hsName 'pure) (HsExprVar val)
     mkPredList = mkHList id
 
 -- | If a module does not export a 'spec' identifier (e.g. if the module
@@ -149,7 +157,7 @@ addSpec modl
   | not isSpecDefined =
       modl
         & addModuleFun specFun
-        & addModuleExport (ModuleExportVar $ hsName "spec")
+        & addModuleExport (ModuleExportVar $ hsNewName "spec")
   -- if spec is defined but not exported, error
   | not isSpecExported =
       skeletestPluginError . unlines $
@@ -167,8 +175,8 @@ addSpec modl
 
     specFun =
       FunDef
-        { funName = hsName "spec"
-        , funType = HsTypeCon $ hsName "Spec"
+        { funName = "spec"
+        , funType = HsTypeCon $ hsName ''Spec
         , funPats = []
-        , funBody = hsApps (HsExprVar $ hsName "pure") [HsExprTuple []]
+        , funBody = hsApps (HsExprVar $ hsName 'pure) [HsExprTuple []]
         }

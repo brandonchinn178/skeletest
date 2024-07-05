@@ -33,6 +33,7 @@ library
     , ghc
     , ordered-containers
     , recover-rtti
+    , template-haskell
     , text
     , transformers
     , unliftio

@@ -22,8 +22,6 @@ module Skeletest.Internal.Predicate (
   -- tup2,
   -- tup3,
   -- tup4,
-  HList (..), -- TODO: remove export, import directly from Utils.HList
-  Const (..), -- TODO: remove export, import directly from Data.Functor.Const
   -- tup,
   con,
   conMatches,

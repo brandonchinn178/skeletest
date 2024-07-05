@@ -19,6 +19,7 @@ library
     Skeletest.Internal.Snapshot
     Skeletest.Internal.Spec
     Skeletest.Internal.State
+    Skeletest.Internal.Utils.HList
     Skeletest.Main
     Skeletest.Predicate
     Skeletest.Prop.Gen

@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Skeletest.Internal.Plugin (
@@ -5,6 +6,7 @@ module Skeletest.Internal.Plugin (
 ) where
 
 import Data.Function ((&))
+import Data.Text qualified as Text
 
 import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
 import Skeletest.Internal.Error (skeletestPluginError)
@@ -35,30 +37,119 @@ transformMainModule modl = addModuleFun mainFun modl
 
     mainFun =
       FunDef
-        { funName = "main"
-        , funType = HsTypeApp (HsTypeCon "IO") [HsTypeTuple []]
+        { funName = hsName "main"
+        , funType = HsTypeApp (HsTypeCon $ hsName "IO") [HsTypeTuple []]
         , funPats = []
         , funBody =
-            HsExprApp
-              (HsExprVar "runSkeletest")
+            hsApps
+              (HsExprVar $ hsName "runSkeletest")
               [ HsExprRecordCon
-                  "SkeletestOptions"
-                  [ ("plugins", pluginsExpr)
-                  , ("snapshotRenderers", snapshotRenderersExpr)
+                  (hsName "SkeletestOptions")
+                  [ (hsName "plugins", pluginsExpr)
+                  , (hsName "snapshotRenderers", snapshotRenderersExpr)
                   ]
-              , HsExprVar mainFileSpecsListIdentifier
+              , HsExprVar $ hsName mainFileSpecsListIdentifier
               ]
         }
 
+transformTestModule :: ParsedModule -> ParsedModule
+transformTestModule = replaceConMatch . addSpec
+
+-- | Replace all uses of P.con with P.conMatches. See P.con.
+--
+-- P.con $ User (P.eq "user1") (P.contains "@")
+-- ====>
+-- P.conMatches
+--   "User"
+--   Nothing
+--   ( \case
+--       User x0 x1 -> Just (HCons (pure x0) $ HCons (pure x1) $ HNil)
+--       _ -> Nothing
+--   )
+--   (HCons (H.eq "user1") $ HCons (P.contains "@") $ HNil)
+--
+-- P.con User{name = P.eq "user1", email = P.contains "@"}
+-- ====>
+-- P.conMatches
+--   "User"
+--   (Just (HCons (Const "user") $ HCons (Const "email") $ HNil))
+--   ( \case
+--       User{name, email} -> Just (HCons (pure name) $ HCons (pure email) $ HNil)
+--       _ -> Nothing
+--   )
+--   (HCons (P.eq "user1") $ HCons (P.contains "@") $ HNil)
+replaceConMatch :: ParsedModule -> ParsedModule
+replaceConMatch = modifyModuleExprs go
+  where
+    go = \case
+      HsExprApp (HsExprVar name) arg | getHsName name == "con" ->
+        case arg of
+          _ | (HsExprCon conName, preds) <- collectApps arg -> do
+            let exprNames = zipWith (\_ i -> hsName . Text.pack . show $ i) preds [0 :: Int ..]
+            Just . hsApps (HsExprVar $ hsQualName "P" "conMatches") $
+              [ HsExprLitString $ getHsName conName
+              , HsExprCon $ hsName "Nothing"
+              , mkDeconstruct (HsPatCon conName $ map HsPatVar exprNames) exprNames
+              , mkPredList preds
+              ]
+          HsExprRecordCon conName fields -> do
+            let (fieldNames, preds) = unzip fields
+                fieldPats = [(field, HsPatVar field) | field <- fieldNames]
+            -- TODO: don't assume imported as P? use `mkOrigName` with `Module` from plugin?
+            Just . hsApps (HsExprVar $ hsQualName "P" "conMatches") $
+              [ HsExprLitString $ getHsName conName
+              , HsExprApp (HsExprCon $ hsName "Just") (mkNamesList fieldNames)
+              , mkDeconstruct (HsPatRecord conName fieldPats) fieldNames
+              , mkPredList preds
+              ]
+          _ -> skeletestPluginError "P.con must be applied to a constructor"
+      -- Check if P.con is being applied more than once
+      -- TODO: make this more precisely match Skeletest.Predicates.con
+      HsExprApp (HsExprApp (HsExprVar name) _) _ | getHsName name == "con" ->
+        skeletestPluginError "P.con must be applied to exactly one argument"
+      _ -> Nothing
+
+    -- Create the deconstruction function:
+    --
+    -- \actual ->
+    --   case actual of
+    --     User{name} -> Just (HCons (pure name) HNil)
+    --     _ -> Nothing
+    --
+    -- However, if 'User' is the only constructor, GHC complains about the wildcard
+    -- being redundant. So we'll obfuscate it a bit with
+    --
+    -- \actual ->
+    --   case pure actual of
+    --     Just User{name} -> Just (HCons (pure name) HNil)
+    --     _ -> Nothing
+    mkDeconstruct pat argNames =
+      HsExprLam (HsPatVar $ hsName "actual") $
+        HsExprCase (HsExprVar (hsName "pure") `HsExprApp` HsExprVar (hsName "actual")) $
+          [ (HsPatCon (hsName "Just") [pat], HsExprApp (HsExprCon $ hsName "Just") (mkValsList argNames))
+          , (HsPatWild, HsExprCon $ hsName "Nothing")
+          ]
+
+    mkHList f = \case
+      [] -> HsExprCon (hsQualName "P" "HNil")
+      x : xs ->
+        HsExprCon (hsQualName "P" "HCons")
+          `HsExprApp` f x
+          `HsExprApp` mkHList f xs
+
+    mkNamesList = mkHList $ \name -> HsExprApp (HsExprCon (hsQualName "P" "Const")) (HsExprLitString $ getHsName name)
+    mkValsList = mkHList $ \val -> HsExprApp (HsExprVar (hsName "pure")) (HsExprVar val)
+    mkPredList = mkHList id
+
 -- | If a module does not export a 'spec' identifier (e.g. if the module
 -- only contains test utilities), add an empty spec.
-transformTestModule :: ParsedModule -> ParsedModule
-transformTestModule modl
+addSpec :: ParsedModule -> ParsedModule
+addSpec modl
   -- if spec is not defined, generate one
   | not isSpecDefined =
       modl
         & addModuleFun specFun
-        & addModuleExport (ModuleExportVar "spec")
+        & addModuleExport (ModuleExportVar $ hsName "spec")
   -- if spec is defined but not exported, error
   | not isSpecExported =
       skeletestPluginError . unlines $
@@ -68,16 +159,16 @@ transformTestModule modl
   -- if spec is defined + exported, we're good to go
   | otherwise = modl
   where
-    isSpecDefined = ModuleValFun "spec" `elem` getModuleVals modl
+    isSpecDefined = any (== "spec") [getHsName name | ModuleValFun name <- getModuleVals modl]
     isSpecExported =
       case getModuleExports modl of
         ModuleExportEverything -> True
-        ModuleExportList exports -> ModuleExportVar "spec" `elem` exports
+        ModuleExportList exports -> any (== "spec") [getHsName name | ModuleExportVar name <- exports]
 
     specFun =
       FunDef
-        { funName = "spec"
-        , funType = HsTypeCon "Spec"
+        { funName = hsName "spec"
+        , funType = HsTypeCon $ hsName "Spec"
         , funPats = []
-        , funBody = HsExprApp (HsExprVar "pure") [HsExprTuple []]
+        , funBody = hsApps (HsExprVar $ hsName "pure") [HsExprTuple []]
         }

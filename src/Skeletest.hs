@@ -8,7 +8,9 @@ module Skeletest (
 
   -- * Assertions
   shouldBe,
+  shouldNotBe,
   shouldSatisfy,
+  shouldNotSatisfy,
 
   -- * Fixtures
   Fixture (..),

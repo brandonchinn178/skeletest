@@ -10,15 +10,23 @@ module Skeletest.Internal.Predicate (
   renderPredicate,
 
   -- * General
-  eq,
   anything,
+
+  -- * Ord
+  eq,
+  gt,
 
   -- * Data types
   just,
   -- TODO: nothing,
-  -- TODO: tup2,
-  -- TODO: tup3,
-  -- TODO: tup4,
+  -- tup2,
+  -- tup3,
+  -- tup4,
+  HList (..), -- TODO: remove export, import directly from Utils.HList
+  Const (..), -- TODO: remove export, import directly from Data.Functor.Const
+  -- tup,
+  con,
+  conMatches,
 
   -- * Numeric
   approx,
@@ -26,8 +34,13 @@ module Skeletest.Internal.Predicate (
   Tolerance (..),
 
   -- * Combinators
+  (<<<),
+  (>>>),
   not,
   -- TODO: P.any, P.all
+
+  -- * Containers
+  -- TODO: P.contains (Containable: [a], Text)
 
   -- * IO
   returns,
@@ -37,10 +50,15 @@ module Skeletest.Internal.Predicate (
   matchesSnapshot,
 ) where
 
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Except (runExceptT, throwE)
+import Data.Functor.Const (Const (..))
+import Data.Functor.Identity (Identity (..))
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Typeable (Typeable)
 import Debug.RecoverRTTI (anythingToString)
+import GHC.Generics ((:*:) (..))
 import Prelude hiding (abs, not)
 import Prelude qualified
 
@@ -50,6 +68,8 @@ import Skeletest.Internal.Snapshot (
   defaultSnapshotRenderers,
  )
 import Skeletest.Internal.State (getTestInfo)
+import Skeletest.Internal.Utils.HList (HList (..))
+import Skeletest.Internal.Utils.HList qualified as HList
 
 data Predicate a = Predicate
   { predicateFunc :: a -> IO PredicateFuncResult
@@ -102,22 +122,6 @@ setNested result = result{predicateNested = True}
 
 {----- General -----}
 
--- TODO: if rendered vals are too long, show a diff
-eq :: Eq a => a -> Predicate a
-eq expected =
-  Predicate
-    { predicateFunc = \actual ->
-        pure
-          PredicateFuncResult
-            { predicateSuccess = actual == expected
-            , predicateFailMsg = explainOp (Just actual) "≠" expected
-            , predicatePassMsg = explainOp (Just actual) "=" expected
-            , predicateNested = False
-            }
-    , predicateDisp = explainOp Nothing "=" expected
-    , predicateDispNeg = explainOp Nothing "≠" expected
-    }
-
 anything :: Predicate a
 anything =
   Predicate
@@ -132,6 +136,15 @@ anything =
     , predicateDisp = "anything"
     , predicateDispNeg = "not anything"
     }
+
+{----- Ord -----}
+
+-- TODO: if rendered vals are too long, show a diff
+eq :: Eq a => a -> Predicate a
+eq = mkPredicateOp "=" "≠" $ \actual expected -> actual == expected
+
+gt :: Ord a => a -> Predicate a
+gt = mkPredicateOp ">" "≯" $ \actual expected -> actual > expected
 
 {----- Data types -----}
 
@@ -154,6 +167,77 @@ just Predicate{..} =
   where
     disp = "Just (" <> predicateDisp <> ")"
 
+-- -- | A predicate for checking that the given tuple matches the given predicates.
+-- tup2 :: (Predicate a, Predicate b) -> Predicate (a, b)
+-- tup2 (predA, predB) =
+--   Predicate
+--     { predicateFunc = \(a, b) ->
+--         predicateFunc predA a
+--     }
+
+-- | A predicate for checking that a value matches the given constructor.
+--
+-- It takes one argument, which is the constructor, except with all fields
+-- taking a Predicate instead of the normal value. Skeletest will rewrite
+-- the expression so it typechecks correctly.
+--
+-- >>> user `shouldSatisfy` P.con User{name = P.eq "user1", email = P.contains "@"}
+--
+-- Record fields that are omitted are not checked at all; i.e.
+-- @P.con Foo{}@ and @P.con Foo{a = P.anything}@ are equivalent.
+con :: a -> Predicate a
+con =
+  -- A placeholder that will be replaced with conMatches in the plugin.
+  error "P.con was not replaced"
+
+-- | A predicate for checking that a value matches the given constructor.
+-- Assumes that the arguments correctly match the constructor being tested,
+-- so it should not be written directly, only generated from `con`.
+conMatches ::
+  String
+  -> Maybe (HList (Const String) fields)
+  -> (a -> Maybe (HList Identity fields))
+  -> HList Predicate fields
+  -> Predicate a
+conMatches conNameS mFieldNames deconstruct preds =
+  Predicate
+    { predicateFunc = \actual ->
+        case deconstruct actual of
+          Just fields -> do
+            runExceptT (HList.toListWithM runPred $ HList.hzip fields preds) >>= \case
+              Left result -> pure $ setNested result
+              Right _ -> pure $ mkResult True actual predsDisp
+          Nothing -> pure $ mkResult False actual conName
+    , predicateDisp = "matches " <> predsDisp
+    , predicateDispNeg = "does not match " <> predsDisp
+    }
+  where
+    conName = Text.pack conNameS
+    runPred (Identity field :*: p) = do
+      result@PredicateFuncResult{..} <- liftIO $ predicateFunc p field
+      if predicateSuccess
+        then pure result
+        else throwE result
+
+    mkResult success actual rhs =
+      PredicateFuncResult
+        { predicateSuccess = success
+        , predicateFailMsg = render actual <> " ≠ " <> rhs
+        , predicatePassMsg = render actual <> " = " <> rhs
+        , predicateNested = False
+        }
+
+    predsDisp =
+      case mFieldNames of
+        Just fieldNames ->
+          let
+            renderField (Const fieldName :*: p) = Text.pack fieldName <> " = " <> parens (predicateDisp p)
+            fields = HList.toListWith renderField $ HList.hzip fieldNames preds
+          in
+            conName <> "{" <> Text.intercalate ", " fields <> "}"
+        Nothing ->
+          Text.unwords $ conName : map parens (HList.toListWith predicateDisp preds)
+
 {----- Numeric -----}
 
 -- | A predicate for checking that a value is equal within some tolerance.
@@ -168,23 +252,13 @@ just Predicate{..} =
 -- >>> 0.1 + 0.2 `shouldSatisfy` P.approx P.tol{P.rel = Nothing} 0.3
 -- >>> 0.1 + 0.2 `shouldSatisfy` P.approx P.tol{P.rel = Nothing, P.abs = 1e-12} 0.3
 approx :: (Fractional a, Ord a) => Tolerance -> a -> Predicate a
-approx Tolerance{..} expected =
-  Predicate
-    { predicateFunc = \actual ->
-        pure
-          PredicateFuncResult
-            { predicateSuccess = Prelude.abs (actual - expected) <= tolerance
-            , predicateFailMsg = explainOp (Just actual) "≉" expected
-            , predicatePassMsg = explainOp (Just actual) "≈" expected
-            , predicateNested = False
-            }
-    , predicateDisp = explainOp Nothing "≈" expected
-    , predicateDispNeg = explainOp Nothing "≉" expected
-    }
+approx Tolerance{..} =
+  mkPredicateOp "≈" "≉" $ \actual expected ->
+    Prelude.abs (actual - expected) <= getTolerance expected
   where
     mRelTol = fromTol <$> rel
     absTol = fromTol abs
-    tolerance =
+    getTolerance expected =
       case mRelTol of
         Just relTol -> max (relTol * Prelude.abs expected) absTol
         Nothing -> absTol
@@ -202,6 +276,18 @@ tol :: Tolerance
 tol = Tolerance{rel = Just 1e-6, abs = 1e-12}
 
 {----- Combinators -----}
+
+(<<<) :: Predicate a -> (b -> a) -> Predicate b
+Predicate{..} <<< f =
+  -- TODO: render function name in predicateDisp?
+  Predicate
+    { predicateFunc = fmap setNested . predicateFunc . f
+    , predicateDisp
+    , predicateDispNeg
+    }
+
+(>>>) :: (b -> a) -> Predicate a -> Predicate b
+(>>>) = flip (<<<)
 
 not :: Predicate a -> Predicate a
 not Predicate{..} =
@@ -259,11 +345,37 @@ matchesSnapshot =
 
 {----- Utilities -----}
 
-explainOp :: Maybe a -> Text -> a -> Text
-explainOp mActual op expected =
-  case mActual of
-    Just actual -> render actual <> " " <> op <> " " <> render expected
-    Nothing -> op <> " " <> render expected
+mkPredicateOp ::
+  Text -- ^ operator
+  -> Text -- ^ negative operator
+  -> (a -> a -> Bool) -- ^ actual -> expected -> success
+  -> a -- ^ expected
+  -> Predicate a
+mkPredicateOp op negOp f expected =
+  Predicate
+    { predicateFunc = \actual ->
+        pure
+          PredicateFuncResult
+            { predicateSuccess = f actual expected
+            , predicateFailMsg = explainOp (Just actual) negOp
+            , predicatePassMsg = explainOp (Just actual) op
+            , predicateNested = False
+            }
+    , predicateDisp = explainOp Nothing op
+    , predicateDispNeg = explainOp Nothing negOp
+    }
+  where
+    explainOp mActual op' =
+      case mActual of
+        Just actual -> render actual <> " " <> op' <> " " <> render expected
+        Nothing -> op' <> " " <> render expected
 
 render :: a -> Text
 render = Text.pack . anythingToString
+
+-- | Add parentheses if the given input contains spaces.
+parens :: Text -> Text
+parens s =
+  if " " `Text.isInfixOf` s
+    then "(" <> s <> ")"
+    else s

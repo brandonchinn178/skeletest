@@ -59,6 +59,10 @@ spec = do
       DbConnFixture conn <- getFixture
       ioFunc conn 100 `shouldSatisfy` P.matchesSnapshot
 
+  describe "getUser" $ do
+    it "returns a matching user" $ do
+      getUser "user1" `shouldSatisfy` P.con User{name = P.eq "user1", email = P.contains "@"}
+
 newtype DbConnFixture = DbConnFixture Connection
 
 instance Fixture DbConnFixture where

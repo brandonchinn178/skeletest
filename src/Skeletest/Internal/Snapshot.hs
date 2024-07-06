@@ -34,12 +34,7 @@ import System.FilePath (replaceExtension, splitFileName, (</>))
 import System.IO.Error (isDoesNotExistError)
 import UnliftIO.Exception (throwIO, try)
 
-import Skeletest.Internal.Fixtures (
-  Fixture (..),
-  FixtureCleanup (..),
-  FixtureDef (..),
-  FixtureScope (..),
- )
+import Skeletest.Internal.Fixtures (Fixture (..), noCleanup)
 import Skeletest.Internal.State (TestInfo (..))
 
 {----- Fixture -----}
@@ -49,13 +44,9 @@ data SnapshotFixture = SnapshotFixture
   }
 
 instance Fixture SnapshotFixture where
-  fixtureDef =
-    FixtureDef
-      { fixtureScope = PerTestFixture
-      , fixtureImpl = do
-          snapshotIndexRef <- newIORef 0
-          pure (SnapshotFixture{..}, NoCleanup)
-      }
+  fixtureAction = do
+    snapshotIndexRef <- newIORef 0
+    pure . noCleanup $ SnapshotFixture{..}
 
 {----- Checking snapshot -----}
 

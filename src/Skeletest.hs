@@ -14,11 +14,11 @@ module Skeletest (
 
   -- * Fixtures
   Fixture (..),
-  FixtureDef (..),
   FixtureScope (..),
   FixtureCleanup (..),
   getFixture,
-  cleanupFixtures,
+  noCleanup,
+  withCleanup,
 ) where
 
 import Skeletest.Assertions

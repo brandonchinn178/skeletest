@@ -5,7 +5,7 @@ module Skeletest.Internal.State (
   FixtureRegistry (..),
   FixtureStatus (..),
   FixtureCleanup (..),
-  withFixtureRegistry,
+  modifyFixtureRegistry,
 
   -- * CLI options
   -- TODO
@@ -69,8 +69,8 @@ emptyFixtureRegistry =
     , testFixtures = Map.empty
     }
 
-withFixtureRegistry :: (FixtureRegistry -> (FixtureRegistry, a)) -> IO a
-withFixtureRegistry f =
+modifyFixtureRegistry :: (FixtureRegistry -> (FixtureRegistry, a)) -> IO a
+modifyFixtureRegistry f =
   atomicModifyIORef globalStateRef $ \s ->
     let (registry, a) = f (fixturesRegistry s)
      in (s{fixturesRegistry = registry}, a)
@@ -91,8 +91,8 @@ withTestInfo info m = do
   tid <- myThreadId
   bracket_ (set tid) (unset tid) m
   where
-    set tid = modifyIORef globalStateRef (\s -> s{testInfoMap = Map.insert tid info (testInfoMap s)})
-    unset tid = modifyIORef globalStateRef (\s -> s{testInfoMap = Map.delete tid (testInfoMap s)})
+    set tid = modifyIORef globalStateRef $ \s -> s{testInfoMap = Map.insert tid info (testInfoMap s)}
+    unset tid = modifyIORef globalStateRef $ \s -> s{testInfoMap = Map.delete tid (testInfoMap s)}
 
 lookupTestInfo :: IO (Maybe TestInfo)
 lookupTestInfo = do

@@ -69,13 +69,9 @@ data UserNoShow = UserNoShow
 -- | A helper for tracing fixtures
 newtype TraceFixture = TraceFixture (IORef [String])
 instance Fixture TraceFixture where
-  fixtureDef =
-    FixtureDef
-      { fixtureScope = PerTestFixture
-      , fixtureImpl = do
-          traceRef <- newIORef []
-          pure (TraceFixture traceRef, NoCleanup)
-      }
+  fixtureAction = do
+    traceRef <- newIORef []
+    pure . noCleanup $ TraceFixture traceRef
 
 {-----
 Fixtures example:
@@ -89,48 +85,32 @@ B   C
 
 data FixtureA = FixtureA
 instance Fixture FixtureA where
-  fixtureDef =
-    FixtureDef
-      { fixtureScope = PerTestFixture
-      , fixtureImpl = do
-          TraceFixture traceRef <- getFixture
-          modifyIORef' traceRef (<> ["A"])
-          pure (FixtureA, NoCleanup)
-      }
+  fixtureAction = do
+    TraceFixture traceRef <- getFixture
+    modifyIORef' traceRef (<> ["A"])
+    pure . noCleanup $ FixtureA
 
 data FixtureB = FixtureB
 instance Fixture FixtureB where
-  fixtureDef =
-    FixtureDef
-      { fixtureScope = PerTestFixture
-      , fixtureImpl = do
-          FixtureA <- getFixture
-          TraceFixture traceRef <- getFixture
-          modifyIORef' traceRef (<> ["B"])
-          pure (FixtureB, NoCleanup)
-      }
+  fixtureAction = do
+    FixtureA <- getFixture
+    TraceFixture traceRef <- getFixture
+    modifyIORef' traceRef (<> ["B"])
+    pure . noCleanup $ FixtureB
 
 data FixtureC = FixtureC
 instance Fixture FixtureC where
-  fixtureDef =
-    FixtureDef
-      { fixtureScope = PerTestFixture
-      , fixtureImpl = do
-          FixtureA <- getFixture
-          TraceFixture traceRef <- getFixture
-          modifyIORef' traceRef (<> ["C"])
-          pure (FixtureC, NoCleanup)
-      }
+  fixtureAction = do
+    FixtureA <- getFixture
+    TraceFixture traceRef <- getFixture
+    modifyIORef' traceRef (<> ["C"])
+    pure . noCleanup $ FixtureC
 
 data FixtureD = FixtureD
 instance Fixture FixtureD where
-  fixtureDef =
-    FixtureDef
-      { fixtureScope = PerTestFixture
-      , fixtureImpl = do
-          FixtureB <- getFixture
-          FixtureC <- getFixture
-          TraceFixture traceRef <- getFixture
-          modifyIORef' traceRef (<> ["D"])
-          pure (FixtureD, NoCleanup)
-      }
+  fixtureAction = do
+    FixtureB <- getFixture
+    FixtureC <- getFixture
+    TraceFixture traceRef <- getFixture
+    modifyIORef' traceRef (<> ["D"])
+    pure . noCleanup $ FixtureD

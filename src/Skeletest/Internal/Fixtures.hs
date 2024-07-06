@@ -1,14 +1,15 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 
 module Skeletest.Internal.Fixtures (
   Fixture (..),
-  FixtureDef (..),
   FixtureScope (..),
   getFixture,
 
   -- * Cleanup
   FixtureCleanup (..),
+  noCleanup,
   withCleanup,
   cleanupFixtures,
 ) where
@@ -29,20 +30,23 @@ import Skeletest.Internal.State (
   FixtureCleanup (..),
   FixtureRegistry (..),
   FixtureStatus (..),
-  withFixtureRegistry,
+  modifyFixtureRegistry,
  )
 
 class Typeable a => Fixture a where
-  fixtureDef :: FixtureDef a
+  -- | The scope of the fixture, defaults to per-test
+  fixtureScope :: FixtureScope
+  fixtureScope = PerTestFixture
 
-data FixtureDef a = FixtureDef
-  { fixtureScope :: FixtureScope
-  , fixtureImpl :: IO (a, FixtureCleanup)
-  }
+  fixtureAction :: IO (a, FixtureCleanup)
 
 data FixtureScope
   = PerTestFixture
   | PerSessionFixture
+
+-- | A helper for specifying no cleanup.
+noCleanup :: a -> (a, FixtureCleanup)
+noCleanup a = (a, NoCleanup)
 
 -- | A helper for defining the cleanup function in-line.
 withCleanup :: a -> IO () -> (a, FixtureCleanup)
@@ -51,11 +55,11 @@ withCleanup a cleanup = (a, CleanupFunc cleanup)
 -- | Load a fixture, initializing it if it hasn't been cached already.
 getFixture :: forall a m. (Fixture a, MonadIO m) => m a
 getFixture = liftIO $ do
-  (getScopedFixtures, updateScopedFixtures) <- getScopedAccessors scope
+  (getScopedFixtures, updateScopedFixtures) <- getScopedAccessors (fixtureScope @a)
   let insertFixture state = updateScopedFixtures (OMap.>| (rep, state))
 
   cachedFixture <-
-    withFixtureRegistry $ \registry ->
+    modifyFixtureRegistry $ \registry ->
       case OMap.lookup rep $ getScopedFixtures registry of
         -- fixture has not been requested yet
         Nothing -> (insertFixture FixtureInProgress registry, Nothing)
@@ -65,7 +69,7 @@ getFixture = liftIO $ do
             Just Refl -> (registry, Just fixture)
             Nothing ->
               invariantViolation . unwords $
-                [ "loadedFixturesVar contained incorrect types."
+                [ "fixture registry contained incorrect types."
                 , "Expected: " <> show rep <> "."
                 , "Got: " <> show (typeOf fixture)
                 ]
@@ -76,12 +80,11 @@ getFixture = liftIO $ do
     Just fixture -> pure fixture
     -- otherwise, execute it (allowing it to request other fixtures) and cache the result.
     Nothing -> do
-      result@(fixture, _) <- runFixture
-      withFixtureRegistry $ \registry -> (insertFixture (FixtureLoaded result) registry, ())
+      result@(fixture, _) <- fixtureAction @a
+      modifyFixtureRegistry $ \registry -> (insertFixture (FixtureLoaded result) registry, ())
       pure fixture
   where
     rep = typeRep (Proxy @a)
-    FixtureDef{fixtureScope = scope, fixtureImpl = runFixture} = fixtureDef @a
 
 -- | Clean up fixtures in the given scope.
 --
@@ -94,7 +97,7 @@ cleanupFixtures scope = do
   -- get fixtures in the given scope and clear
   (getScopedFixtures, updateScopedFixtures) <- getScopedAccessors scope
   fixtures <-
-    withFixtureRegistry $ \registry ->
+    modifyFixtureRegistry $ \registry ->
       (updateScopedFixtures (const OMap.empty) registry, getScopedFixtures registry)
 
   errors <-

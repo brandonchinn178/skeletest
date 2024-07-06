@@ -22,12 +22,15 @@ import Control.Monad.Trans.Except qualified as Trans
 import Control.Monad.Trans.State qualified as Trans
 import Data.Bifunctor (first, second)
 import Data.Dynamic (fromDynamic, toDyn)
+import Data.Foldable1 qualified as Foldable1
+import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Proxy (Proxy (..))
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Text.IO qualified as Text
 import Data.Typeable (Typeable, typeOf, typeRep)
 import System.Environment (getArgs)
 import System.Exit (exitSuccess)
@@ -78,6 +81,11 @@ class Typeable a => IsFlag a where
   flagShort :: Maybe Char
   flagShort = Nothing
 
+  -- | The placeholder for the flag to show in the help text, if
+  -- the flag takes an argument.
+  flagMetaVar :: String
+  flagMetaVar = "VAR"
+
   flagHelp :: String
 
   flagSpec :: FlagSpec a
@@ -87,11 +95,11 @@ data FlagSpec a
       { flagFromBool :: Bool -> a
       }
   | RequiredFlag
-      { flagParse :: String -> Either Text a
+      { flagParse :: String -> Either String a
       }
   | OptionalFlag
       { flagDefault :: a
-      , flagParse :: String -> Either Text a
+      , flagParse :: String -> Either String a
       }
 
 getFlag :: forall a m. (MonadIO m, IsFlag a) => m a
@@ -112,24 +120,99 @@ getFlag =
   where
     rep = typeRep (Proxy @a)
 
+{----- Load CLI arguments -----}
+
 -- | Parse the CLI arguments using the given user-defined flags, then
 -- stores the flags in the global state and returns the positional
 -- arguments.
-loadCliArgs :: [Flag] -> IO [Text]
-loadCliArgs flags = do
+loadCliArgs :: [Flag] -> [Flag] -> IO [Text]
+loadCliArgs builtinFlags flags = do
   args <- getArgs
 
   -- quick sweep for --help/-h; skip parsing flags if so
   when (any (`elem` ["--help", "-h"]) args) $ do
-    printHelpText flags
+    printHelpText builtinFlags flags
     exitSuccess
 
-  (args', flagStore) <- either (error . Text.unpack) pure $ parseCliArgs flags args
+  (args', flagStore) <- either (error . Text.unpack) pure $ parseCliArgs (builtinFlags <> flags) args
   setCliFlagStore flagStore
   pure args'
 
-printHelpText :: [Flag] -> IO ()
-printHelpText _ = error "TODO: --help"
+printHelpText :: [Flag] -> [Flag] -> IO ()
+printHelpText builtinFlags customFlags =
+  -- TODO: rewrap to terminal width
+  Text.putStrLn . Text.intercalate "\n\n" $
+    "Usage: skeletest [OPTIONS] [--] [TARGETS]" : map (uncurry renderSection) helpSections
+  where
+    helpSections =
+      filter (not . Text.null . snd) $
+        [ ("TEST SELECTION", testSelectionDocs)
+        , ("BUILTIN OPTIONS", renderFlagList builtinFlagDocs)
+        , ("CUSTOM OPTIONS", renderFlagList customFlagDocs)
+        ]
+
+    testSelectionDocs =
+      Text.intercalate "\n" $
+        [ "Test targets may be specified as plain positional arguments, with the following syntax:"
+        , "    * Tests in file, relative to CWD:     'test/MyLib/FooSpec.hs'"
+        , "    * Tests matching pattern in file:     'test/MyLib/FooSpec.hs:{myFooFunc}'"
+        , "    * Tests matching pattern in any file: '{myFooFunc}'"
+        , "    * Tests matching both targets:        '{func1} and {func2}'"
+        , "    * Tests matching either target:       '{func1} or {func2}'"
+        , "    * Tests not matching target:          'not {func1}"
+        , ""
+        , "When multiple targets are specified, they are joined with 'or'."
+        , ""
+        , "Tests can also be tagged with markers, which can be specified with the following syntax:"
+        , "    * Tests with given marker:  --marker 'nightly'"
+        , "    * Tests without marker:     --marker 'not nightly'"
+        , "    * Tests with both markers:  --marker 'nightly and fast'"
+        , "    * Tests with either marker: --marker 'not nightly or fast'"
+        ]
+
+    builtinFlagDocs = ("help", Just 'h', Nothing, "Display this help text") : fromFlags builtinFlags
+    customFlagDocs = fromFlags customFlags
+    fromFlags flags =
+      [ (Text.pack (flagName @a), flagShort @a, mMetaVar, Text.pack (flagHelp @a))
+      | Flag (Proxy :: Proxy a) <- flags
+      , let mMetaVar =
+              case flagSpec @a of
+                SwitchFlag{} -> Nothing
+                RequiredFlag{} -> Just $ Text.pack (flagMetaVar @a)
+                OptionalFlag{} -> Just $ Text.pack (flagMetaVar @a)
+      ]
+
+    renderSection title body =
+      Text.intercalate "\n" $
+        [ "===== " <> title
+        , ""
+        , body
+        ]
+
+    renderFlagList flagList =
+      Text.intercalate "\n" . mkTabular $
+        [ (shortName <> renderLongFlag longName <> metaVar, help)
+        | (longName, mShortName, mMetaVar, help) <- flagList
+        , let
+            shortName =
+              case mShortName of
+                Just short -> renderShortFlag short <> ", "
+                Nothing -> ""
+            metaVar =
+              case mMetaVar of
+                Just meta -> " <" <> meta <> ">"
+                Nothing -> ""
+        ]
+
+    mkTabular rows0 =
+      case NonEmpty.nonEmpty rows0 of
+        Nothing -> []
+        Just rows ->
+          let fstColWidth = Foldable1.maximum $ NonEmpty.map (Text.length . fst) rows
+              margin = 2 -- space between columns
+           in [ a <> Text.replicate (fstColWidth - Text.length a + margin) " " <> b
+              | (a, b) <- NonEmpty.toList rows
+              ]
 
 {----- Parse args -----}
 
@@ -196,8 +279,8 @@ parseCliArgsWith longFlags shortFlags = Trans.runExcept . flip Trans.execStateT 
               curr : rest -> parseArg curr >>= addFlagStore >> parseArgs rest
       case flagSpec @a of
         SwitchFlag{flagFromBool} -> addFlagStore (flagFromBool True) >> parseArgs args
-        RequiredFlag{flagParse} -> parseFlagArg (Trans.lift . Trans.except . flagParse)
-        OptionalFlag{flagParse} -> parseFlagArg (Trans.lift . Trans.except . flagParse)
+        RequiredFlag{flagParse} -> parseFlagArg (Trans.lift . Trans.except . first Text.pack . flagParse)
+        OptionalFlag{flagParse} -> parseFlagArg (Trans.lift . Trans.except . first Text.pack . flagParse)
 
     argError = Trans.lift . Trans.throwE
 

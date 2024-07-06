@@ -28,7 +28,7 @@ import System.Exit (exitFailure)
 
 import Skeletest.Internal.CLI (Flag, flag, loadCliArgs)
 import Skeletest.Internal.Snapshot (SnapshotRenderer (..), SnapshotUpdateFlag)
-import Skeletest.Internal.Spec (Spec, SpecTree (..), filterSpec, runSpecs)
+import Skeletest.Internal.Spec (MarkerFlag, Spec, SpecTree (..), filterSpec, runSpecs)
 
 -- TODO: a plugin should return a SkeletestOptions to merge with the other options
 type Plugin = ()
@@ -51,21 +51,22 @@ defaultOptions =
 -- TODO: handle plugins
 runSkeletest :: SkeletestOptions -> [(FilePath, String, Spec)] -> IO ()
 runSkeletest SkeletestOptions{..} testModules = do
-  _ <- loadCliArgs (builtinFlags <> cliFlags)
+  targets <- loadCliArgs builtinFlags cliFlags
   let initialSpecs = map mkSpec testModules
-  success <- runSpecs . pruneSpec . selectTests $ initialSpecs
+  success <- runSpecs . pruneSpec . selectTests targets $ initialSpecs
   unless success exitFailure
   where
     builtinFlags =
-      [ flag @SnapshotUpdateFlag
+      [ flag @MarkerFlag
+      , flag @SnapshotUpdateFlag
       ]
 
     mkSpec (fp, name, spec) =
       let name' = stripSuffix "Spec" $ Text.pack name
        in (fp, name', spec)
 
-    -- TODO: allow filtering test tree by filepath, name of test, etc. in CLI arguments
-    selectTests = id
+    -- TODO: filter by targets and markers
+    selectTests _ = id
 
     -- remove empty specs
     pruneSpec specs =

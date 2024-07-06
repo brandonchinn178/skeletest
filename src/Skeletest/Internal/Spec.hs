@@ -26,6 +26,8 @@ module Skeletest.Internal.Spec (
   AnonMarker (..),
   withMarker,
   withMarkers,
+  MarkerFlag,
+  filterMarkers,
 ) where
 
 import Control.Monad (forM)
@@ -44,6 +46,7 @@ import UnliftIO.Exception (
  )
 
 import Skeletest.Assertions (TestFailure (..))
+import Skeletest.Internal.CLI (IsFlag (..), FlagSpec (..))
 import Skeletest.Internal.Fixtures (FixtureScope (..), cleanupFixtures)
 import Skeletest.Internal.State (TestInfo (..), withTestInfo)
 import Skeletest.Prop.Internal (Property, runProperty)
@@ -177,3 +180,37 @@ withMarkers :: [String] -> Spec -> Spec
 withMarkers = foldr (\mark acc -> withMarker (toAnon mark) . acc) id
   where
     toAnon = AnonMarker . Text.pack
+
+filterMarkers :: MarkerFlag -> Spec -> Spec
+filterMarkers (MarkerFlag mMarkerSpec) =
+  case mMarkerSpec of
+    Nothing -> id
+    Just markerSpec -> filterWithMarkerSpec markerSpec
+
+newtype MarkerFlag = MarkerFlag (Maybe MarkerSpec)
+
+instance IsFlag MarkerFlag where
+  flagName = "marker"
+  flagShort = Just 'm'
+  flagHelp = "Filter tests by marker (see TEST SELECTION)"
+  flagSpec =
+    OptionalFlag
+      { flagDefault = MarkerFlag Nothing
+      , flagParse = fmap (MarkerFlag . Just) . parseMarkerSpec
+      }
+
+data MarkerSpec
+  = MarkerSpecName Text
+  | MarkerSpecNot MarkerSpec
+  | MarkerSpecAnd MarkerSpec MarkerSpec
+  | MarkerSpecOr MarkerSpec MarkerSpec
+
+parseMarkerSpec :: String -> Either String MarkerSpec
+parseMarkerSpec = undefined
+
+filterWithMarkerSpec :: MarkerSpec -> Spec -> Spec
+filterWithMarkerSpec = \case
+  MarkerSpecName{} -> undefined
+  MarkerSpecNot{} -> undefined
+  MarkerSpecAnd{} -> undefined
+  MarkerSpecOr{} -> undefined

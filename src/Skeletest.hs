@@ -19,8 +19,15 @@ module Skeletest (
   getFixture,
   noCleanup,
   withCleanup,
+
+  -- * CLI flags
+  Flag (..),
+  IsFlag (..),
+  FlagSpec (..),
+  getFlag,
 ) where
 
 import Skeletest.Assertions
+import Skeletest.Internal.CLI
 import Skeletest.Internal.Fixtures
 import Skeletest.Internal.Spec

@@ -61,11 +61,13 @@ import GHC.Generics ((:*:) (..))
 import Prelude hiding (abs, not)
 import Prelude qualified
 
+import Skeletest.Internal.CLI (getFlag)
 import Skeletest.Internal.Fixtures (getFixture)
 import Skeletest.Internal.Snapshot (
   SnapshotContext (..),
   SnapshotFixture (..),
   SnapshotResult (..),
+  SnapshotUpdateFlag (..),
   checkSnapshot,
   defaultSnapshotRenderers,
  )
@@ -323,13 +325,13 @@ returns Predicate{..} =
 
 {----- Snapshot -----}
 
--- TODO: --update to update snapshots
 -- TODO: if no filters were added, error if outdated snapshot files (--update to remove)
 -- TODO: if all tests in file were run, error if snapshot file contains outdated tests (--update to remove)
 matchesSnapshot :: Typeable a => Predicate a
 matchesSnapshot =
   Predicate
     { predicateFunc = \actual -> do
+        SnapshotUpdateFlag doUpdate <- getFlag
         testInfo <- getTestInfo
         SnapshotFixture{snapshotIndexRef} <- getFixture
         snapshotIndex <- atomicModifyIORef snapshotIndexRef $ \i -> (i + 1, i)
@@ -339,7 +341,12 @@ matchesSnapshot =
                 , snapshotTestInfo = testInfo
                 , snapshotIndex
                 }
-        result <- checkSnapshot ctx actual
+
+        result <-
+          if doUpdate
+            then error "TODO: --update" >> pure SnapshotMatches
+            else checkSnapshot ctx actual
+
         pure
           PredicateFuncResult
             { predicateSuccess = result == SnapshotMatches

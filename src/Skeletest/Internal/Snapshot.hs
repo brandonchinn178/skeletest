@@ -4,9 +4,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Skeletest.Internal.Snapshot (
-  -- * Fixture
-  SnapshotFixture (..),
-
   -- * Checking snapshot
   SnapshotContext (..),
   SnapshotResult (..),
@@ -15,6 +12,10 @@ module Skeletest.Internal.Snapshot (
   -- * Rendering
   SnapshotRenderer (..),
   defaultSnapshotRenderers,
+
+  -- * Infrastructure
+  SnapshotFixture (..),
+  SnapshotUpdateFlag (..),
 ) where
 
 import Control.Monad.IO.Class (liftIO)
@@ -34,10 +35,11 @@ import System.FilePath (replaceExtension, splitFileName, (</>))
 import System.IO.Error (isDoesNotExistError)
 import UnliftIO.Exception (throwIO, try)
 
+import Skeletest.Internal.CLI (IsFlag (..), FlagSpec (..))
 import Skeletest.Internal.Fixtures (Fixture (..), noCleanup)
 import Skeletest.Internal.State (TestInfo (..))
 
-{----- Fixture -----}
+{----- Infrastructure -----}
 
 data SnapshotFixture = SnapshotFixture
   { snapshotIndexRef :: IORef Int
@@ -47,6 +49,14 @@ instance Fixture SnapshotFixture where
   fixtureAction = do
     snapshotIndexRef <- newIORef 0
     pure . noCleanup $ SnapshotFixture{..}
+
+newtype SnapshotUpdateFlag = SnapshotUpdateFlag Bool
+
+instance IsFlag SnapshotUpdateFlag where
+  flagName = "update"
+  flagShort = Just 'u'
+  flagHelp = "Update snapshots"
+  flagSpec = SwitchFlag SnapshotUpdateFlag
 
 {----- Checking snapshot -----}
 

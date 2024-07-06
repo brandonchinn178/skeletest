@@ -9,6 +9,7 @@ library
   exposed-modules:
     Skeletest
     Skeletest.Assertions
+    Skeletest.Internal.CLI
     Skeletest.Internal.Constants
     Skeletest.Internal.Error
     Skeletest.Internal.Fixtures

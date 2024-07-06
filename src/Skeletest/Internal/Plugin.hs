@@ -35,11 +35,14 @@ plugin =
 transformMainModule :: ParsedModule -> ParsedModule
 transformMainModule modl = addModuleFun mainFun modl
   where
-    -- TODO: if `plugins` value exists in `getModuleVals modl`, use `HsExprVar "plugins"`
-    pluginsExpr = HsExprList []
+    -- TODO: if `cliFlags` value exists in `getModuleVals modl`, use `HsExprVar "cliFlags"`
+    cliFlagsExpr = HsExprList []
 
     -- TODO: if `snapshotRenderers` value exists in `getModuleVals modl`, use `HsExprVar "snapshotRenderers"`
     snapshotRenderersExpr = HsExprList []
+
+    -- TODO: if `plugins` value exists in `getModuleVals modl`, use `HsExprVar "plugins"`
+    pluginsExpr = HsExprList []
 
     mainFun =
       FunDef
@@ -51,8 +54,9 @@ transformMainModule modl = addModuleFun mainFun modl
               (HsExprVar $ hsName 'Main.runSkeletest)
               [ HsExprRecordCon
                   (hsName 'Main.SkeletestOptions)
-                  [ (hsName 'Main.plugins, pluginsExpr)
+                  [ (hsName 'Main.cliFlags, cliFlagsExpr)
                   , (hsName 'Main.snapshotRenderers, snapshotRenderersExpr)
+                  , (hsName 'Main.plugins, pluginsExpr)
                   ]
               , HsExprVar $ hsNewName mainFileSpecsListIdentifier
               ]

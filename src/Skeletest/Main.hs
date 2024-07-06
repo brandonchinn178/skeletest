@@ -16,8 +16,10 @@ module Skeletest.Main (
   Spec,
 ) where
 
+import Control.Monad (unless)
 import Data.Maybe (fromMaybe)
 import Data.Text qualified as Text
+import System.Exit (exitFailure)
 
 import Skeletest.Internal.Snapshot (SnapshotRenderer (..))
 import Skeletest.Internal.Spec (Spec, SpecTree (..), filterSpec, runSpecs)
@@ -42,7 +44,8 @@ defaultOptions =
 runSkeletest :: SkeletestOptions -> [(FilePath, String, Spec)] -> IO ()
 runSkeletest _ testModules = do
   let initialSpecs = map mkSpec testModules
-  runSpecs . pruneSpec . selectTests $ initialSpecs
+  success <- runSpecs . pruneSpec . selectTests $ initialSpecs
+  unless success exitFailure
   where
     mkSpec (fp, name, spec) =
       let name' = stripSuffix "Spec" $ Text.pack name

@@ -28,7 +28,7 @@ module Skeletest.Internal.Spec (
   withMarkers,
 ) where
 
-import Control.Monad (forM_)
+import Control.Monad (forM)
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -71,11 +71,14 @@ filterSpec f = Spec . tell . go . getSpecTrees
       SpecGroup name trees -> SpecGroup name (go trees)
       SpecTest name io -> SpecTest name io
 
+-- | Run the given Specs and return whether all of the tests passed.
+--
 -- TODO: allow running tests in parallel
-runSpecs :: [(FilePath, Text, Spec)] -> IO ()
+-- TODO: colors
+runSpecs :: [(FilePath, Text, Spec)] -> IO Bool
 runSpecs specs =
   (`finally` cleanupFixtures PerSessionFixture) $
-    forM_ specs $ \(testFile, testModule, spec) -> do
+    fmap and . forM specs $ \(testFile, testModule, spec) -> do
       let emptyTestInfo =
             TestInfo
               { testModule
@@ -84,14 +87,14 @@ runSpecs specs =
               , testFile
               }
       Text.putStrLn testModule
-      go emptyTestInfo $ getSpecTrees spec
+      runTrees emptyTestInfo $ getSpecTrees spec
   where
-    -- TODO: colors
-    go testInfo = mapM_ $ \case
+    runTrees testInfo = fmap and . mapM (runTree testInfo)
+    runTree testInfo = \case
       SpecGroup name trees -> do
         let lvl = getIndentLevel testInfo
         Text.putStrLn $ indent lvl name
-        go testInfo{testContexts = testContexts testInfo <> [name]} trees
+        runTrees testInfo{testContexts = testContexts testInfo <> [name]} trees
       SpecTest name io -> do
         let lvl = getIndentLevel testInfo
         Text.putStr $ indent lvl (name <> ": ")
@@ -105,14 +108,17 @@ runSpecs specs =
         case result of
           Right () -> do
             Text.putStrLn "OK"
-          Left (e :: SomeException)
-            | Just TestFailure{testInfo = _, ..} <- fromException e -> do
+            pure True
+          Left (e :: SomeException) -> do
+            case fromException e of
+              Just TestFailure{testInfo = _, ..} -> do
                 Text.putStrLn "FAIL"
                 Text.putStrLn $ indent (lvl + 1) testFailMessage
                 Text.putStrLn $ indent (lvl + 1) (Text.pack $ GHC.prettyCallStack callStack)
-            | otherwise -> do
+              Nothing -> do
                 Text.putStrLn "ERROR"
                 Text.putStrLn $ indent lvl (Text.pack $ displayException e)
+            pure False
 
     getIndentLevel testInfo = length (testContexts testInfo) + 1 -- +1 to include the module name
     indent lvl = Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"

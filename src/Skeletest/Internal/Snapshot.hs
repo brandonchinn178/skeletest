@@ -4,7 +4,11 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Skeletest.Internal.Snapshot (
+  -- * Fixture
+  SnapshotFixture (..),
+
   -- * Checking snapshot
+  SnapshotContext (..),
   SnapshotResult (..),
   checkSnapshot,
 
@@ -15,6 +19,7 @@ module Skeletest.Internal.Snapshot (
 
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT, throwE)
+import Data.IORef (IORef, newIORef)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
@@ -29,9 +34,36 @@ import System.FilePath (replaceExtension, splitFileName, (</>))
 import System.IO.Error (isDoesNotExistError)
 import UnliftIO.Exception (throwIO, try)
 
+import Skeletest.Internal.Fixtures (
+  Fixture (..),
+  FixtureCleanup (..),
+  FixtureDef (..),
+  FixtureScope (..),
+ )
 import Skeletest.Internal.State (TestInfo (..))
 
+{----- Fixture -----}
+
+data SnapshotFixture = SnapshotFixture
+  { snapshotIndexRef :: IORef Int
+  }
+
+instance Fixture SnapshotFixture where
+  fixtureDef =
+    FixtureDef
+      { fixtureScope = PerTestFixture
+      , fixtureImpl = do
+          snapshotIndexRef <- newIORef 0
+          pure (SnapshotFixture{..}, NoCleanup)
+      }
+
 {----- Checking snapshot -----}
+
+data SnapshotContext = SnapshotContext
+  { snapshotRenderers :: [SnapshotRenderer]
+  , snapshotTestInfo :: TestInfo
+  , snapshotIndex :: Int
+  }
 
 data SnapshotResult
   = SnapshotMissing
@@ -43,8 +75,8 @@ data SnapshotResult
   deriving (Show, Eq)
 
 -- TODO: use a per-file fixture to cache snapshot files and write it all back in cleanup?
-checkSnapshot :: Typeable a => [SnapshotRenderer] -> TestInfo -> a -> IO SnapshotResult
-checkSnapshot renderers TestInfo{..} testResult =
+checkSnapshot :: Typeable a => SnapshotContext -> a -> IO SnapshotResult
+checkSnapshot snapshotContext testResult =
   fmap (either id absurd) . runExceptT $ do
     snapshotFileContents <-
       liftIO (try $ Text.readFile $ snapshotPath testFile) >>= \case
@@ -53,23 +85,35 @@ checkSnapshot renderers TestInfo{..} testResult =
           | otherwise -> throwIO e
         Right contents -> pure contents
 
-    snapshots <-
+    fileSnapshots <-
       case decodeSnapshotFile snapshotFileContents of
         Nothing -> error "corrupted snapshot file" -- TODO: better error
         Just SnapshotFile{snapshots} -> pure snapshots
 
-    snapshotContent <- fmap head' $ maybe (returnE SnapshotMissing) pure $ Map.lookup (testContexts <> [testName]) snapshots
+    let snapshots = Map.findWithDefault [] (testContexts <> [testName]) fileSnapshots
+    snapshotContent <- maybe (returnE SnapshotMissing) pure $ safeIndex snapshots snapshotIndex
+
     returnE $
       if snapshotContent == renderedTestResult
         then SnapshotMatches
         else SnapshotDiff{snapshotContent, renderedTestResult}
   where
+    SnapshotContext
+      { snapshotRenderers = renderers
+      , snapshotTestInfo = TestInfo{testContexts, testName, testFile}
+      , snapshotIndex
+      } = snapshotContext
+
     returnE = throwE
     renderedTestResult = normalizeTrailingNewlines $ renderVal renderers testResult
     normalizeTrailingNewlines = (<> "\n") . Text.dropWhileEnd (== '\n')
-    head' = \case
-      [] -> undefined
-      a : _ -> a
+
+    safeIndex xs0 i0 =
+      let go = \cases
+            _ [] -> Nothing
+            0 (x : _) -> Just x
+            i (_ : xs) -> go (i - 1) xs
+       in if i0 < 0 then Nothing else go i0 xs0
 
 {----- Snapshot file -----}
 

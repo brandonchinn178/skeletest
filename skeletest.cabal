@@ -19,6 +19,7 @@ library
     Skeletest.Internal.Snapshot
     Skeletest.Internal.Spec
     Skeletest.Internal.State
+    Skeletest.Internal.Utils.Diff
     Skeletest.Internal.Utils.HList
     Skeletest.Main
     Skeletest.Predicate
@@ -28,10 +29,12 @@ library
   build-depends:
       base
     , containers
+    , Diff
     , directory
     , filepath
     , ghc
     , ordered-containers
+    , pretty
     , recover-rtti
     , template-haskell
     , text

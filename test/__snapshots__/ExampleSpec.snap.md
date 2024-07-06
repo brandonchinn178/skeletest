@@ -1,6 +1,6 @@
 # Example
 
-## predicates / matches snapshot
+## predicates / matches snapshots
 
 ```
 1

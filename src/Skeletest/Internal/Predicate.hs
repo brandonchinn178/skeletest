@@ -52,6 +52,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.Functor.Const (Const (..))
 import Data.Functor.Identity (Identity (..))
+import Data.IORef (atomicModifyIORef)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Typeable (Typeable)
@@ -60,12 +61,16 @@ import GHC.Generics ((:*:) (..))
 import Prelude hiding (abs, not)
 import Prelude qualified
 
+import Skeletest.Internal.Fixtures (getFixture)
 import Skeletest.Internal.Snapshot (
+  SnapshotContext (..),
+  SnapshotFixture (..),
   SnapshotResult (..),
   checkSnapshot,
   defaultSnapshotRenderers,
  )
 import Skeletest.Internal.State (getTestInfo)
+import Skeletest.Internal.Utils.Diff (showLineDiff)
 import Skeletest.Internal.Utils.HList (HList (..))
 import Skeletest.Internal.Utils.HList qualified as HList
 
@@ -326,11 +331,27 @@ matchesSnapshot =
   Predicate
     { predicateFunc = \actual -> do
         testInfo <- getTestInfo
-        result <- checkSnapshot (customRenderers <> defaultSnapshotRenderers) testInfo actual
+        SnapshotFixture{snapshotIndexRef} <- getFixture
+        snapshotIndex <- atomicModifyIORef snapshotIndexRef $ \i -> (i + 1, i)
+        let ctx =
+              SnapshotContext
+                { snapshotRenderers = customRenderers <> defaultSnapshotRenderers
+                , snapshotTestInfo = testInfo
+                , snapshotIndex
+                }
+        result <- checkSnapshot ctx actual
         pure
           PredicateFuncResult
-            { predicateSuccess = result == SnapshotMatches || True -- TODO: fix failure
-            , predicateFailMsg = "does not match snapshot" -- TODO: show diff
+            { predicateSuccess = result == SnapshotMatches
+            , predicateFailMsg =
+                case result of
+                  SnapshotMissing -> "Snapshot does not exist. Update snapshot with --update."
+                  SnapshotMatches -> "Matches snapshot"
+                  SnapshotDiff snapshot renderedActual ->
+                    Text.intercalate "\n" $
+                      [ "Result differed from snapshot. Update snapshot with --update."
+                      , showLineDiff ("expected", snapshot) ("actual", renderedActual)
+                      ]
             , predicatePassMsg = "matches snapshot"
             , predicateNested = False
             }

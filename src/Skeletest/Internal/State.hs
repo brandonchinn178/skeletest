@@ -51,7 +51,7 @@ globalStateRef = unsafePerformIO $ newIORef newState
 -- | The registry of active fixtures, in order of activation.
 data FixtureRegistry = FixtureRegistry
   { sessionFixtures :: OMap TypeRep FixtureStatus
-  , testFixtures :: OMap (TypeRep, ThreadId) FixtureStatus
+  , testFixtures :: Map ThreadId (OMap TypeRep FixtureStatus)
   }
 
 data FixtureStatus
@@ -66,7 +66,7 @@ emptyFixtureRegistry :: FixtureRegistry
 emptyFixtureRegistry =
   FixtureRegistry
     { sessionFixtures = OMap.empty
-    , testFixtures = OMap.empty
+    , testFixtures = Map.empty
     }
 
 withFixtureRegistry :: (FixtureRegistry -> (FixtureRegistry, a)) -> IO a

@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Skeletest.Internal.Fixtures (
   Fixture (..),
@@ -13,9 +14,15 @@ module Skeletest.Internal.Fixtures (
 ) where
 
 import Control.Concurrent (myThreadId)
+import Control.Monad (forM)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Map qualified as Map
+import Data.Map.Ordered (OMap)
 import Data.Map.Ordered qualified as OMap
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Proxy (Proxy (..))
-import Data.Typeable (Typeable, eqT, typeOf, typeRep, (:~:) (Refl))
+import Data.Typeable (Typeable, TypeRep, eqT, typeOf, typeRep, (:~:) (Refl))
+import UnliftIO.Exception (throwIO, tryAny)
 
 import Skeletest.Internal.Error (invariantViolation)
 import Skeletest.Internal.State (
@@ -42,25 +49,16 @@ withCleanup :: a -> IO () -> (a, FixtureCleanup)
 withCleanup a cleanup = (a, CleanupFunc cleanup)
 
 -- | Load a fixture, initializing it if it hasn't been cached already.
-getFixture :: forall a. Fixture a => IO a
-getFixture = do
-  tid <- myThreadId
-  let (lookupFixture, setFixture) =
-        case scope of
-          PerTestFixture ->
-            ( \registry -> OMap.lookup (rep, tid) (testFixtures registry)
-            , \s registry -> registry{testFixtures = OMap.alter (const s) (rep, tid) (testFixtures registry)}
-            )
-          PerSessionFixture ->
-            ( \registry -> OMap.lookup rep (sessionFixtures registry)
-            , \s registry -> registry{sessionFixtures = OMap.alter (const s) rep (sessionFixtures registry)}
-            )
+getFixture :: forall a m. (Fixture a, MonadIO m) => m a
+getFixture = liftIO $ do
+  (getScopedFixtures, updateScopedFixtures) <- getScopedAccessors scope
+  let insertFixture state = updateScopedFixtures (OMap.>| (rep, state))
 
   cachedFixture <-
     withFixtureRegistry $ \registry ->
-      case lookupFixture registry of
+      case OMap.lookup rep $ getScopedFixtures registry of
         -- fixture has not been requested yet
-        Nothing -> (setFixture (Just FixtureInProgress) registry, Nothing)
+        Nothing -> (insertFixture FixtureInProgress registry, Nothing)
         -- fixture has already been requested
         Just (FixtureLoaded (fixture :: ty, _)) ->
           case eqT @a @ty of
@@ -79,7 +77,7 @@ getFixture = do
     -- otherwise, execute it (allowing it to request other fixtures) and cache the result.
     Nothing -> do
       result@(fixture, _) <- runFixture
-      withFixtureRegistry $ \registry -> (setFixture (Just $ FixtureLoaded result) registry, ())
+      withFixtureRegistry $ \registry -> (insertFixture (FixtureLoaded result) registry, ())
       pure fixture
   where
     rep = typeRep (Proxy @a)
@@ -87,7 +85,55 @@ getFixture = do
 
 -- | Clean up fixtures in the given scope.
 --
--- TODO: iterate loadedFixturesVar with the given scope in reverse order
--- TODO: catch all errors and rethrow at end, to ensure everything is cleaned up.
+-- Clean up functions are run in the reverse order the fixtures finished in.
+-- For example, if a test asks for fixtures A and C, A asks for B, and C asks
+-- for D, the fixtures should finish loading in order: B, A, D, C.
+-- Cleanup should then go in order: C, D, A, B.
 cleanupFixtures :: FixtureScope -> IO ()
-cleanupFixtures _ = pure ()
+cleanupFixtures scope = do
+  -- get fixtures in the given scope and clear
+  (getScopedFixtures, updateScopedFixtures) <- getScopedAccessors scope
+  fixtures <-
+    withFixtureRegistry $ \registry ->
+      (updateScopedFixtures (const OMap.empty) registry, getScopedFixtures registry)
+
+  errors <-
+    forM (reverse . map snd . OMap.assocs $ fixtures) $ \case
+      FixtureInProgress -> invariantViolation "Fixture was unexpectedly in progress in cleanupFixtures"
+      FixtureLoaded (_, NoCleanup) -> pure Nothing
+      FixtureLoaded (_, CleanupFunc io) -> fromLeft <$> tryAny io
+
+  -- throw the first error we encountered
+  case catMaybes errors of
+    e : _ -> throwIO e
+    [] -> pure ()
+  where
+    fromLeft = \case
+      Left x -> Just x
+      Right _ -> Nothing
+
+getScopedAccessors ::
+  FixtureScope
+  -> IO
+      ( FixtureRegistry -> OMap TypeRep FixtureStatus
+      , (OMap TypeRep FixtureStatus -> OMap TypeRep FixtureStatus) -> FixtureRegistry -> FixtureRegistry
+      )
+getScopedAccessors scope = do
+  tid <- myThreadId
+  pure $
+    case scope of
+      PerTestFixture ->
+        ( Map.findWithDefault OMap.empty tid . testFixtures
+        , \f registry -> registry{testFixtures = adjustWithDefault f tid (testFixtures registry)}
+        )
+      PerSessionFixture ->
+        ( sessionFixtures
+        , \f registry -> registry{sessionFixtures = f (sessionFixtures registry)}
+        )
+  where
+    -- Look up a key in the map, defaulting to an empty map if it doesn't exist. Then apply the
+    -- given function. Finally, if the function returned an empty map, delete the key from the
+    -- original map.
+    adjustWithDefault f =
+      let prune m = if OMap.null m then Nothing else Just m
+       in Map.alter (prune . f . fromMaybe OMap.empty)

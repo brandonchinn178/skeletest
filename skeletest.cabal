@@ -22,6 +22,7 @@ library
     Skeletest.Internal.State
     Skeletest.Internal.Utils.Diff
     Skeletest.Internal.Utils.HList
+    Skeletest.Internal.Utils.Map
     Skeletest.Main
     Skeletest.Predicate
     Skeletest.Prop.Gen

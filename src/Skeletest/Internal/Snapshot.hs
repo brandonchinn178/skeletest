@@ -4,9 +4,10 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Skeletest.Internal.Snapshot (
-  -- * Checking snapshot
+  -- * Running snapshot
   SnapshotContext (..),
   SnapshotResult (..),
+  updateSnapshot,
   checkSnapshot,
 
   -- * Rendering
@@ -21,7 +22,7 @@ module Skeletest.Internal.Snapshot (
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
@@ -32,16 +33,19 @@ import Debug.RecoverRTTI (anythingToString)
 import System.FilePath (replaceExtension, splitFileName, (</>))
 import System.IO.Error (isDoesNotExistError)
 import UnliftIO.Exception (throwIO, try)
-import UnliftIO.IORef (IORef, atomicModifyIORef, newIORef, readIORef)
+import UnliftIO.IORef (IORef, atomicModifyIORef', modifyIORef', newIORef, readIORef)
 
 import Skeletest.Internal.CLI (IsFlag (..), FlagSpec (..))
+import Skeletest.Internal.Error (invariantViolation)
 import Skeletest.Internal.Fixtures (
   Fixture (..),
   FixtureScope (..),
   getFixture,
   noCleanup,
+  withCleanup,
  )
 import Skeletest.Internal.State (TestInfo (..), getTestInfo)
+import Skeletest.Internal.Utils.Map qualified as Map.Utils
 
 {----- Infrastructure -----}
 
@@ -57,7 +61,7 @@ instance Fixture SnapshotTestFixture where
 getAndIncSnapshotIndex :: IO Int
 getAndIncSnapshotIndex = do
   SnapshotTestFixture{snapshotIndexRef} <- getFixture
-  atomicModifyIORef snapshotIndexRef $ \i -> (i + 1, i)
+  atomicModifyIORef' snapshotIndexRef $ \i -> (i + 1, i)
 
 -- TODO: if all tests in file were run, error if snapshot file contains outdated tests (--update to remove)
 data SnapshotFileFixture = SnapshotFileFixture
@@ -68,8 +72,10 @@ instance Fixture SnapshotFileFixture where
   fixtureScope = PerFileFixture
   fixtureAction = do
     TestInfo{testFile} <- getTestInfo
+    let snapshotPath = getSnapshotPath testFile
+
     mSnapshotFile <-
-      try (Text.readFile $ snapshotPath testFile) >>= \case
+      try (Text.readFile snapshotPath) >>= \case
         Left e
           | isDoesNotExistError e -> pure Nothing
           | otherwise -> throwIO e
@@ -78,9 +84,15 @@ instance Fixture SnapshotFileFixture where
             Just snapshotFile -> pure $ Just snapshotFile
             -- TODO: better error
             Nothing -> error "corrupted snapshot file"
+    let snapshotChanged newSnapshot = mSnapshotFile /= Just newSnapshot
 
     snapshotFileRef <- newIORef mSnapshotFile
-    pure . noCleanup $ SnapshotFileFixture{..}
+    pure . withCleanup SnapshotFileFixture{..} $
+      -- write snapshot back out when file is done
+      readIORef snapshotFileRef >>= \case
+        Just snapshotFile | snapshotChanged snapshotFile ->
+          Text.writeFile snapshotPath $ encodeSnapshotFile snapshotFile
+        _ -> pure ()
 
 -- TODO: session fixture to track which tests were run.
 -- if no filters were added, error if outdated snapshot files (--update to remove)
@@ -93,13 +105,50 @@ instance IsFlag SnapshotUpdateFlag where
   flagHelp = "Update snapshots"
   flagSpec = SwitchFlag SnapshotUpdateFlag
 
-{----- Checking snapshot -----}
+{----- Running snapshot -----}
 
 data SnapshotContext = SnapshotContext
   { snapshotRenderers :: [SnapshotRenderer]
   , snapshotTestInfo :: TestInfo
   , snapshotIndex :: Int
   }
+
+updateSnapshot :: Typeable a => SnapshotContext -> a -> IO ()
+updateSnapshot snapshotContext testResult = do
+  SnapshotFileFixture{snapshotFileRef} <- getFixture
+  modifyIORef' snapshotFileRef (Just . setSnapshot . fromMaybe emptySnapshotFile)
+  where
+    SnapshotContext
+      { snapshotRenderers = renderers
+      , snapshotTestInfo = testInfo@TestInfo{testModule}
+      , snapshotIndex
+      } = snapshotContext
+
+    emptySnapshotFile =
+      SnapshotFile
+        { moduleName = testModule
+        , snapshots = Map.empty
+        }
+
+    testIdentifier = toTestIdentifier testInfo
+    renderedTestResult = renderVal renderers testResult
+    setSnapshot snapshotFile@SnapshotFile{snapshots} =
+      let setForTest = Map.Utils.adjustNested (setAt snapshotIndex renderedTestResult) testIdentifier
+       in snapshotFile{snapshots = setForTest snapshots}
+
+    -- Set the given snapshot at the given index. If the index is too large,
+    -- fill in with empty snapshots.
+    --
+    -- >>> setAt 3 "x" ["a"] == ["a", "", "", "x"]
+    setAt i0 v =
+      let go = \cases
+            i [] -> replicate i mempty <> [v]
+            0 (_ : xs) -> v : xs
+            i (x : xs) -> x : go (i - 1) xs
+       in
+        if i0 < 0
+          then invariantViolation $ "Got negative snapshot index: " <> show i0
+          else go i0
 
 data SnapshotResult
   = SnapshotMissing
@@ -120,7 +169,7 @@ checkSnapshot snapshotContext testResult =
         Nothing -> returnE SnapshotMissing
         Just SnapshotFile{snapshots} -> pure snapshots
 
-    let snapshots = Map.findWithDefault [] (testContexts <> [testName]) fileSnapshots
+    let snapshots = Map.Utils.findOrEmpty (toTestIdentifier testInfo) fileSnapshots
     snapshotContent <- maybe (returnE SnapshotMissing) pure $ safeIndex snapshots snapshotIndex
 
     returnE $
@@ -130,13 +179,12 @@ checkSnapshot snapshotContext testResult =
   where
     SnapshotContext
       { snapshotRenderers = renderers
-      , snapshotTestInfo = TestInfo{testContexts, testName}
+      , snapshotTestInfo = testInfo
       , snapshotIndex
       } = snapshotContext
 
     returnE = throwE
-    renderedTestResult = normalizeTrailingNewlines $ renderVal renderers testResult
-    normalizeTrailingNewlines = (<> "\n") . Text.dropWhileEnd (== '\n')
+    renderedTestResult = renderVal renderers testResult
 
     safeIndex xs0 i0 =
       let go = \cases
@@ -150,16 +198,22 @@ checkSnapshot snapshotContext testResult =
 -- TODO: keep ordered by test order?
 data SnapshotFile = SnapshotFile
   { moduleName :: Text
-  , snapshots :: Map [Text] [Text]
+  , snapshots :: Map TestIdentifier [Text]
     -- ^ full test identifier => snapshots
     -- e.g. ["group1", "group2", "returns val1 and val2"] => ["val1", "val2"]
   }
+  deriving (Eq)
 
-snapshotPath :: FilePath -> FilePath
-snapshotPath testFile = testDir </> "__snapshots__" </> snapshotFileName
+type TestIdentifier = [Text]
+
+getSnapshotPath :: FilePath -> FilePath
+getSnapshotPath testFile = testDir </> "__snapshots__" </> snapshotFileName
   where
     (testDir, testFileName) = splitFileName testFile
     snapshotFileName = replaceExtension testFileName ".snap.md"
+
+toTestIdentifier :: TestInfo -> TestIdentifier
+toTestIdentifier TestInfo{testContexts, testName} = testContexts <> [testName]
 
 decodeSnapshotFile :: Text -> Maybe SnapshotFile
 decodeSnapshotFile = parseFile . Text.lines
@@ -205,9 +259,21 @@ decodeSnapshotFile = parseFile . Text.lines
         | "```" <- Text.strip line -> pure (Text.unlines snapshot, rest)
         | otherwise -> parseSnapshot (snapshot <> [line]) rest
 
+-- TODO: property test
+encodeSnapshotFile :: SnapshotFile -> Text
+encodeSnapshotFile SnapshotFile{..} =
+  Text.intercalate "\n" $
+    h1 moduleName : concatMap toSection (Map.toList snapshots)
+  where
+    toSection (testIdentifier, snaps) =
+      h2 (Text.intercalate " / " testIdentifier) : map codeBlock snaps
+
+    h1 s = "# " <> s <> "\n"
+    h2 s = "## " <> s <> "\n"
+    codeBlock s = "```\n" <> normalizeTrailingNewlines s <> "```\n"
+
 {----- Renderers -----}
 
--- TODO: Skeletest.Internal.Snapshot
 data SnapshotRenderer =
   forall a.
   Typeable a =>
@@ -223,8 +289,13 @@ defaultSnapshotRenderers =
 
 renderVal :: Typeable a => [SnapshotRenderer] -> a -> Text
 renderVal renderers a =
-  case mapMaybe tryRender renderers of
-    [] -> Text.pack $ anythingToString a
-    rendered : _ -> rendered
+  normalizeTrailingNewlines $
+    case mapMaybe tryRender renderers of
+      [] -> Text.pack $ anythingToString a
+      rendered : _ -> rendered
   where
     tryRender SnapshotRenderer{render} = render <$> Typeable.cast a
+
+-- | Ensure there's exactly one trailing newline.
+normalizeTrailingNewlines :: Text -> Text
+normalizeTrailingNewlines s = Text.dropWhileEnd (== '\n') s <> "\n"

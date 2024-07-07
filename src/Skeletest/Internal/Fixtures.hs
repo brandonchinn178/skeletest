@@ -18,10 +18,8 @@ module Skeletest.Internal.Fixtures (
 import Control.Concurrent (ThreadId, myThreadId)
 import Control.Monad (forM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.Map (Map)
-import Data.Map qualified as Map
 import Data.Map.Ordered qualified as OMap
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy (..))
 import Data.Typeable (Typeable, eqT, typeOf, typeRep, (:~:) (Refl))
 import UnliftIO.Exception (throwIO, tryAny)
@@ -36,6 +34,7 @@ import Skeletest.Internal.State (
   modifyFixtureRegistry,
   getTestInfo,
  )
+import Skeletest.Internal.Utils.Map qualified as Map.Utils
 
 class Typeable a => Fixture a where
   -- | The scope of the fixture, defaults to per-test
@@ -139,21 +138,14 @@ getScopedAccessors ::
 getScopedAccessors scopeKey =
   case scopeKey of
     PerTestFixtureKey tid ->
-      ( Map.findWithDefault OMap.empty tid . testFixtures
-      , \f registry -> registry{testFixtures = adjustWithDefault OMap.empty f tid (testFixtures registry)}
+      ( Map.Utils.findOrEmpty tid . testFixtures
+      , \f registry -> registry{testFixtures = Map.Utils.adjustNested f tid (testFixtures registry)}
       )
     PerFileFixtureKey fp ->
-      ( Map.findWithDefault OMap.empty fp . fileFixtures
-      , \f registry -> registry{fileFixtures = adjustWithDefault OMap.empty f fp (fileFixtures registry)}
+      ( Map.Utils.findOrEmpty fp . fileFixtures
+      , \f registry -> registry{fileFixtures = Map.Utils.adjustNested f fp (fileFixtures registry)}
       )
     PerSessionFixtureKey ->
       ( sessionFixtures
       , \f registry -> registry{sessionFixtures = f (sessionFixtures registry)}
       )
-  where
-    -- Same as 'adjust', except defaulting to the given value if it doesn't exist, and
-    -- deleting the key if the adjusted value is empty.
-    adjustWithDefault :: (Ord k, Foldable t) => t a -> (t a -> t a) -> k -> Map k (t a) -> Map k (t a)
-    adjustWithDefault def f =
-      let prune m = if null m then Nothing else Just m
-       in Map.alter (prune . f . fromMaybe def)

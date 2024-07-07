@@ -68,6 +68,7 @@ import Skeletest.Internal.Snapshot (
   checkSnapshot,
   defaultSnapshotRenderers,
   getAndIncSnapshotIndex,
+  updateSnapshot,
  )
 import Skeletest.Internal.State (getTestInfo)
 import Skeletest.Internal.Utils.Diff (showLineDiff)
@@ -339,7 +340,7 @@ matchesSnapshot =
 
         result <-
           if doUpdate
-            then error "TODO: --update" >> pure SnapshotMatches
+            then updateSnapshot ctx actual >> pure SnapshotMatches
             else checkSnapshot ctx actual
 
         pure

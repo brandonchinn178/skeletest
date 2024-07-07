@@ -66,16 +66,12 @@ spec = do
 newtype DbConnFixture = DbConnFixture Connection
 
 instance Fixture DbConnFixture where
-  fixtureDef =
-    FixtureDef
-      { fixtureScope = PerTest
-      , fixtureImpl = do
-          conn <- initDBConn
-          setupTestTables conn
-          pure . withCleanup (DbConnFixture conn) $ do
-            destroyTestTables conn
-            closeConn conn
-      }
+  fixtureAction = do
+    conn <- initDBConn
+    setupTestTables conn
+    pure . withCleanup (DbConnFixture conn) $ do
+      destroyTestTables conn
+      closeConn conn
 ```
 
 ## Quickstart

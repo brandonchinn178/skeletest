@@ -14,13 +14,13 @@ module Skeletest.Internal.Snapshot (
   defaultSnapshotRenderers,
 
   -- * Infrastructure
-  SnapshotFixture (..),
+  getAndIncSnapshotIndex,
   SnapshotUpdateFlag (..),
 ) where
 
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT, throwE)
-import Data.IORef (IORef, newIORef)
+import Data.IORef (IORef, atomicModifyIORef, newIORef)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
@@ -36,19 +36,24 @@ import System.IO.Error (isDoesNotExistError)
 import UnliftIO.Exception (throwIO, try)
 
 import Skeletest.Internal.CLI (IsFlag (..), FlagSpec (..))
-import Skeletest.Internal.Fixtures (Fixture (..), noCleanup)
+import Skeletest.Internal.Fixtures (Fixture (..), getFixture, noCleanup)
 import Skeletest.Internal.State (TestInfo (..))
 
 {----- Infrastructure -----}
 
-data SnapshotFixture = SnapshotFixture
+data SnapshotTestFixture = SnapshotTestFixture
   { snapshotIndexRef :: IORef Int
   }
 
-instance Fixture SnapshotFixture where
+instance Fixture SnapshotTestFixture where
   fixtureAction = do
     snapshotIndexRef <- newIORef 0
-    pure . noCleanup $ SnapshotFixture{..}
+    pure . noCleanup $ SnapshotTestFixture{..}
+
+getAndIncSnapshotIndex :: IO Int
+getAndIncSnapshotIndex = do
+  SnapshotTestFixture{snapshotIndexRef} <- getFixture
+  atomicModifyIORef snapshotIndexRef $ \i -> (i + 1, i)
 
 newtype SnapshotUpdateFlag = SnapshotUpdateFlag Bool
 

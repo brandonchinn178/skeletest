@@ -52,7 +52,6 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.Functor.Const (Const (..))
 import Data.Functor.Identity (Identity (..))
-import Data.IORef (atomicModifyIORef)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Typeable (Typeable)
@@ -62,14 +61,13 @@ import Prelude hiding (abs, not)
 import Prelude qualified
 
 import Skeletest.Internal.CLI (getFlag)
-import Skeletest.Internal.Fixtures (getFixture)
 import Skeletest.Internal.Snapshot (
   SnapshotContext (..),
-  SnapshotFixture (..),
   SnapshotResult (..),
   SnapshotUpdateFlag (..),
   checkSnapshot,
   defaultSnapshotRenderers,
+  getAndIncSnapshotIndex,
  )
 import Skeletest.Internal.State (getTestInfo)
 import Skeletest.Internal.Utils.Diff (showLineDiff)
@@ -333,8 +331,7 @@ matchesSnapshot =
     { predicateFunc = \actual -> do
         SnapshotUpdateFlag doUpdate <- getFlag
         testInfo <- getTestInfo
-        SnapshotFixture{snapshotIndexRef} <- getFixture
-        snapshotIndex <- atomicModifyIORef snapshotIndexRef $ \i -> (i + 1, i)
+        snapshotIndex <- getAndIncSnapshotIndex
         let ctx =
               SnapshotContext
                 { snapshotRenderers = customRenderers <> defaultSnapshotRenderers

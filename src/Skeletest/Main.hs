@@ -28,7 +28,13 @@ import System.Exit (exitFailure)
 
 import Skeletest.Internal.CLI (Flag, flag, loadCliArgs)
 import Skeletest.Internal.Snapshot (SnapshotRenderer (..), SnapshotUpdateFlag)
-import Skeletest.Internal.Spec (MarkerFlag, Spec, SpecTree (..), filterSpec, runSpecs)
+import Skeletest.Internal.Spec (
+  Spec,
+  SpecInfo (..),
+  applyTestSelections,
+  pruneSpec,
+  runSpecs,
+ )
 
 -- TODO: a plugin should return a SkeletestOptions to merge with the other options
 type Plugin = ()
@@ -51,32 +57,21 @@ defaultOptions =
 -- TODO: handle plugins
 runSkeletest :: SkeletestOptions -> [(FilePath, String, Spec)] -> IO ()
 runSkeletest SkeletestOptions{..} testModules = do
-  targets <- loadCliArgs builtinFlags cliFlags
+  selections <- loadCliArgs builtinFlags cliFlags
   let initialSpecs = map mkSpec testModules
-  success <- runSpecs . pruneSpec . selectTests targets $ initialSpecs
+  success <- runSpecs . pruneSpec . applyTestSelections selections $ initialSpecs
   unless success exitFailure
   where
     builtinFlags =
-      [ flag @MarkerFlag
-      , flag @SnapshotUpdateFlag
+      [ flag @SnapshotUpdateFlag
       ]
 
-    mkSpec (fp, name, spec) =
-      let name' = stripSuffix "Spec" $ Text.pack name
-       in (fp, name', spec)
-
-    -- TODO: filter by targets and markers
-    selectTests _ = id
-
-    -- remove empty specs
-    pruneSpec specs =
-      [ (fp, name, filterSpec (not . isEmptySpec) spec)
-      | (fp, name, spec) <- specs
-      , let
-          isEmptySpec = \case
-            SpecGroup _ [] -> True
-            _ -> False
-      ]
+    mkSpec (specPath, name, specSpec) =
+      SpecInfo
+        { specPath
+        , specName = stripSuffix "Spec" $ Text.pack name
+        , specSpec
+        }
 
     -- same as Text.stripSuffix, except return original string if not match
     stripSuffix suf s = fromMaybe s $ Text.stripSuffix suf s

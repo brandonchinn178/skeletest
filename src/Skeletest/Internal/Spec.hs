@@ -10,6 +10,12 @@ module Skeletest.Internal.Spec (
   filterSpec,
   runSpecs,
 
+  -- ** Entrypoint
+  SpecRegistry,
+  SpecInfo (..),
+  pruneSpec,
+  applyTestSelections,
+
   -- ** Defining a Spec
   describe,
   Testable (..),
@@ -26,8 +32,6 @@ module Skeletest.Internal.Spec (
   AnonMarker (..),
   withMarker,
   withMarkers,
-  MarkerFlag,
-  filterMarkers,
 ) where
 
 import Control.Concurrent (myThreadId)
@@ -47,9 +51,15 @@ import UnliftIO.Exception (
  )
 
 import Skeletest.Assertions (TestFailure (..))
-import Skeletest.Internal.CLI (IsFlag (..), FlagSpec (..))
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.State (TestInfo (..), withTestInfo)
+import Skeletest.Internal.TestSelection (
+  -- Expr (..),
+  -- TestSelection (..),
+  TestSelections,
+  -- TestTarget (..),
+  -- TestTargets,
+ )
 import Skeletest.Prop.Internal (Property, runProperty)
 
 type Spec = Spec' ()
@@ -79,20 +89,20 @@ filterSpec f = Spec . tell . go . getSpecTrees
 --
 -- TODO: allow running tests in parallel
 -- TODO: colors
-runSpecs :: [(FilePath, Text, Spec)] -> IO Bool
+runSpecs :: SpecRegistry -> IO Bool
 runSpecs specs =
   (`finally` cleanupFixtures PerSessionFixtureKey) $
-    fmap and . forM specs $ \(testFile, testModule, spec) ->
-      (`finally` cleanupFixtures (PerFileFixtureKey testFile)) $ do
+    fmap and . forM specs $ \SpecInfo{..} ->
+      (`finally` cleanupFixtures (PerFileFixtureKey specPath)) $ do
         let emptyTestInfo =
               TestInfo
-                { testModule
+                { testModule = specName
                 , testContexts = []
                 , testName = ""
-                , testFile
+                , testFile = specPath
                 }
-        Text.putStrLn testModule
-        runTrees emptyTestInfo $ getSpecTrees spec
+        Text.putStrLn specName
+        runTrees emptyTestInfo $ getSpecTrees specSpec
   where
     runTrees testInfo = fmap and . mapM (runTree testInfo)
     runTree testInfo = \case
@@ -128,6 +138,28 @@ runSpecs specs =
 
     getIndentLevel testInfo = length (testContexts testInfo) + 1 -- +1 to include the module name
     indent lvl = Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"
+
+{----- Entrypoint -----}
+
+type SpecRegistry = [SpecInfo]
+
+data SpecInfo = SpecInfo
+  { specPath :: FilePath
+  , specName :: Text
+  , specSpec :: Spec
+  }
+
+pruneSpec :: SpecRegistry -> SpecRegistry
+pruneSpec = map $ \info -> info{specSpec = filterSpec (not . isEmptySpec) (specSpec info)}
+  where
+    isEmptySpec = \case
+      SpecGroup _ [] -> True
+      _ -> False
+
+applyTestSelections :: TestSelections -> SpecRegistry -> SpecRegistry
+applyTestSelections = \case
+  Nothing -> id
+  Just _ -> id -- TODO
 
 {----- Defining a Spec -----}
 
@@ -183,37 +215,3 @@ withMarkers :: [String] -> Spec -> Spec
 withMarkers = foldr (\mark acc -> withMarker (toAnon mark) . acc) id
   where
     toAnon = AnonMarker . Text.pack
-
-filterMarkers :: MarkerFlag -> Spec -> Spec
-filterMarkers (MarkerFlag mMarkerSpec) =
-  case mMarkerSpec of
-    Nothing -> id
-    Just markerSpec -> filterWithMarkerSpec markerSpec
-
-newtype MarkerFlag = MarkerFlag (Maybe MarkerSpec)
-
-instance IsFlag MarkerFlag where
-  flagName = "marker"
-  flagShort = Just 'm'
-  flagHelp = "Filter tests by marker (see TEST SELECTION)"
-  flagSpec =
-    OptionalFlag
-      { flagDefault = MarkerFlag Nothing
-      , flagParse = fmap (MarkerFlag . Just) . parseMarkerSpec
-      }
-
-data MarkerSpec
-  = MarkerSpecName Text
-  | MarkerSpecNot MarkerSpec
-  | MarkerSpecAnd MarkerSpec MarkerSpec
-  | MarkerSpecOr MarkerSpec MarkerSpec
-
-parseMarkerSpec :: String -> Either String MarkerSpec
-parseMarkerSpec = undefined
-
-filterWithMarkerSpec :: MarkerSpec -> Spec -> Spec
-filterWithMarkerSpec = \case
-  MarkerSpecName{} -> undefined
-  MarkerSpecNot{} -> undefined
-  MarkerSpecAnd{} -> undefined
-  MarkerSpecOr{} -> undefined

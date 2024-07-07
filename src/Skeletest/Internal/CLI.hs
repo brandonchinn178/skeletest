@@ -38,6 +38,7 @@ import System.IO (stderr)
 
 import Skeletest.Internal.Error (invariantViolation)
 import Skeletest.Internal.State (CLIFlagStore, lookupCliFlag, setCliFlagStore)
+import Skeletest.Internal.TestSelection (TestSelections, parseTestSelections)
 
 -- | Register a CLI flag.
 --
@@ -126,7 +127,7 @@ getFlag =
 -- | Parse the CLI arguments using the given user-defined flags, then
 -- stores the flags in the global state and returns the positional
 -- arguments.
-loadCliArgs :: [Flag] -> [Flag] -> IO [Text]
+loadCliArgs :: [Flag] -> [Flag] -> IO TestSelections
 loadCliArgs builtinFlags flags = do
   args0 <- getArgs
   case parseCliArgs (builtinFlags <> flags) args0 of
@@ -139,9 +140,9 @@ loadCliArgs builtinFlags flags = do
     CLIParseFailure msg -> do
       Text.hPutStrLn stderr $ msg <> "\n\n" <> helpText
       exitFailure
-    CLIParseSuccess{args, flagStore} -> do
+    CLIParseSuccess{testSelections, flagStore} -> do
       setCliFlagStore flagStore
-      pure args
+      pure testSelections
   where
     helpText = getHelpText builtinFlags flags
 
@@ -161,20 +162,15 @@ getHelpText builtinFlags customFlags =
     testSelectionDocs =
       Text.intercalate "\n" $
         [ "Test targets may be specified as plain positional arguments, with the following syntax:"
-        , "    * Tests in file, relative to CWD:     'test/MyLib/FooSpec.hs'"
-        , "    * Tests matching pattern in file:     'test/MyLib/FooSpec.hs:{myFooFunc}'"
-        , "    * Tests matching pattern in any file: '{myFooFunc}'"
-        , "    * Tests matching both targets:        '{func1} and {func2}'"
-        , "    * Tests matching either target:       '{func1} or {func2}'"
-        , "    * Tests not matching target:          'not {func1}"
+        , "    * Tests in file, relative to CWD:       'test/MyLib/FooSpec.hs'"
+        , "    * Tests matching pattern in file:       'test/MyLib/FooSpec.hs:[myFooFunc]'"
+        , "    * Tests matching pattern in any file:   '[myFooFunc]'"
+        , "    * Tests tagged with marker in any file: '@fast"
+        , "    * Tests matching both targets:          '[func1] and [func2]'"
+        , "    * Tests matching either target:         '[func1] or [func2]'"
+        , "    * Tests not matching target:            'not [func1]"
         , ""
         , "When multiple targets are specified, they are joined with 'or'."
-        , ""
-        , "Tests can also be tagged with markers, which can be specified with the following syntax:"
-        , "    * Tests with given marker:  --marker 'nightly'"
-        , "    * Tests without marker:     --marker 'not nightly'"
-        , "    * Tests with both markers:  --marker 'nightly and fast'"
-        , "    * Tests with either marker: --marker 'not nightly or fast'"
         ]
 
     builtinFlagDocs = ("help", Just 'h', Nothing, "Display this help text") : fromFlags builtinFlags
@@ -227,7 +223,10 @@ data CLIParseResult
   = CLISetupFailure Text
   | CLIHelpRequested
   | CLIParseFailure Text
-  | CLIParseSuccess { args :: [Text], flagStore :: CLIFlagStore }
+  | CLIParseSuccess
+      { testSelections :: TestSelections
+      , flagStore :: CLIFlagStore
+      }
 
 parseCliArgs :: [Flag] -> [String] -> CLIParseResult
 parseCliArgs flags args = either id id $ do
@@ -238,8 +237,9 @@ parseCliArgs flags args = either id id $ do
   when (any (`elem` ["--help", "-h"]) args) $ Left CLIHelpRequested
 
   (args', flagStore) <- first CLIParseFailure $ parseCliArgsWith longFlags shortFlags args
+  testSelections <- first CLIParseFailure $ parseTestSelections args'
   flagStore' <- first CLIParseFailure $ resolveFlags flags flagStore
-  pure CLIParseSuccess{args = args', flagStore = flagStore'}
+  pure CLIParseSuccess{testSelections, flagStore = flagStore'}
   where
     extractLongFlags =
       toFlagMap renderLongFlag $

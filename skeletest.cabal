@@ -20,6 +20,7 @@ library
     Skeletest.Internal.Snapshot
     Skeletest.Internal.Spec
     Skeletest.Internal.State
+    Skeletest.Internal.TestSelection
     Skeletest.Internal.Utils.Diff
     Skeletest.Internal.Utils.HList
     Skeletest.Internal.Utils.Map

@@ -18,9 +18,7 @@ module Skeletest.Internal.Snapshot (
   SnapshotUpdateFlag (..),
 ) where
 
-import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT, throwE)
-import Data.IORef (IORef, atomicModifyIORef, newIORef)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
@@ -34,10 +32,16 @@ import Debug.RecoverRTTI (anythingToString)
 import System.FilePath (replaceExtension, splitFileName, (</>))
 import System.IO.Error (isDoesNotExistError)
 import UnliftIO.Exception (throwIO, try)
+import UnliftIO.IORef (IORef, atomicModifyIORef, newIORef, readIORef)
 
 import Skeletest.Internal.CLI (IsFlag (..), FlagSpec (..))
-import Skeletest.Internal.Fixtures (Fixture (..), getFixture, noCleanup)
-import Skeletest.Internal.State (TestInfo (..))
+import Skeletest.Internal.Fixtures (
+  Fixture (..),
+  FixtureScope (..),
+  getFixture,
+  noCleanup,
+ )
+import Skeletest.Internal.State (TestInfo (..), getTestInfo)
 
 {----- Infrastructure -----}
 
@@ -54,6 +58,32 @@ getAndIncSnapshotIndex :: IO Int
 getAndIncSnapshotIndex = do
   SnapshotTestFixture{snapshotIndexRef} <- getFixture
   atomicModifyIORef snapshotIndexRef $ \i -> (i + 1, i)
+
+-- TODO: if all tests in file were run, error if snapshot file contains outdated tests (--update to remove)
+data SnapshotFileFixture = SnapshotFileFixture
+  { snapshotFileRef :: IORef (Maybe SnapshotFile)
+  }
+
+instance Fixture SnapshotFileFixture where
+  fixtureScope = PerFileFixture
+  fixtureAction = do
+    TestInfo{testFile} <- getTestInfo
+    mSnapshotFile <-
+      try (Text.readFile $ snapshotPath testFile) >>= \case
+        Left e
+          | isDoesNotExistError e -> pure Nothing
+          | otherwise -> throwIO e
+        Right contents ->
+          case decodeSnapshotFile contents of
+            Just snapshotFile -> pure $ Just snapshotFile
+            -- TODO: better error
+            Nothing -> error "corrupted snapshot file"
+
+    snapshotFileRef <- newIORef mSnapshotFile
+    pure . noCleanup $ SnapshotFileFixture{..}
+
+-- TODO: session fixture to track which tests were run.
+-- if no filters were added, error if outdated snapshot files (--update to remove)
 
 newtype SnapshotUpdateFlag = SnapshotUpdateFlag Bool
 
@@ -84,16 +114,10 @@ data SnapshotResult
 checkSnapshot :: Typeable a => SnapshotContext -> a -> IO SnapshotResult
 checkSnapshot snapshotContext testResult =
   fmap (either id absurd) . runExceptT $ do
-    snapshotFileContents <-
-      liftIO (try $ Text.readFile $ snapshotPath testFile) >>= \case
-        Left e
-          | isDoesNotExistError e -> returnE SnapshotMissing
-          | otherwise -> throwIO e
-        Right contents -> pure contents
-
+    SnapshotFileFixture{snapshotFileRef} <- getFixture
     fileSnapshots <-
-      case decodeSnapshotFile snapshotFileContents of
-        Nothing -> error "corrupted snapshot file" -- TODO: better error
+      readIORef snapshotFileRef >>= \case
+        Nothing -> returnE SnapshotMissing
         Just SnapshotFile{snapshots} -> pure snapshots
 
     let snapshots = Map.findWithDefault [] (testContexts <> [testName]) fileSnapshots
@@ -106,7 +130,7 @@ checkSnapshot snapshotContext testResult =
   where
     SnapshotContext
       { snapshotRenderers = renderers
-      , snapshotTestInfo = TestInfo{testContexts, testName, testFile}
+      , snapshotTestInfo = TestInfo{testContexts, testName}
       , snapshotIndex
       } = snapshotContext
 

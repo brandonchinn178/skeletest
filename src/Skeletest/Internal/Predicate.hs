@@ -323,8 +323,6 @@ returns Predicate{..} =
 
 {----- Snapshot -----}
 
--- TODO: if no filters were added, error if outdated snapshot files (--update to remove)
--- TODO: if all tests in file were run, error if snapshot file contains outdated tests (--update to remove)
 matchesSnapshot :: Typeable a => Predicate a
 matchesSnapshot =
   Predicate

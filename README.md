@@ -5,6 +5,7 @@ Skeletest is a batteries-included test framework heavily inspired by [pytest](ht
 Features:
 * Seamless experience writing unit tests, property tests, and snapshot tests
 * Descriptive failure messages
+* Easy test selection from CLI
 * Automatic fixtures management
 * Rich plugin + hooks functionality
 
@@ -105,3 +106,23 @@ TODO
 ### Markers
 
 TODO
+
+### Test selection
+
+Test targets are specified as plain positional arguments, with the following syntax:
+
+| Target | Notes |
+|--------|-------|
+| `[myFooFunc]`           | Tests including substring      |
+| `@fast`                 | Tests tagged with marker       |
+| `test/MyLib/FooSpec.hs` | Tests in file, relative to CWD |
+| `test/MyLib/FooSpec.hs[myFooFunc]` | Syntax sugar for `(test/MyLib/FooSpec.hs and [myFooFunc])` |
+| `[func1] and @fast`     | Tests matching both targets    |
+| `[func1] or @fast`      | Tests matching either target   |
+| `not [func1]`           | Tests not matching target      |
+
+Some more examples:
+* `test/MySpec.hs and ([myFooFunc] or [myBarFunc]) and @fast`
+* `[myFooFunc] or test/MySpec.hs[myBarFunc]`
+ 
+When multiple targets are specified, they are joined with `or`.

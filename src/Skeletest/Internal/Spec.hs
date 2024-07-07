@@ -8,6 +8,7 @@ module Skeletest.Internal.Spec (
   SpecTree (..),
   getSpecTrees,
   filterSpec,
+  mapMaybeSpec,
   runSpecs,
 
   -- ** Entrypoint
@@ -35,8 +36,9 @@ module Skeletest.Internal.Spec (
 ) where
 
 import Control.Concurrent (myThreadId)
-import Control.Monad (forM)
+import Control.Monad (forM, guard)
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
+import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
@@ -53,13 +55,7 @@ import UnliftIO.Exception (
 import Skeletest.Assertions (TestFailure (..))
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.State (TestInfo (..), withTestInfo)
-import Skeletest.Internal.TestSelection (
-  -- Expr (..),
-  -- TestSelection (..),
-  TestSelections,
-  -- TestTarget (..),
-  -- TestTargets,
- )
+import Skeletest.Internal.TestTargets (TestTargets, matchesTest)
 import Skeletest.Prop.Internal (Property, runProperty)
 
 type Spec = Spec' ()
@@ -70,16 +66,23 @@ newtype Spec' a = Spec (Writer [SpecTree] a)
 getSpecTrees :: Spec -> [SpecTree]
 getSpecTrees (Spec spec) = execWriter spec
 
+withSpecTrees :: ([SpecTree] -> [SpecTree]) -> Spec -> Spec
+withSpecTrees f = Spec . tell . f . getSpecTrees
+
 data SpecTree
   = SpecGroup Text [SpecTree]
   | SpecTest Text (IO ())
 
 -- | Filter specs bottom-to-top.
 filterSpec :: (SpecTree -> Bool) -> Spec -> Spec
-filterSpec f = Spec . tell . go . getSpecTrees
+filterSpec f = mapMaybeSpec (\tree -> if f tree then Just tree else Nothing)
+
+-- | Map + filter specs bottom-to-top.
+mapMaybeSpec :: (SpecTree -> Maybe SpecTree) -> Spec -> Spec
+mapMaybeSpec f = withSpecTrees go
   where
     go :: [SpecTree] -> [SpecTree]
-    go = filter f . map recurseGroups
+    go = mapMaybe f . map recurseGroups
 
     recurseGroups = \case
       SpecGroup name trees -> SpecGroup name (go trees)
@@ -89,6 +92,7 @@ filterSpec f = Spec . tell . go . getSpecTrees
 --
 -- TODO: allow running tests in parallel
 -- TODO: colors
+-- TODO: print summary: # total tests, # failing tests, # snapshots updated
 runSpecs :: SpecRegistry -> IO Bool
 runSpecs specs =
   (`finally` cleanupFixtures PerSessionFixtureKey) $
@@ -150,16 +154,33 @@ data SpecInfo = SpecInfo
   }
 
 pruneSpec :: SpecRegistry -> SpecRegistry
-pruneSpec = map $ \info -> info{specSpec = filterSpec (not . isEmptySpec) (specSpec info)}
+pruneSpec = mapMaybe $ \info -> do
+  let spec = filterSpec (not . isEmptySpec) (specSpec info)
+  guard $ (not . null . getSpecTrees) spec
+  pure info{specSpec = spec}
   where
     isEmptySpec = \case
       SpecGroup _ [] -> True
       _ -> False
 
-applyTestSelections :: TestSelections -> SpecRegistry -> SpecRegistry
+applyTestSelections :: TestTargets -> SpecRegistry -> SpecRegistry
 applyTestSelections = \case
   Nothing -> id
-  Just _ -> id -- TODO
+  Just selections ->
+    map $ \info ->
+      let testMatches = matchesTest selections (specPath info)
+       in info{specSpec = withSpecTrees (goTrees testMatches []) (specSpec info)}
+  where
+    goTrees testMatches ctx = mapMaybe (goTree testMatches ctx)
+
+    goTree testMatches ctx = \case
+      SpecGroup name trees ->
+        pure $ SpecGroup name $ goTrees testMatches (ctx <> [name]) trees
+      tree@(SpecTest name _) -> do
+        -- TODO: specify markers
+        let markers = []
+        guard $ testMatches (ctx <> [name]) markers
+        pure tree
 
 {----- Defining a Spec -----}
 

@@ -20,7 +20,7 @@ library
     Skeletest.Internal.Snapshot
     Skeletest.Internal.Spec
     Skeletest.Internal.State
-    Skeletest.Internal.TestSelection
+    Skeletest.Internal.TestTargets
     Skeletest.Internal.Utils.Diff
     Skeletest.Internal.Utils.HList
     Skeletest.Internal.Utils.Map
@@ -36,7 +36,9 @@ library
     , directory
     , filepath
     , ghc
+    , megaparsec
     , ordered-containers
+    , parser-combinators
     , pretty
     , recover-rtti
     , template-haskell
@@ -64,6 +66,7 @@ test-suite skeletest-tests
   other-modules:
     ExampleSpec
     Skeletest.Internal.PluginSpec
+    Skeletest.Internal.TestTargetsSpec
   build-depends:
       base
     , skeletest

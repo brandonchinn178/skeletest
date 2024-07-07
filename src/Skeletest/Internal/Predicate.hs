@@ -18,6 +18,7 @@ module Skeletest.Internal.Predicate (
 
   -- * Data types
   just,
+  left,
   -- TODO: nothing,
   -- tup2,
   -- tup3,
@@ -170,6 +171,25 @@ just Predicate{..} =
     }
   where
     disp = "Just (" <> predicateDisp <> ")"
+
+left :: Predicate a -> Predicate (Either a b)
+left Predicate{..} =
+  Predicate
+    { predicateFunc = \case
+        Left a -> setNested <$> predicateFunc a
+        x ->
+          pure
+            PredicateFuncResult
+              { predicateSuccess = False
+              , predicateFailMsg = render x <> " ≠ " <> disp
+              , predicatePassMsg = render x <> " = " <> disp
+              , predicateNested = False
+              }
+    , predicateDisp = disp
+    , predicateDispNeg = "not " <> disp
+    }
+  where
+    disp = "Left (" <> predicateDisp <> ")"
 
 -- -- | A predicate for checking that the given tuple matches the given predicates.
 -- tup2 :: (Predicate a, Predicate b) -> Predicate (a, b)

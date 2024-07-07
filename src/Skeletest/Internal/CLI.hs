@@ -33,7 +33,8 @@ import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Data.Typeable (Typeable, typeOf, typeRep)
 import System.Environment (getArgs)
-import System.Exit (exitSuccess)
+import System.Exit (exitFailure, exitSuccess)
+import System.IO (stderr)
 
 import Skeletest.Internal.Error (invariantViolation)
 import Skeletest.Internal.State (CLIFlagStore, lookupCliFlag, setCliFlagStore)
@@ -127,21 +128,27 @@ getFlag =
 -- arguments.
 loadCliArgs :: [Flag] -> [Flag] -> IO [Text]
 loadCliArgs builtinFlags flags = do
-  args <- getArgs
+  args0 <- getArgs
+  case parseCliArgs (builtinFlags <> flags) args0 of
+    CLISetupFailure msg -> do
+      Text.hPutStrLn stderr $ "ERROR: " <> msg
+      exitFailure
+    CLIHelpRequested -> do
+      Text.putStrLn helpText
+      exitSuccess
+    CLIParseFailure msg -> do
+      Text.hPutStrLn stderr $ msg <> "\n\n" <> helpText
+      exitFailure
+    CLIParseSuccess{args, flagStore} -> do
+      setCliFlagStore flagStore
+      pure args
+  where
+    helpText = getHelpText builtinFlags flags
 
-  -- quick sweep for --help/-h; skip parsing flags if so
-  when (any (`elem` ["--help", "-h"]) args) $ do
-    printHelpText builtinFlags flags
-    exitSuccess
-
-  (args', flagStore) <- either (error . Text.unpack) pure $ parseCliArgs (builtinFlags <> flags) args
-  setCliFlagStore flagStore
-  pure args'
-
-printHelpText :: [Flag] -> [Flag] -> IO ()
-printHelpText builtinFlags customFlags =
+getHelpText :: [Flag] -> [Flag] -> Text
+getHelpText builtinFlags customFlags =
   -- TODO: rewrap to terminal width
-  Text.putStrLn . Text.intercalate "\n\n" $
+  Text.intercalate "\n\n" $
     "Usage: skeletest [OPTIONS] [--] [TARGETS]" : map (uncurry renderSection) helpSections
   where
     helpSections =
@@ -216,13 +223,23 @@ printHelpText builtinFlags customFlags =
 
 {----- Parse args -----}
 
-parseCliArgs :: [Flag] -> [String] -> Either Text ([Text], CLIFlagStore)
-parseCliArgs flags args = do
+data CLIParseResult
+  = CLISetupFailure Text
+  | CLIHelpRequested
+  | CLIParseFailure Text
+  | CLIParseSuccess { args :: [Text], flagStore :: CLIFlagStore }
+
+parseCliArgs :: [Flag] -> [String] -> CLIParseResult
+parseCliArgs flags args = either id id $ do
   longFlags <- extractLongFlags
   shortFlags <- extractShortFlags
-  (args', flagStore) <- parseCliArgsWith longFlags shortFlags args
-  flagStore' <- resolveFlags flags flagStore
-  pure (args', flagStore')
+
+  -- quick sweep for --help/-h after flag validation; skip parsing flags if so
+  when (any (`elem` ["--help", "-h"]) args) $ Left CLIHelpRequested
+
+  (args', flagStore) <- first CLIParseFailure $ parseCliArgsWith longFlags shortFlags args
+  flagStore' <- first CLIParseFailure $ resolveFlags flags flagStore
+  pure CLIParseSuccess{args = args', flagStore = flagStore'}
   where
     extractLongFlags =
       toFlagMap renderLongFlag $
@@ -237,12 +254,12 @@ parseCliArgs flags args = do
         , Just shortFlag <- pure $ flagShort @a
         ]
 
-    toFlagMap :: Ord name => (name -> Text) -> [(name, a)] -> Either Text (Map name a)
+    toFlagMap :: Ord name => (name -> Text) -> [(name, a)] -> Either CLIParseResult (Map name a)
     toFlagMap renderFlag vals =
       let go seen = \case
             [] -> Right $ Map.fromList vals
             (name, _) : xs
-              | name `Set.member` seen -> Left $ "Flag registered multiple times: " <> renderFlag name
+              | name `Set.member` seen -> Left . CLISetupFailure $ "Flag registered multiple times: " <> renderFlag name
               | otherwise -> go (Set.insert name seen) xs
        in go Set.empty vals
 

@@ -5,6 +5,7 @@
 module Skeletest.Internal.Fixtures (
   Fixture (..),
   FixtureScope (..),
+  FixtureScopeKey (..),
   getFixture,
 
   -- * Cleanup
@@ -14,23 +15,26 @@ module Skeletest.Internal.Fixtures (
   cleanupFixtures,
 ) where
 
-import Control.Concurrent (myThreadId)
+import Control.Concurrent (ThreadId, myThreadId)
 import Control.Monad (forM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Map.Ordered (OMap)
 import Data.Map.Ordered qualified as OMap
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Proxy (Proxy (..))
-import Data.Typeable (Typeable, TypeRep, eqT, typeOf, typeRep, (:~:) (Refl))
+import Data.Typeable (Typeable, eqT, typeOf, typeRep, (:~:) (Refl))
 import UnliftIO.Exception (throwIO, tryAny)
 
 import Skeletest.Internal.Error (invariantViolation)
 import Skeletest.Internal.State (
   FixtureCleanup (..),
+  FixtureMap,
   FixtureRegistry (..),
   FixtureStatus (..),
+  TestInfo (testFile),
   modifyFixtureRegistry,
+  getTestInfo,
  )
 
 class Typeable a => Fixture a where
@@ -42,7 +46,13 @@ class Typeable a => Fixture a where
 
 data FixtureScope
   = PerTestFixture
+  | PerFileFixture
   | PerSessionFixture
+
+data FixtureScopeKey
+  = PerTestFixtureKey ThreadId
+  | PerFileFixtureKey FilePath
+  | PerSessionFixtureKey
 
 -- | A helper for specifying no cleanup.
 noCleanup :: a -> (a, FixtureCleanup)
@@ -55,7 +65,13 @@ withCleanup a cleanup = (a, CleanupFunc cleanup)
 -- | Load a fixture, initializing it if it hasn't been cached already.
 getFixture :: forall a m. (Fixture a, MonadIO m) => m a
 getFixture = liftIO $ do
-  (getScopedFixtures, updateScopedFixtures) <- getScopedAccessors (fixtureScope @a)
+  (getScopedFixtures, updateScopedFixtures) <-
+    fmap getScopedAccessors $
+      case fixtureScope @a of
+        PerTestFixture -> PerTestFixtureKey <$> myThreadId
+        PerFileFixture -> PerFileFixtureKey . testFile <$> getTestInfo
+        PerSessionFixture -> pure PerSessionFixtureKey
+
   let insertFixture state = updateScopedFixtures (OMap.>| (rep, state))
 
   cachedFixture <-
@@ -92,10 +108,9 @@ getFixture = liftIO $ do
 -- For example, if a test asks for fixtures A and C, A asks for B, and C asks
 -- for D, the fixtures should finish loading in order: B, A, D, C.
 -- Cleanup should then go in order: C, D, A, B.
-cleanupFixtures :: FixtureScope -> IO ()
-cleanupFixtures scope = do
+cleanupFixtures :: FixtureScopeKey -> IO ()
+cleanupFixtures scopeKey = do
   -- get fixtures in the given scope and clear
-  (getScopedFixtures, updateScopedFixtures) <- getScopedAccessors scope
   fixtures <-
     modifyFixtureRegistry $ \registry ->
       (updateScopedFixtures (const OMap.empty) registry, getScopedFixtures registry)
@@ -111,32 +126,34 @@ cleanupFixtures scope = do
     e : _ -> throwIO e
     [] -> pure ()
   where
+    (getScopedFixtures, updateScopedFixtures) = getScopedAccessors scopeKey
     fromLeft = \case
       Left x -> Just x
       Right _ -> Nothing
 
 getScopedAccessors ::
-  FixtureScope
-  -> IO
-      ( FixtureRegistry -> OMap TypeRep FixtureStatus
-      , (OMap TypeRep FixtureStatus -> OMap TypeRep FixtureStatus) -> FixtureRegistry -> FixtureRegistry
+  FixtureScopeKey
+  -> ( FixtureRegistry -> FixtureMap
+     , (FixtureMap -> FixtureMap) -> FixtureRegistry -> FixtureRegistry
+     )
+getScopedAccessors scopeKey =
+  case scopeKey of
+    PerTestFixtureKey tid ->
+      ( Map.findWithDefault OMap.empty tid . testFixtures
+      , \f registry -> registry{testFixtures = adjustWithDefault OMap.empty f tid (testFixtures registry)}
       )
-getScopedAccessors scope = do
-  tid <- myThreadId
-  pure $
-    case scope of
-      PerTestFixture ->
-        ( Map.findWithDefault OMap.empty tid . testFixtures
-        , \f registry -> registry{testFixtures = adjustWithDefault f tid (testFixtures registry)}
-        )
-      PerSessionFixture ->
-        ( sessionFixtures
-        , \f registry -> registry{sessionFixtures = f (sessionFixtures registry)}
-        )
+    PerFileFixtureKey fp ->
+      ( Map.findWithDefault OMap.empty fp . fileFixtures
+      , \f registry -> registry{fileFixtures = adjustWithDefault OMap.empty f fp (fileFixtures registry)}
+      )
+    PerSessionFixtureKey ->
+      ( sessionFixtures
+      , \f registry -> registry{sessionFixtures = f (sessionFixtures registry)}
+      )
   where
-    -- Look up a key in the map, defaulting to an empty map if it doesn't exist. Then apply the
-    -- given function. Finally, if the function returned an empty map, delete the key from the
-    -- original map.
-    adjustWithDefault f =
-      let prune m = if OMap.null m then Nothing else Just m
-       in Map.alter (prune . f . fromMaybe OMap.empty)
+    -- Same as 'adjust', except defaulting to the given value if it doesn't exist, and
+    -- deleting the key if the adjusted value is empty.
+    adjustWithDefault :: (Ord k, Foldable t) => t a -> (t a -> t a) -> k -> Map k (t a) -> Map k (t a)
+    adjustWithDefault def f =
+      let prune m = if null m then Nothing else Just m
+       in Map.alter (prune . f . fromMaybe def)

@@ -30,6 +30,7 @@ module Skeletest.Internal.Spec (
   filterMarkers,
 ) where
 
+import Control.Concurrent (myThreadId)
 import Control.Monad (forM)
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
 import Data.Text (Text)
@@ -47,7 +48,7 @@ import UnliftIO.Exception (
 
 import Skeletest.Assertions (TestFailure (..))
 import Skeletest.Internal.CLI (IsFlag (..), FlagSpec (..))
-import Skeletest.Internal.Fixtures (FixtureScope (..), cleanupFixtures)
+import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.State (TestInfo (..), withTestInfo)
 import Skeletest.Prop.Internal (Property, runProperty)
 
@@ -80,17 +81,18 @@ filterSpec f = Spec . tell . go . getSpecTrees
 -- TODO: colors
 runSpecs :: [(FilePath, Text, Spec)] -> IO Bool
 runSpecs specs =
-  (`finally` cleanupFixtures PerSessionFixture) $
-    fmap and . forM specs $ \(testFile, testModule, spec) -> do
-      let emptyTestInfo =
-            TestInfo
-              { testModule
-              , testContexts = []
-              , testName = ""
-              , testFile
-              }
-      Text.putStrLn testModule
-      runTrees emptyTestInfo $ getSpecTrees spec
+  (`finally` cleanupFixtures PerSessionFixtureKey) $
+    fmap and . forM specs $ \(testFile, testModule, spec) ->
+      (`finally` cleanupFixtures (PerFileFixtureKey testFile)) $ do
+        let emptyTestInfo =
+              TestInfo
+                { testModule
+                , testContexts = []
+                , testName = ""
+                , testFile
+                }
+        Text.putStrLn testModule
+        runTrees emptyTestInfo $ getSpecTrees spec
   where
     runTrees testInfo = fmap and . mapM (runTree testInfo)
     runTree testInfo = \case
@@ -106,7 +108,8 @@ runSpecs specs =
         result <-
           trySyncOrAsync $
             withTestInfo testInfo{testName = name} $ do
-              io `finally` cleanupFixtures PerTestFixture
+              tid <- myThreadId
+              io `finally` cleanupFixtures (PerTestFixtureKey tid)
 
         case result of
           Right () -> do

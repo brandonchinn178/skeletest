@@ -3,6 +3,7 @@
 module Skeletest.Internal.State (
   -- * Fixtures
   FixtureRegistry (..),
+  FixtureMap,
   FixtureStatus (..),
   FixtureCleanup (..),
   modifyFixtureRegistry,
@@ -53,9 +54,12 @@ globalStateRef = unsafePerformIO $ newIORef newState
 
 -- | The registry of active fixtures, in order of activation.
 data FixtureRegistry = FixtureRegistry
-  { sessionFixtures :: OMap TypeRep FixtureStatus
-  , testFixtures :: Map ThreadId (OMap TypeRep FixtureStatus)
+  { sessionFixtures :: FixtureMap
+  , fileFixtures :: Map FilePath FixtureMap
+  , testFixtures :: Map ThreadId FixtureMap
   }
+
+type FixtureMap = OMap TypeRep FixtureStatus
 
 data FixtureStatus
   = FixtureInProgress
@@ -69,6 +73,7 @@ emptyFixtureRegistry :: FixtureRegistry
 emptyFixtureRegistry =
   FixtureRegistry
     { sessionFixtures = OMap.empty
+    , fileFixtures = Map.empty
     , testFixtures = Map.empty
     }
 

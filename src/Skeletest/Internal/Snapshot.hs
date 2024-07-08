@@ -30,7 +30,8 @@ import Data.Typeable (Typeable)
 import Data.Typeable qualified as Typeable
 import Data.Void (absurd)
 import Debug.RecoverRTTI (anythingToString)
-import System.FilePath (replaceExtension, splitFileName, (</>))
+import System.Directory (createDirectoryIfMissing)
+import System.FilePath (replaceExtension, splitFileName, takeDirectory, (</>))
 import System.IO.Error (isDoesNotExistError)
 import UnliftIO.Exception (throwIO, try)
 import UnliftIO.IORef (IORef, atomicModifyIORef', modifyIORef', newIORef, readIORef)
@@ -90,7 +91,8 @@ instance Fixture SnapshotFileFixture where
     pure . withCleanup SnapshotFileFixture{..} $
       -- write snapshot back out when file is done
       readIORef snapshotFileRef >>= \case
-        Just snapshotFile | snapshotChanged snapshotFile ->
+        Just snapshotFile | snapshotChanged snapshotFile -> do
+          createDirectoryIfMissing True (takeDirectory snapshotPath)
           Text.writeFile snapshotPath $ encodeSnapshotFile snapshotFile
         _ -> pure ()
 

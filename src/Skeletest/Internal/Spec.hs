@@ -58,6 +58,7 @@ import Skeletest.Assertions (TestFailure (..))
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.State (TestInfo (..), withTestInfo)
 import Skeletest.Internal.TestTargets (TestTargets, matchesTest)
+import Skeletest.Internal.TestTargets qualified as TestTargets
 import Skeletest.Prop.Internal (Property, runProperty)
 
 type Spec = Spec' ()
@@ -226,19 +227,23 @@ applyTestSelections = \case
   Nothing -> id
   Just selections ->
     map $ \info ->
-      let testMatches = matchesTest selections (specPath info)
-       in info{specSpec = withSpecTrees (goTrees testMatches []) (specSpec info)}
-  where
-    goTrees testMatches ctx = mapMaybe (goTree testMatches ctx)
-
-    goTree testMatches ctx = \case
-      SpecGroup name trees ->
-        pure $ SpecGroup name $ goTrees testMatches (ctx <> [name]) trees
-      tree@(SpecTest name _) -> do
-        -- TODO: specify markers
-        let markers = []
-        guard $ testMatches (ctx <> [name]) markers
-        pure tree
+      let
+        goTrees ctx = mapMaybe (goTree ctx)
+        goTree ctx = \case
+          SpecGroup name trees ->
+            pure $ SpecGroup name $ goTrees (ctx <> [name]) trees
+          tree@(SpecTest name _) -> do
+            -- TODO: specify markers
+            let markers = []
+            guard . matchesTest selections $
+              TestTargets.TestAttrs
+                { testPath = specPath info
+                , testIdentifier = ctx <> [name]
+                , testMarkers = markers
+                }
+            pure tree
+      in
+        info{specSpec = withSpecTrees (goTrees []) (specSpec info)}
 
 {----- Defining a Spec -----}
 

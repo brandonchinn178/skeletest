@@ -1,9 +1,11 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Skeletest.Internal.TestTargets (
   TestTargets,
   TestTarget (..),
+  TestAttrs (..),
   matchesTest,
   parseTestTargets,
 ) where
@@ -32,13 +34,19 @@ data TestTarget
   | TestTargetOr TestTarget TestTarget
   deriving (Eq)
 
-matchesTest :: TestTarget -> FilePath -> [Text] -> [Text] -> Bool
-matchesTest selection fp testIdentifier markers = go selection
+data TestAttrs = TestAttrs
+  { testPath :: FilePath
+  , testIdentifier :: [Text]
+  , testMarkers :: [Text]
+  }
+
+matchesTest :: TestTarget -> TestAttrs -> Bool
+matchesTest selection TestAttrs{..} = go selection
   where
     go = \case
-      TestTargetFile path -> fp == path
+      TestTargetFile path -> testPath == path
       TestTargetName s -> s `Text.isInfixOf` Text.unwords testIdentifier
-      TestTargetMarker marker -> marker `elem` markers
+      TestTargetMarker marker -> marker `elem` testMarkers
       TestTargetNot e -> not $ go e
       TestTargetAnd l r -> go l && go r
       TestTargetOr l r -> go l || go r

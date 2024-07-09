@@ -10,8 +10,78 @@ import Skeletest.Internal.TestTargets
 spec :: Spec
 spec = do
   describe "matchesTest" $ do
-    -- TODO
-    pure ()
+    let someAttrs =
+          TestAttrs
+            { testPath = "MyTestSpec.hs"
+            , testIdentifier = ["a", "b", "test name"]
+            , testMarkers = ["mark1", "mark2"]
+            }
+
+    sequence_
+      [ it label $
+          matchesTest selection attrs `shouldBe` True
+      | (label, selection, attrs) <-
+          [ ( "matches tests in file"
+            , TestTargetFile "FooSpec.hs"
+            , someAttrs{testPath = "FooSpec.hs"}
+            )
+          , ( "matches test name substring"
+            , TestTargetName "foo"
+            , someAttrs{testIdentifier = ["group1", "group2", "my foo test"]}
+            )
+          , ( "matches group name substring"
+            , TestTargetName "fooFunc"
+            , someAttrs{testIdentifier = ["fooFunction", "does a thing"]}
+            )
+          , ( "matches a marker exactly"
+            , TestTargetMarker "fast"
+            , someAttrs{testMarkers = ["fast", "slow"]}
+            )
+          , ( "matches a NOT target when target does not match"
+            , TestTargetNot (TestTargetFile "FooSpec.hs")
+            , someAttrs{testPath = "BarSpec.hs"}
+            )
+          , ( "matches an AND target when target matches both"
+            , TestTargetAnd (TestTargetFile "FooSpec.hs") (TestTargetMarker "fast")
+            , someAttrs{testPath = "FooSpec.hs", testMarkers = ["fast"]}
+            )
+          , ( "matches an OR target when target matches one"
+            , TestTargetOr (TestTargetFile "FooSpec.hs") (TestTargetMarker "fast")
+            , someAttrs{testPath = "FooSpec.hs", testMarkers = []}
+            )
+          ]
+      ]
+
+    sequence_
+      [ it label $
+          matchesTest selection attrs `shouldBe` False
+      | (label, selection, attrs) <-
+          [ ( "does not match test in another file"
+            , TestTargetFile "FooSpec.hs"
+            , someAttrs{testPath = "BarSpec.hs"}
+            )
+          , ( "does not match test not containing name"
+            , TestTargetName "foo"
+            , someAttrs{testIdentifier = ["group1", "group2", "other test"]}
+            )
+          , ( "does not match marker substring"
+            , TestTargetMarker "fastish"
+            , someAttrs{testMarkers = ["fast"]}
+            )
+          , ( "does not match a NOT target when target matches"
+            , TestTargetNot (TestTargetFile "FooSpec.hs")
+            , someAttrs{testPath = "FooSpec.hs"}
+            )
+          , ( "does not match an AND target when target does not match one"
+            , TestTargetAnd (TestTargetFile "FooSpec.hs") (TestTargetMarker "fast")
+            , someAttrs{testPath = "BarSpec.hs", testMarkers = ["fast"]}
+            )
+          , ( "does not match an OR target when target does not match either"
+            , TestTargetOr (TestTargetFile "FooSpec.hs") (TestTargetMarker "fast")
+            , someAttrs{testPath = "BarSpec.hs", testMarkers = []}
+            )
+          ]
+      ]
 
   describe "parseTestTargets" $ do
     sequence_

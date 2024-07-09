@@ -38,17 +38,19 @@ module Skeletest.Internal.Spec (
 import Control.Concurrent (myThreadId)
 import Control.Monad (forM, guard)
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (listToMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Data.Typeable (Typeable)
 import GHC.Stack qualified as GHC
+import System.Console.ANSI qualified as ANSI
 import UnliftIO.Exception (
   SomeException,
   displayException,
   finally,
   fromException,
+  try,
   trySyncOrAsync,
  )
 
@@ -91,7 +93,6 @@ mapMaybeSpec f = withSpecTrees go
 -- | Run the given Specs and return whether all of the tests passed.
 --
 -- TODO: allow running tests in parallel
--- TODO: colors
 -- TODO: print summary: # total tests, # failing tests, # snapshots updated
 runSpecs :: SpecRegistry -> IO Bool
 runSpecs specs =
@@ -127,21 +128,78 @@ runSpecs specs =
 
         case result of
           Right () -> do
-            Text.putStrLn "OK"
+            Text.putStrLn $ green "OK"
             pure True
           Left (e :: SomeException) -> do
             case fromException e of
-              Just TestFailure{testInfo = _, ..} -> do
-                Text.putStrLn "FAIL"
-                Text.putStrLn $ indent (lvl + 1) testFailMessage
-                Text.putStrLn $ indent (lvl + 1) (Text.pack $ GHC.prettyCallStack callStack)
+              Just failure -> do
+                Text.putStrLn $ red "FAIL"
+                Text.putStrLn =<< renderTestFailure failure
               Nothing -> do
-                Text.putStrLn "ERROR"
+                Text.putStrLn $ red "ERROR"
                 Text.putStrLn $ indent lvl (Text.pack $ displayException e)
             pure False
 
     getIndentLevel testInfo = length (testContexts testInfo) + 1 -- +1 to include the module name
     indent lvl = Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"
+
+    withANSI codes s = Text.pack (ANSI.setSGRCode codes) <> s <> Text.pack (ANSI.setSGRCode [ANSI.Reset])
+    green = withANSI [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Green]
+    red = withANSI [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Red]
+
+-- | Render a test failure like:
+--
+-- @
+-- At test/Skeletest/Internal/TestTargetsSpec.hs:19:
+-- |
+-- |           parseTestTargets input `shouldBe` Right (Just expected)
+-- |                                   ^^^^^^^^
+--
+-- Right 1 ≠ Left 1
+-- @
+renderTestFailure :: TestFailure -> IO Text
+renderTestFailure TestFailure{..} = do
+  prettyStackTrace <- mapM renderCallLine . reverse $ GHC.getCallStack callStack
+  pure . Text.intercalate "\n" $
+    [ border
+    , Text.intercalate "\n\n" prettyStackTrace
+    , ""
+    , testFailMessage
+    , border
+    ]
+  where
+    border = Text.replicate 80 "-"
+
+    renderCallLine (_, loc) = do
+      let
+        path = GHC.srcLocFile loc
+        lineNum = GHC.srcLocStartLine loc
+        startCol = GHC.srcLocStartCol loc
+        endCol = GHC.srcLocEndCol loc
+
+      mLine <-
+        try (Text.readFile path) >>= \case
+          Right srcFile -> pure $ getLineNum lineNum srcFile
+          Left (_ :: SomeException) -> pure Nothing
+      let (srcLine, pointerLine) =
+            case mLine of
+              Just line ->
+                ( line
+                , Text.replicate (startCol - 1) " " <> Text.replicate (endCol - startCol) "^"
+                )
+              Nothing ->
+                ( "<unknown line>"
+                , ""
+                )
+
+      pure . Text.intercalate "\n" $
+        [ Text.pack path <> ":" <> (Text.pack . show) lineNum <> ":"
+        , "|"
+        , "| " <> srcLine
+        , "| " <> pointerLine
+        ]
+
+    getLineNum n = listToMaybe . take 1 . drop (n - 1) . Text.lines
 
 {----- Entrypoint -----}
 

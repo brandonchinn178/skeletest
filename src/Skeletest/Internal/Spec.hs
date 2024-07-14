@@ -7,8 +7,6 @@ module Skeletest.Internal.Spec (
   Spec,
   SpecTree (..),
   getSpecTrees,
-  filterSpec,
-  mapMaybeSpec,
   runSpecs,
 
   -- ** Entrypoint
@@ -37,8 +35,10 @@ module Skeletest.Internal.Spec (
 
 import Control.Concurrent (myThreadId)
 import Control.Monad (forM, guard)
+import Control.Monad.Trans.Reader qualified as Trans
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
-import Data.Maybe (listToMaybe, mapMaybe)
+import Data.Functor.Identity (runIdentity)
+import Data.Maybe (catMaybes, listToMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
@@ -57,6 +57,7 @@ import UnliftIO.Exception (
 import Skeletest.Assertions (TestFailure (..))
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.State (TestInfo (..), withTestInfo)
+import Skeletest.Internal.State qualified as TestInfo (TestInfo (..))
 import Skeletest.Internal.TestTargets (TestTargets, matchesTest)
 import Skeletest.Internal.TestTargets qualified as TestTargets
 import Skeletest.Prop.Internal (Property, runProperty)
@@ -69,27 +70,59 @@ newtype Spec' a = Spec (Writer [SpecTree] a)
 getSpecTrees :: Spec -> [SpecTree]
 getSpecTrees (Spec spec) = execWriter spec
 
-withSpecTrees :: ([SpecTree] -> [SpecTree]) -> Spec -> Spec
-withSpecTrees f = Spec . tell . f . getSpecTrees
+withSpecTrees :: Monad m => ([SpecTree] -> m [SpecTree]) -> Spec -> m Spec
+withSpecTrees f = fmap (Spec . tell) . f . getSpecTrees
 
 data SpecTree
-  = SpecGroup Text [SpecTree]
-  | SpecTest Text (IO ())
+  = SpecGroup
+      { groupLabel :: Text
+      , groupTrees :: [SpecTree]
+      }
+  | SpecTest
+      { testName :: Text
+      , testAction :: IO ()
+      }
 
--- | Filter specs bottom-to-top.
-filterSpec :: (SpecTree -> Bool) -> Spec -> Spec
-filterSpec f = mapMaybeSpec (\tree -> if f tree then Just tree else Nothing)
-
--- | Map + filter specs bottom-to-top.
-mapMaybeSpec :: (SpecTree -> Maybe SpecTree) -> Spec -> Spec
-mapMaybeSpec f = withSpecTrees go
+-- | Traverse the tree with the given processing function.
+--
+-- To preprocess trees with @pre@ and postprocess with @post@:
+--
+-- >>> traverseSpecTrees (\go -> post <=< mapM go <=< pre) spec
+traverseSpecTrees ::
+  forall m.
+  Monad m =>
+  ( (SpecTree -> m SpecTree)
+    -> [SpecTree]
+    -> m [SpecTree]
+  )
+  -> Spec
+  -> m Spec
+traverseSpecTrees f = withSpecTrees go
   where
-    go :: [SpecTree] -> [SpecTree]
-    go = mapMaybe f . map recurseGroups
+    go :: [SpecTree] -> m [SpecTree]
+    go = f recurseGroups
 
     recurseGroups = \case
-      SpecGroup name trees -> SpecGroup name (go trees)
-      SpecTest name io -> SpecTest name io
+      group@SpecGroup{} -> do
+        trees' <- go $ groupTrees group
+        pure group{groupTrees = trees'}
+      stest@SpecTest{} -> pure stest
+
+-- | Map the tree with the given processing function.
+--
+-- To preprocess trees with @pre@ and postprocess with @post@:
+--
+-- >>> traverseSpecTrees (\go -> post . map go . pre) spec
+mapSpecTrees ::
+  ( (SpecTree -> SpecTree)
+    -> [SpecTree]
+    -> [SpecTree]
+  )
+  -> Spec
+  -> Spec
+mapSpecTrees f = runIdentity . traverseSpecTrees (\go -> pure . f (runIdentity . go))
+
+{----- Execute spec -----}
 
 -- | Run the given Specs and return whether all of the tests passed.
 --
@@ -123,7 +156,7 @@ runSpecs specs =
         -- TODO: timeout
         result <-
           trySyncOrAsync $
-            withTestInfo testInfo{testName = name} $ do
+            withTestInfo testInfo{TestInfo.testName = name} $ do
               tid <- myThreadId
               io `finally` cleanupFixtures (PerTestFixtureKey tid)
 
@@ -214,7 +247,7 @@ data SpecInfo = SpecInfo
 
 pruneSpec :: SpecRegistry -> SpecRegistry
 pruneSpec = mapMaybe $ \info -> do
-  let spec = filterSpec (not . isEmptySpec) (specSpec info)
+  let spec = mapSpecTrees (\go -> filter (not . isEmptySpec) . map go) (specSpec info)
   guard $ (not . null . getSpecTrees) spec
   pure info{specSpec = spec}
   where
@@ -228,22 +261,27 @@ applyTestSelections = \case
   Just selections ->
     map $ \info ->
       let
-        goTrees ctx = mapMaybe (goTree ctx)
-        goTree ctx = \case
-          SpecGroup name trees ->
-            pure $ SpecGroup name $ goTrees (ctx <> [name]) trees
-          tree@(SpecTest name _) -> do
-            -- TODO: specify markers
-            let markers = []
-            guard . matchesTest selections $
-              TestTargets.TestAttrs
-                { testPath = specPath info
-                , testIdentifier = ctx <> [name]
-                , testMarkers = markers
-                }
-            pure tree
+        applySelections = (`Trans.runReader` []) . traverseSpecTrees apply'
+        apply' = apply selections (specPath info)
       in
-        info{specSpec = withSpecTrees (goTrees []) (specSpec info)}
+        info{specSpec = applySelections (specSpec info)}
+  where
+    apply selections path go = mapMaybeM $ \case
+      group@SpecGroup{groupLabel} -> Just <$> Trans.local (<> [groupLabel]) (go group)
+      stest@SpecTest{testName} -> do
+        groups <- Trans.ask
+        let attrs =
+              TestTargets.TestAttrs
+                { testPath = path
+                , testIdentifier = groups <> [testName]
+                , testMarkers = [] -- TODO: specify markers
+                }
+        pure $
+          if matchesTest selections attrs
+            then Just stest
+            else Nothing
+
+    mapMaybeM f = fmap catMaybes . mapM f
 
 {----- Defining a Spec -----}
 

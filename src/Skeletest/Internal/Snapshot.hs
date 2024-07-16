@@ -57,6 +57,7 @@ data SnapshotTestFixture = SnapshotTestFixture
 instance Fixture SnapshotTestFixture where
   fixtureAction = do
     snapshotIndexRef <- newIORef 0
+    -- TODO: if --update, clean up extraneous snapshots when test finishes
     pure . noCleanup $ SnapshotTestFixture{..}
 
 getAndIncSnapshotIndex :: IO Int
@@ -96,8 +97,9 @@ instance Fixture SnapshotFileFixture where
           Text.writeFile snapshotPath $ encodeSnapshotFile snapshotFile
         _ -> pure ()
 
--- TODO: session fixture to track which tests were run.
--- if no filters were added, error if outdated snapshot files (--update to remove)
+-- TODO: statically analyze if P.matchesSnapshot appears anywhere in a test file
+-- and check if there are snapshot files for test files that don't have snapshot
+-- assertions. if --update, remove such files, or error if not --update.
 
 newtype SnapshotUpdateFlag = SnapshotUpdateFlag Bool
 

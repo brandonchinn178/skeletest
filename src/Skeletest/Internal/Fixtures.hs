@@ -88,7 +88,7 @@ getFixture = liftIO $ do
                 , "Expected: " <> show rep <> "."
                 , "Got: " <> show (typeOf fixture)
                 ]
-        Just FixtureInProgress -> error "circular dependency" -- TODO: better error
+        Just FixtureInProgress -> error "circular dependency" -- FIXME: better error
 
   case cachedFixture of
     -- fixture was cached, return it

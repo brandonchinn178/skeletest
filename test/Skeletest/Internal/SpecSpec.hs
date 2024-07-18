@@ -4,7 +4,7 @@ import Skeletest
 
 spec :: Spec
 spec = do
-  -- TODO: integration tests
+  -- FIXME: integration tests
   describe "Markers" $ do
     withMarkers ["foo", "bar"] $ do
       it "foo" $ pure ()

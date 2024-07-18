@@ -35,13 +35,13 @@ plugin =
 transformMainModule :: ParsedModule -> ParsedModule
 transformMainModule modl = addModuleFun mainFun modl
   where
-    -- TODO: if `cliFlags` value exists in `getModuleVals modl`, use `HsExprVar "cliFlags"`
+    -- FIXME: if `cliFlags` value exists in `getModuleVals modl`, use `HsExprVar "cliFlags"`
     cliFlagsExpr = HsExprList []
 
-    -- TODO: if `snapshotRenderers` value exists in `getModuleVals modl`, use `HsExprVar "snapshotRenderers"`
+    -- FIXME: if `snapshotRenderers` value exists in `getModuleVals modl`, use `HsExprVar "snapshotRenderers"`
     snapshotRenderersExpr = HsExprList []
 
-    -- TODO: if `plugins` value exists in `getModuleVals modl`, use `HsExprVar "plugins"`
+    -- FIXME: if `plugins` value exists in `getModuleVals modl`, use `HsExprVar "plugins"`
     pluginsExpr = HsExprList []
 
     mainFun =

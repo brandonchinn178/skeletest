@@ -124,4 +124,4 @@ getTestInfo :: IO TestInfo
 getTestInfo =
   lookupTestInfo >>= \case
     Just info -> pure info
-    Nothing -> error "test info not initialized" -- TODO
+    Nothing -> error "test info not initialized" -- FIXME: better error

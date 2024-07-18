@@ -117,7 +117,7 @@ getFlag =
               , "Expected: " <> show rep <> "."
               , "Got: " <> show dyn
               ]
-      -- TODO: better error
+      -- FIXME: better error
       Nothing -> error "Flag was not registered. Did you add it to cliFlags in Main.hs?"
   where
     rep = typeRep (Proxy @a)

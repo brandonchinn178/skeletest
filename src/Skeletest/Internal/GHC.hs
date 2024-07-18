@@ -177,7 +177,7 @@ addModuleFun FunDef{..} parsedModule = parsedModule{ghcModule = update <$> ghcMo
       ]
 
 addModuleExport :: ModuleExport -> ParsedModule -> ParsedModule
-addModuleExport _ = id -- error "TODO: addModuleExport"
+addModuleExport _ = id -- error "FIXME: addModuleExport"
 
 {----- ModuleVal -----}
 

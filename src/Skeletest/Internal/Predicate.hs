@@ -19,7 +19,8 @@ module Skeletest.Internal.Predicate (
   -- * Data types
   just,
   left,
-  -- TODO: nothing,
+  -- FIXME: implement
+  -- nothing,
   -- tup2,
   -- tup3,
   -- tup4,
@@ -36,14 +37,14 @@ module Skeletest.Internal.Predicate (
   (<<<),
   (>>>),
   not,
-  -- TODO: P.any, P.all
+  -- FIXME: P.any, P.all
 
   -- * Containers
-  -- TODO: P.contains (Containable: [a], Text)
+  -- FIXME: P.contains (Containable: [a], Text)
 
   -- * IO
   returns,
-  -- TODO: throws
+  -- FIXME: throws
 
   -- * Snapshot testing
   matchesSnapshot,
@@ -382,7 +383,7 @@ matchesSnapshot =
     , predicateDispNeg = "does not match snapshot"
     }
   where
-    -- TODO: load from SkeletestOptions
+    -- FIXME: load from SkeletestOptions
     customRenderers = []
 
 {----- Utilities -----}

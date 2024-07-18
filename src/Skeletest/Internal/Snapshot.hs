@@ -84,7 +84,7 @@ instance Fixture SnapshotFileFixture where
         Right contents ->
           case decodeSnapshotFile contents of
             Just snapshotFile -> pure $ Just snapshotFile
-            -- TODO: better error
+            -- FIXME: better error
             Nothing -> error "corrupted snapshot file"
     let snapshotChanged newSnapshot = mSnapshotFile /= Just newSnapshot
 
@@ -263,7 +263,7 @@ decodeSnapshotFile = parseFile . Text.lines
         | "```" <- Text.strip line -> pure (Text.unlines snapshot, rest)
         | otherwise -> parseSnapshot (snapshot <> [line]) rest
 
--- TODO: property test
+-- FIXME: property test
 encodeSnapshotFile :: SnapshotFile -> Text
 encodeSnapshotFile SnapshotFile{..} =
   Text.intercalate "\n" $

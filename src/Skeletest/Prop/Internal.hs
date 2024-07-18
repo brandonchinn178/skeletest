@@ -3,6 +3,7 @@ module Skeletest.Prop.Internal (
   runProperty,
 ) where
 
+-- FIXME: implement
 data Property
 
 runProperty :: Property -> IO ()

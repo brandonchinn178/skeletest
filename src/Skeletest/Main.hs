@@ -45,7 +45,7 @@ data SkeletestOptions = SkeletestOptions
   , plugins :: [Plugin]
   }
 
--- TODO: allow modifying command line options, test execution, etc.
+-- TODO: allow registering hooks to modify test execution
 defaultOptions :: SkeletestOptions
 defaultOptions =
   SkeletestOptions
@@ -54,7 +54,6 @@ defaultOptions =
     , plugins = []
     }
 
--- TODO: handle plugins
 runSkeletest :: SkeletestOptions -> [(FilePath, String, Spec)] -> IO ()
 runSkeletest SkeletestOptions{..} testModules = do
   selections <- loadCliArgs builtinFlags cliFlags

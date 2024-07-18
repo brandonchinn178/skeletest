@@ -14,6 +14,7 @@ library
     Skeletest.Internal.Error
     Skeletest.Internal.Fixtures
     Skeletest.Internal.GHC
+    Skeletest.Internal.Markers
     Skeletest.Internal.Plugin
     Skeletest.Internal.Predicate
     Skeletest.Internal.Preprocessor
@@ -67,6 +68,7 @@ test-suite skeletest-tests
   other-modules:
     ExampleSpec
     Skeletest.Internal.PluginSpec
+    Skeletest.Internal.SpecSpec
     Skeletest.Internal.TestTargetsSpec
   build-depends:
       base

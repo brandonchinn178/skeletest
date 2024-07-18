@@ -6,7 +6,6 @@ module Skeletest.Internal.Spec (
   -- * Spec interface
   Spec,
   SpecTree (..),
-  getSpecTrees,
   runSpecs,
 
   -- ** Entrypoint
@@ -25,10 +24,11 @@ module Skeletest.Internal.Spec (
   -- ** Modifiers
   xfail,
   skip,
+  markManual,
 
   -- ** Markers
   IsMarker (..),
-  AnonMarker (..),
+  MarkerTag (..),
   withMarker,
   withMarkers,
 ) where
@@ -42,21 +42,23 @@ import Data.Maybe (catMaybes, listToMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
-import Data.Typeable (Typeable)
 import GHC.Stack qualified as GHC
 import System.Console.ANSI qualified as ANSI
 import UnliftIO.Exception (
+  Exception,
   SomeException,
   displayException,
   finally,
   fromException,
+  throwIO,
   try,
   trySyncOrAsync,
  )
 
 import Skeletest.Assertions (TestFailure (..))
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
-import Skeletest.Internal.State (TestInfo (..), withTestInfo)
+import Skeletest.Internal.Markers (IsMarker (..), SomeMarker (..), findMarker)
+import Skeletest.Internal.State (TestInfo (TestInfo), withTestInfo)
 import Skeletest.Internal.State qualified as TestInfo (TestInfo (..))
 import Skeletest.Internal.TestTargets (TestTargets, matchesTest)
 import Skeletest.Internal.TestTargets qualified as TestTargets
@@ -80,6 +82,14 @@ data SpecTree
       }
   | SpecTest
       { testName :: Text
+      , testMarkers :: [SomeMarker]
+        -- ^ Markers, in order from least to most recently applied.
+        --
+        -- >>> withMarker MarkerA . withMarker MarkerB $ test ...
+        --
+        -- will contain
+        --
+        -- >>> SpecTest { testMarkers = [MarkerA, MarkerB] }
       , testAction :: IO ()
       }
 
@@ -138,6 +148,7 @@ runSpecs specs =
                 { testModule = specName
                 , testContexts = []
                 , testName = ""
+                , testMarkers = []
                 , testFile = specPath
                 }
         Text.putStrLn specName
@@ -145,41 +156,62 @@ runSpecs specs =
   where
     runTrees testInfo = fmap and . mapM (runTree testInfo)
     runTree testInfo = \case
-      SpecGroup name trees -> do
+      SpecGroup{..} -> do
         let lvl = getIndentLevel testInfo
-        Text.putStrLn $ indent lvl name
-        runTrees testInfo{testContexts = testContexts testInfo <> [name]} trees
-      SpecTest name io -> do
+        Text.putStrLn $ indent lvl groupLabel
+        runTrees testInfo{TestInfo.testContexts = TestInfo.testContexts testInfo <> [groupLabel]} groupTrees
+      SpecTest{..} -> do
         let lvl = getIndentLevel testInfo
-        Text.putStr $ indent lvl (name <> ": ")
+        Text.putStr $ indent lvl (testName <> ": ")
 
         -- TODO: timeout
+        let testInfo' =
+              testInfo
+                { TestInfo.testName = testName
+                , TestInfo.testMarkers = testMarkers
+                }
         result <-
           trySyncOrAsync $
-            withTestInfo testInfo{TestInfo.testName = name} $ do
+            withTestInfo testInfo' $ do
               tid <- myThreadId
-              io `finally` cleanupFixtures (PerTestFixtureKey tid)
+              modifyTest testInfo' testAction `finally` cleanupFixtures (PerTestFixtureKey tid)
 
         case result of
           Right () -> do
             Text.putStrLn $ green "OK"
             pure True
-          Left (e :: SomeException) -> do
-            case fromException e of
-              Just failure -> do
+          Left e
+            | Just (SkeletestSkip reason) <- fromException e -> do
+                Text.putStrLn $ yellow "SKIP"
+                Text.putStrLn $ indent (lvl + 1) reason
+                pure True
+            | Just (SkeletestXFail reason) <- fromException e -> do
+                Text.putStrLn $ yellow "XFAIL"
+                Text.putStrLn $ indent (lvl + 1) reason
+                pure True
+            | Just (SkeletestXPass reason) <- fromException e -> do
+                Text.putStrLn $ red "XPASS"
+                Text.putStrLn $ indent (lvl + 1) reason
+                pure False
+            | Just failure <- fromException e -> do
                 Text.putStrLn $ red "FAIL"
                 Text.putStrLn =<< renderTestFailure failure
-              Nothing -> do
+                pure False
+            | otherwise -> do
                 Text.putStrLn $ red "ERROR"
-                Text.putStrLn $ indent lvl (Text.pack $ displayException e)
-            pure False
+                Text.putStrLn $ indent (lvl + 1) (Text.pack $ displayException e)
+                pure False
 
-    getIndentLevel testInfo = length (testContexts testInfo) + 1 -- +1 to include the module name
+    -- TODO: make pluggable
+    modifyTest info = foldr (.) id $ map ($ info) [checkXFail, checkSkip]
+
+    getIndentLevel testInfo = length (TestInfo.testContexts testInfo) + 1 -- +1 to include the module name
     indent lvl = Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"
 
     withANSI codes s = Text.pack (ANSI.setSGRCode codes) <> s <> Text.pack (ANSI.setSGRCode [ANSI.Reset])
     green = withANSI [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Green]
     red = withANSI [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Red]
+    yellow = withANSI [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Yellow]
 
 -- | Render a test failure like:
 --
@@ -257,7 +289,9 @@ pruneSpec = mapMaybe $ \info -> do
 
 applyTestSelections :: TestTargets -> SpecRegistry -> SpecRegistry
 applyTestSelections = \case
-  Nothing -> id
+  Nothing ->
+    -- if no selections are specified, hide manual tests
+    applyTestSelections (Just $ TestTargets.TestTargetNot $ TestTargets.TestTargetMarker "manual")
   Just selections ->
     map $ \info ->
       let
@@ -268,13 +302,13 @@ applyTestSelections = \case
   where
     apply selections path go = mapMaybeM $ \case
       group@SpecGroup{groupLabel} -> Just <$> Trans.local (<> [groupLabel]) (go group)
-      stest@SpecTest{testName} -> do
+      stest@SpecTest{testName, testMarkers} -> do
         groups <- Trans.ask
         let attrs =
               TestTargets.TestAttrs
                 { testPath = path
                 , testIdentifier = groups <> [testName]
-                , testMarkers = [] -- TODO: specify markers
+                , testMarkers = [getMarkerName m | SomeMarker m <- testMarkers]
                 }
         pure $
           if matchesTest selections attrs
@@ -286,7 +320,13 @@ applyTestSelections = \case
 {----- Defining a Spec -----}
 
 describe :: String -> Spec -> Spec
-describe name spec = Spec $ tell [SpecGroup (Text.pack name) (getSpecTrees spec)]
+describe name = runIdentity . withSpecTrees (pure . (:[]) . mkGroup)
+  where
+    mkGroup trees =
+      SpecGroup
+        { groupLabel = Text.pack name
+        , groupTrees = trees
+        }
 
 class Testable a where
   runTest :: a -> IO ()
@@ -298,7 +338,14 @@ instance Testable Property where
   runTest = runProperty
 
 test :: Testable a => String -> a -> Spec
-test name t = Spec $ tell [SpecTest (Text.pack name) (runTest t)]
+test name t = Spec $ tell [mkTest]
+  where
+    mkTest =
+      SpecTest
+        { testName = Text.pack name
+        , testMarkers = []
+        , testAction = runTest t
+        }
 
 it :: String -> IO () -> Spec
 it = test
@@ -310,30 +357,107 @@ prop = test
 
 -- | Mark the given spec as expected to fail.
 -- Fails tests if they unexpectedly pass.
+--
+-- Can be selected with the marker '@xfail'
 xfail :: String -> Spec -> Spec
-xfail = undefined
+xfail = withMarker . MarkerXFail . Text.pack
+
+checkXFail :: TestInfo -> IO a -> IO a
+checkXFail info m =
+  case findMarker (TestInfo.testMarkers info) of
+    Just (MarkerXFail reason) ->
+      try m >>= \case
+        Left (_ :: SomeException) -> throwIO $ SkeletestXFail reason
+        Right _ -> throwIO $ SkeletestXPass reason
+    Nothing -> m
+
+-- TODO: instead of throwing xfail, allow checkXFail to
+-- explicitly modify the test result
+data SkeletestXFail = SkeletestXFail Text
+  deriving (Show)
+
+instance Exception SkeletestXFail
+
+data SkeletestXPass = SkeletestXPass Text
+  deriving (Show)
+
+instance Exception SkeletestXPass
 
 -- | Skip all tests in the given spec.
+--
+-- Can be selected with the marker '@skip'
 skip :: String -> Spec -> Spec
-skip = undefined
+skip = withMarker . MarkerSkip . Text.pack
+
+checkSkip :: TestInfo -> IO a -> IO a
+checkSkip info m =
+  case findMarker (TestInfo.testMarkers info) of
+    Just (MarkerSkip reason) -> throwIO $ SkeletestSkip reason
+    Nothing -> m
+
+-- TODO: instead of throwing skip, allow checkSkip to
+-- explicitly modify the test result
+data SkeletestSkip = SkeletestSkip Text
+  deriving (Show)
+
+instance Exception SkeletestSkip
+
+-- | Mark all tests in the given spec as "manual", which only
+-- run if the test is selected to run. In other words, manual
+-- tests will not run when no test selections are specified.
+--
+-- Can be selected with the marker '@manual'
+markManual :: Spec -> Spec
+markManual = withMarker MarkerManual
 
 {----- Markers -----}
 
-class Typeable a => IsMarker a where
-  getMarkerName :: a -> Text
+newtype MarkerXFail = MarkerXFail Text
+  deriving (Show)
 
-newtype AnonMarker = AnonMarker Text
+instance IsMarker MarkerXFail where
+  getMarkerName _ = "xfail"
 
-instance IsMarker AnonMarker where
-  getMarkerName (AnonMarker n) = n
+newtype MarkerSkip = MarkerSkip Text
+  deriving (Show)
+
+instance IsMarker MarkerSkip where
+  getMarkerName _ = "skip"
+
+-- | Tests with this marker will automatically be skipped if no
+-- test selections are specified.
+data MarkerManual = MarkerManual
+  deriving (Show)
+
+instance IsMarker MarkerManual where
+  getMarkerName _ = "manual"
+
+-- | A marker that doesn't do anything except tag a test with a given name.
+--
+-- A test tagged with @MarkerTag "foo"@ can be selected with the marker '@foo'
+newtype MarkerTag = MarkerTag Text
+  deriving (Show)
+
+instance IsMarker MarkerTag where
+  getMarkerName (MarkerTag n) = n
 
 -- | Adds the given marker to all the tests in the given spec.
--- Useful for selecting tests from the command line or
--- identifying tests in hooks
+--
+-- Useful for selecting tests from the command line or identifying tests in hooks
 withMarker :: IsMarker a => a -> Spec -> Spec
-withMarker = undefined
-
-withMarkers :: [String] -> Spec -> Spec
-withMarkers = foldr (\mark acc -> withMarker (toAnon mark) . acc) id
+withMarker m = mapSpecTrees (\go -> map (addMarker . go))
   where
-    toAnon = AnonMarker . Text.pack
+    marker = SomeMarker m
+    addMarker = \case
+      group@SpecGroup{} -> group
+      tree@SpecTest{} -> tree{testMarkers = marker : testMarkers tree}
+
+-- | Adds the given names as MarkerTag to all the tests in the given spec.
+--
+-- @
+-- withMarkers ["A", "B"] === withMarker (MarkerTag "A") . withMarker (MarkerTag "B")
+-- @
+withMarkers :: [String] -> Spec -> Spec
+withMarkers = foldr (\mark acc -> withMarker (toTag mark) . acc) id
+  where
+    toTag = MarkerTag . Text.pack

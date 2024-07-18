@@ -32,6 +32,8 @@ import Data.Typeable (Typeable, TypeRep)
 import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.Exception (bracket_)
 
+import Skeletest.Internal.Markers (SomeMarker)
+
 -- | The global state shared by all of Skeletest.
 data GlobalState = GlobalState
   { fixturesRegistry :: FixtureRegistry
@@ -99,6 +101,7 @@ data TestInfo = TestInfo
   { testModule :: Text
   , testContexts :: [Text]
   , testName :: Text
+  , testMarkers :: [SomeMarker]
   , testFile :: FilePath
     -- ^ Relative to CWD
   }

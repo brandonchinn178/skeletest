@@ -6,6 +6,17 @@ module Skeletest (
   it,
   prop,
 
+  -- ** Modifiers
+  xfail,
+  skip,
+  markManual,
+
+  -- ** Markers
+  IsMarker (..),
+  MarkerTag (..),
+  withMarker,
+  withMarkers,
+
   -- * Assertions
   shouldBe,
   shouldNotBe,

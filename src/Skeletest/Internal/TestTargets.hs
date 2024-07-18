@@ -96,16 +96,18 @@ testTargetParser =
 
     markerParser :: Parser TestTarget
     markerParser =
-      Parser.label "marker" $ do
+      Parser.label "marker" . ignoreSpacesAfter $ do
         _ <- symbol "@"
         fmap TestTargetMarker . Parser.takeWhile1P Nothing $
           (||) <$> isAlphaNum <*> (`elem` ("-_." :: [Char]))
 
     fileParser :: Parser TestTarget
     fileParser =
-      Parser.label "test file" $
+      Parser.label "test file" . ignoreSpacesAfter $
         fmap (TestTargetFile . Text.unpack) . Parser.takeWhile1P Nothing $
           (||) <$> isAlphaNum <*> (`elem` ("-_./" :: [Char]))
+
+    ignoreSpacesAfter m = m <* Parser.space
 
 showTestTargetParseError :: ParseErrorBundle -> Text
 showTestTargetParseError bundle =

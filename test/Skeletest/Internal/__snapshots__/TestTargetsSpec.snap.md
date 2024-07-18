@@ -4,7 +4,7 @@
 
 ```
 Could not parse test target: unexpected '!'
-expecting "and", "or", end of input, or test name
+expecting "and", "or", end of input, test name, or white space
  |
  | test/Example!Spec.hs
  |             ^

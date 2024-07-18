@@ -108,13 +108,25 @@ spec = do
             , ["not [fooFunc]"]
             , TestTargetNot (TestTargetName "fooFunc")
             )
-          , ( "parses and operations"
-            , ["[fooFunc] and @fast"]
-            , TestTargetAnd (TestTargetName "fooFunc") (TestTargetMarker "fast")
+          , ( "parses and operations between test names"
+            , ["[fooFunc] and [barFunc]"]
+            , TestTargetAnd (TestTargetName "fooFunc") (TestTargetName "barFunc")
             )
-          , ( "parses or operations"
-            , ["[fooFunc] or test/BarSpec.hs"]
-            , TestTargetOr (TestTargetName "fooFunc") (TestTargetFile "test/BarSpec.hs")
+          , ( "parses and operations between markers"
+            , ["@foo and @fast"]
+            , TestTargetAnd (TestTargetMarker "foo") (TestTargetMarker "fast")
+            )
+          , ( "parses or operations between test names"
+            , ["[fooFunc] or [barFunc]"]
+            , TestTargetOr (TestTargetName "fooFunc") (TestTargetName "barFunc")
+            )
+          , ( "parses or operations between markers"
+            , ["@foo or @fast"]
+            , TestTargetOr (TestTargetMarker "foo") (TestTargetMarker "fast")
+            )
+          , ( "parses or operations between files"
+            , ["FooSpec.hs or BarSpec.hs"]
+            , TestTargetOr (TestTargetFile "FooSpec.hs") (TestTargetFile "BarSpec.hs")
             )
           , ( "joins multiple targets with or"
             , ["[fooFunc]", "test/BarSpec.hs"]

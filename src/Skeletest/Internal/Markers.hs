@@ -6,12 +6,11 @@ module Skeletest.Internal.Markers (
 ) where
 
 import Data.Maybe (listToMaybe, mapMaybe)
-import Data.Text (Text)
 import Data.Typeable (Typeable, cast)
 
 class (Show a, Typeable a) => IsMarker a where
   -- | The name of the marker that can be selected with '@name' syntax.
-  getMarkerName :: a -> Text
+  getMarkerName :: a -> String
 
   -- | If true, skips tests if no selections are specified on the command
   -- line. Defaults to false.
@@ -20,7 +19,7 @@ class (Show a, Typeable a) => IsMarker a where
 
 -- | A marker that can be used for bespoke marker definitions.
 data AnonMarker = AnonMarker
-  { anonMarkerName :: Text
+  { anonMarkerName :: String
   , anonMarkerManual :: Bool
   }
   deriving (Show)

@@ -26,7 +26,10 @@ import Text.Megaparsec.Char.Lexer qualified as Parser.L
 type TestTargets = Maybe TestTarget
 
 data TestTarget
-  = TestTargetFile FilePath
+  = TestTargetEverything
+    -- ^ Useful for selecting all tests, whether manual or not.
+    -- TODO: replace with allowing globs in TestTargetFile
+  | TestTargetFile FilePath
   | TestTargetName Text
   | TestTargetMarker Text
   | TestTargetNot TestTarget
@@ -44,6 +47,7 @@ matchesTest :: TestTarget -> TestAttrs -> Bool
 matchesTest selection TestAttrs{..} = go selection
   where
     go = \case
+      TestTargetEverything -> True
       TestTargetFile path -> testPath == path
       TestTargetName s -> s `Text.isInfixOf` Text.unwords testIdentifier
       TestTargetMarker marker -> marker `elem` testMarkers
@@ -69,6 +73,7 @@ testTargetParser =
   Parser.makeExprParser
     ( Parser.choice
         [ parens testTargetParser
+        , everythingParser
         , nameParser
         , markerParser
         , do
@@ -88,20 +93,19 @@ testTargetParser =
     symbol = Parser.L.symbol Parser.space
     parens = Parser.between (symbol "(") (symbol ")")
 
-    nameParser :: Parser TestTarget
+    everythingParser = TestTargetEverything <$ symbol "*"
+
     nameParser =
       Parser.label "test name" $
         fmap TestTargetName . Parser.between (symbol "[") (symbol "]") $
           Parser.takeWhile1P Nothing (/= ']')
 
-    markerParser :: Parser TestTarget
     markerParser =
       Parser.label "marker" . ignoreSpacesAfter $ do
         _ <- symbol "@"
         fmap TestTargetMarker . Parser.takeWhile1P Nothing $
           (||) <$> isAlphaNum <*> (`elem` ("-_." :: [Char]))
 
-    fileParser :: Parser TestTarget
     fileParser =
       Parser.label "test file" . ignoreSpacesAfter $
         fmap (TestTargetFile . Text.unpack) . Parser.takeWhile1P Nothing $

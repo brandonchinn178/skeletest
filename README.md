@@ -13,9 +13,9 @@ Features:
 
 ```haskell
 import Skeletest
-import Skeletest.Predicate qualified as P
-import Skeletest.Prop.Gen qualified as Gen
-import Skeletest.Prop.Range qualified as Range
+import qualified Skeletest.Predicate as P
+import qualified Skeletest.Prop.Gen as Gen
+import qualified Skeletest.Prop.Range as Range
 
 spec :: Spec
 spec = do
@@ -113,6 +113,7 @@ Test targets are specified as plain positional arguments, with the following syn
 
 | Target | Notes |
 |--------|-------|
+| `*`                     | Selects all tests (useful to include manual tests) |
 | `[myFooFunc]`           | Tests including substring      |
 | `@fast`                 | Tests tagged with marker       |
 | `test/MyLib/FooSpec.hs` | Tests in file, relative to CWD |

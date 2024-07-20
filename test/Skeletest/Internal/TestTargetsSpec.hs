@@ -21,7 +21,11 @@ spec = do
       [ it label $
           matchesTest selection attrs `shouldBe` True
       | (label, selection, attrs) <-
-          [ ( "matches tests in file"
+          [ ( "matches any test"
+            , TestTargetEverything
+            , someAttrs
+            )
+          , ( "matches tests in file"
             , TestTargetFile "FooSpec.hs"
             , someAttrs{testPath = "FooSpec.hs"}
             )
@@ -88,7 +92,11 @@ spec = do
       [ it label $
           parseTestTargets input `shouldBe` Right (Just expected)
       | (label, input, expected) <-
-          [ ( "parses file name"
+          [ ( "parses everything"
+            , ["*"]
+            , TestTargetEverything
+            )
+          , ( "parses file name"
             , ["test/MyLib/FooSpec.hs"]
             , TestTargetFile "test/MyLib/FooSpec.hs"
             )

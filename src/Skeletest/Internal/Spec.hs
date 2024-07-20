@@ -315,7 +315,7 @@ applyTestSelections' selections info = info{specSpec = applySelections $ specSpe
               TestTargets.TestAttrs
                 { testPath = specPath info
                 , testIdentifier = groups <> [testName]
-                , testMarkers = [getMarkerName m | SomeMarker m <- testMarkers]
+                , testMarkers = [Text.pack $ getMarkerName m | SomeMarker m <- testMarkers]
                 }
         pure $
           if matchesTest selections attrs
@@ -451,6 +451,6 @@ withMarkers' isManual = foldr (\mark acc -> withMarker (toTag mark) . acc) id
   where
     toTag name =
       AnonMarker
-        { anonMarkerName = Text.pack name
+        { anonMarkerName = name
         , anonMarkerManual = isManual
         }

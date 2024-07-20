@@ -35,8 +35,9 @@ import Data.Typeable (Typeable, typeOf, typeRep)
 import System.Environment (getArgs)
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (stderr)
+import UnliftIO.Exception (throwIO)
 
-import Skeletest.Internal.Error (invariantViolation)
+import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
 import Skeletest.Internal.State (CLIFlagStore, lookupCliFlag, setCliFlagStore)
 import Skeletest.Internal.TestTargets (TestTargets, parseTestTargets)
 
@@ -117,8 +118,8 @@ getFlag =
               , "Expected: " <> show rep <> "."
               , "Got: " <> show dyn
               ]
-      -- FIXME: better error
-      Nothing -> error "Flag was not registered. Did you add it to cliFlags in Main.hs?"
+      -- FIXME: add test
+      Nothing -> throwIO $ CliFlagNotFound (Text.pack $ flagName @a)
   where
     rep = typeRep (Proxy @a)
 

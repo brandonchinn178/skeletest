@@ -37,7 +37,7 @@ import UnliftIO.Exception (throwIO, try)
 import UnliftIO.IORef (IORef, atomicModifyIORef', modifyIORef', newIORef, readIORef)
 
 import Skeletest.Internal.CLI (IsFlag (..), FlagSpec (..))
-import Skeletest.Internal.Error (invariantViolation)
+import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
 import Skeletest.Internal.Fixtures (
   Fixture (..),
   FixtureScope (..),
@@ -84,8 +84,8 @@ instance Fixture SnapshotFileFixture where
         Right contents ->
           case decodeSnapshotFile contents of
             Just snapshotFile -> pure $ Just snapshotFile
-            -- FIXME: better error
-            Nothing -> error "corrupted snapshot file"
+            -- FIXME: add test
+            Nothing -> throwIO $ SnapshotFileCorrupted snapshotPath
     let snapshotChanged newSnapshot = mSnapshotFile /= Just newSnapshot
 
     snapshotFileRef <- newIORef mSnapshotFile

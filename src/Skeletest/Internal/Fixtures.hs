@@ -21,10 +21,11 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Map.Ordered qualified as OMap
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy (..))
+import Data.Text qualified as Text
 import Data.Typeable (Typeable, eqT, typeOf, typeRep, (:~:) (Refl))
 import UnliftIO.Exception (throwIO, tryAny)
 
-import Skeletest.Internal.Error (invariantViolation)
+import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
 import Skeletest.Internal.State (
   FixtureCleanup (..),
   FixtureMap,
@@ -77,29 +78,38 @@ getFixture = liftIO $ do
     modifyFixtureRegistry $ \registry ->
       case OMap.lookup rep $ getScopedFixtures registry of
         -- fixture has not been requested yet
-        Nothing -> (insertFixture FixtureInProgress registry, Nothing)
+        Nothing -> (insertFixture FixtureInProgress registry, Right Nothing)
         -- fixture has already been requested
         Just (FixtureLoaded (fixture :: ty, _)) ->
           case eqT @a @ty of
-            Just Refl -> (registry, Just fixture)
+            Just Refl -> (registry, Right $ Just fixture)
             Nothing ->
               invariantViolation . unwords $
                 [ "fixture registry contained incorrect types."
                 , "Expected: " <> show rep <> "."
                 , "Got: " <> show (typeOf fixture)
                 ]
-        Just FixtureInProgress -> error "circular dependency" -- FIXME: better error
+        Just FixtureInProgress ->
+          -- FIXME: add test
+          -- get list of fixtures causing a circular dependency
+          let fixtures = map fst . filter (isInProgress . snd) . OMap.assocs $ getScopedFixtures registry
+           in (registry, Left $ FixtureCircularDependency $ map (Text.pack . show) (fixtures <> [rep]))
 
   case cachedFixture of
+    -- error when getting fixture
+    Left e -> throwIO e
     -- fixture was cached, return it
-    Just fixture -> pure fixture
+    Right (Just fixture) -> pure fixture
     -- otherwise, execute it (allowing it to request other fixtures) and cache the result.
-    Nothing -> do
+    Right Nothing -> do
       result@(fixture, _) <- fixtureAction @a
       modifyFixtureRegistry $ \registry -> (insertFixture (FixtureLoaded result) registry, ())
       pure fixture
   where
     rep = typeRep (Proxy @a)
+    isInProgress = \case
+      FixtureInProgress -> True
+      _ -> False
 
 -- | Clean up fixtures in the given scope.
 --

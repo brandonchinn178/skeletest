@@ -177,7 +177,30 @@ addModuleFun FunDef{..} parsedModule = parsedModule{ghcModule = update <$> ghcMo
       ]
 
 addModuleExport :: ModuleExport -> ParsedModule -> ParsedModule
-addModuleExport _ = id -- error "FIXME: addModuleExport"
+addModuleExport export parsedModule = parsedModule{ghcModule = update <$> ghcModule parsedModule}
+  where
+    ParsedModule{fromHsName} = parsedModule
+
+    update modl =
+      modl
+        { GHC.hsmodExports =
+            case GHC.hsmodExports modl of
+              -- no explicit export list, export is already there
+              Nothing -> Nothing
+              -- explicit export list
+              Just lexports -> Just $ (genLoc export' :) <$> lexports
+        }
+
+    fromName = genLoc . GHC.IEName GHC.noExtField . genLoc . fromHsName
+    export' =
+      case export of
+        ModuleExportVar name -> GHC.IEVar GHC.noAnn (fromName name) Nothing
+        ModuleExportPattern name -> GHC.IEThingAbs GHC.noAnn (fromName name) Nothing
+        ModuleExportType name contents ->
+          case contents of
+            ModuleExportTypeNoContents -> GHC.IEThingAbs GHC.noAnn (fromName name) Nothing
+            ModuleExportTypeEverything -> GHC.IEThingAll GHC.noAnn (fromName name) Nothing
+            ModuleExportTypeList contents' -> GHC.IEThingWith GHC.noAnn (fromName name) GHC.NoIEWildcard (map fromName contents') Nothing
 
 {----- ModuleVal -----}
 

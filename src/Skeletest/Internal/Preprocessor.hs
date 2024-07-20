@@ -6,6 +6,7 @@ module Skeletest.Internal.Preprocessor (
 
 import Control.Monad (guard)
 import Data.Char (isDigit, isLower, isUpper)
+import Data.List (sort)
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -120,7 +121,7 @@ insertImports testModules file =
 {----- Helpers -----}
 
 listDirectoryRecursive :: FilePath -> IO [FilePath]
-listDirectoryRecursive fp = fmap concat . mapM (go . (fp </>)) =<< listDirectory fp
+listDirectoryRecursive fp = fmap (sort . concat) . mapM (go . (fp </>)) =<< listDirectory fp
   where
     go child = do
       isDir <- doesDirectoryExist child

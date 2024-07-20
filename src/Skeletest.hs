@@ -9,13 +9,12 @@ module Skeletest (
   -- ** Modifiers
   xfail,
   skip,
-  markManual,
 
   -- ** Markers
   IsMarker (..),
-  MarkerTag (..),
   withMarker,
   withMarkers,
+  withManualMarkers,
 
   -- * Assertions
   shouldBe,

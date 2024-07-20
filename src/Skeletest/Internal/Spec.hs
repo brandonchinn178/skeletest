@@ -24,13 +24,12 @@ module Skeletest.Internal.Spec (
   -- ** Modifiers
   xfail,
   skip,
-  markManual,
 
   -- ** Markers
   IsMarker (..),
-  MarkerTag (..),
   withMarker,
   withMarkers,
+  withManualMarkers,
 ) where
 
 import Control.Concurrent (myThreadId)
@@ -57,10 +56,15 @@ import UnliftIO.Exception (
 
 import Skeletest.Assertions (TestFailure (..))
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
-import Skeletest.Internal.Markers (IsMarker (..), SomeMarker (..), findMarker)
+import Skeletest.Internal.Markers (
+  AnonMarker (..),
+  IsMarker (..),
+  SomeMarker (..),
+  findMarker,
+ )
 import Skeletest.Internal.State (TestInfo (TestInfo), withTestInfo)
 import Skeletest.Internal.State qualified as TestInfo (TestInfo (..))
-import Skeletest.Internal.TestTargets (TestTargets, matchesTest)
+import Skeletest.Internal.TestTargets (TestTarget, TestTargets, matchesTest)
 import Skeletest.Internal.TestTargets qualified as TestTargets
 import Skeletest.Prop.Internal (Property, runProperty)
 
@@ -122,7 +126,7 @@ traverseSpecTrees f = withSpecTrees go
 --
 -- To preprocess trees with @pre@ and postprocess with @post@:
 --
--- >>> traverseSpecTrees (\go -> post . map go . pre) spec
+-- >>> mapSpecTrees (\go -> post . map go . pre) spec
 mapSpecTrees ::
   ( (SpecTree -> SpecTree)
     -> [SpecTree]
@@ -289,24 +293,27 @@ pruneSpec = mapMaybe $ \info -> do
 
 applyTestSelections :: TestTargets -> SpecRegistry -> SpecRegistry
 applyTestSelections = \case
-  Nothing ->
-    -- if no selections are specified, hide manual tests
-    applyTestSelections (Just $ TestTargets.TestTargetNot $ TestTargets.TestTargetMarker "manual")
-  Just selections ->
-    map $ \info ->
-      let
-        applySelections = (`Trans.runReader` []) . traverseSpecTrees apply'
-        apply' = apply selections (specPath info)
-      in
-        info{specSpec = applySelections (specSpec info)}
+  Just selections -> map (applyTestSelections' selections)
+  -- if no selections are specified, hide manual tests
+  Nothing -> map (\info -> info{specSpec = hideManualTests $ specSpec info})
   where
-    apply selections path go = mapMaybeM $ \case
+    hideManualTests = mapSpecTrees (\go -> filter (not . isManualTest) . map go)
+    isManualTest = \case
+      SpecGroup{} -> False
+      SpecTest{testMarkers} -> or [isManualMarker marker | SomeMarker marker <- testMarkers]
+
+applyTestSelections' :: TestTarget -> SpecInfo -> SpecInfo
+applyTestSelections' selections info = info{specSpec = applySelections $ specSpec info}
+  where
+    applySelections = (`Trans.runReader` []) . traverseSpecTrees apply
+
+    apply go = mapMaybeM $ \case
       group@SpecGroup{groupLabel} -> Just <$> Trans.local (<> [groupLabel]) (go group)
       stest@SpecTest{testName, testMarkers} -> do
         groups <- Trans.ask
         let attrs =
               TestTargets.TestAttrs
-                { testPath = path
+                { testPath = specPath info
                 , testIdentifier = groups <> [testName]
                 , testMarkers = [getMarkerName m | SomeMarker m <- testMarkers]
                 }
@@ -402,14 +409,6 @@ data SkeletestSkip = SkeletestSkip Text
 
 instance Exception SkeletestSkip
 
--- | Mark all tests in the given spec as "manual", which only
--- run if the test is selected to run. In other words, manual
--- tests will not run when no test selections are specified.
---
--- Can be selected with the marker '@manual'
-markManual :: Spec -> Spec
-markManual = withMarker MarkerManual
-
 {----- Markers -----}
 
 newtype MarkerXFail = MarkerXFail Text
@@ -424,23 +423,6 @@ newtype MarkerSkip = MarkerSkip Text
 instance IsMarker MarkerSkip where
   getMarkerName _ = "skip"
 
--- | Tests with this marker will automatically be skipped if no
--- test selections are specified.
-data MarkerManual = MarkerManual
-  deriving (Show)
-
-instance IsMarker MarkerManual where
-  getMarkerName _ = "manual"
-
--- | A marker that doesn't do anything except tag a test with a given name.
---
--- A test tagged with @MarkerTag "foo"@ can be selected with the marker '@foo'
-newtype MarkerTag = MarkerTag Text
-  deriving (Show)
-
-instance IsMarker MarkerTag where
-  getMarkerName (MarkerTag n) = n
-
 -- | Adds the given marker to all the tests in the given spec.
 --
 -- Useful for selecting tests from the command line or identifying tests in hooks
@@ -452,12 +434,23 @@ withMarker m = mapSpecTrees (\go -> map (addMarker . go))
       group@SpecGroup{} -> group
       tree@SpecTest{} -> tree{testMarkers = marker : testMarkers tree}
 
--- | Adds the given names as MarkerTag to all the tests in the given spec.
+-- | Adds the given names as plain markers to all tests in the given spec.
 --
--- @
--- withMarkers ["A", "B"] === withMarker (MarkerTag "A") . withMarker (MarkerTag "B")
--- @
+-- See 'getMarkerName'.
 withMarkers :: [String] -> Spec -> Spec
-withMarkers = foldr (\mark acc -> withMarker (toTag mark) . acc) id
+withMarkers = withMarkers' False
+
+-- | Adds the given names as manual markers to all tests in the given spec.
+--
+-- See 'isManualMarker'.
+withManualMarkers :: [String] -> Spec -> Spec
+withManualMarkers = withMarkers' True
+
+withMarkers' :: Bool -> [String] -> Spec -> Spec
+withMarkers' isManual = foldr (\mark acc -> withMarker (toTag mark) . acc) id
   where
-    toTag = MarkerTag . Text.pack
+    toTag name =
+      AnonMarker
+        { anonMarkerName = Text.pack name
+        , anonMarkerManual = isManual
+        }

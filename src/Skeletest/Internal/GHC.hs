@@ -23,18 +23,10 @@ module Skeletest.Internal.GHC (
   modifyModuleExprs,
   FunDef (..),
   addModuleFun,
-  getModuleExports,
-  addModuleExport,
 
   -- ** Module values
   ModuleVal (..),
   moduleValName,
-
-  -- ** Module exports
-  ModuleExports (..),
-  ModuleExport (..),
-  ModuleExportTypeContents (..),
-  moduleExportName,
 
   -- ** Expressions
   HsExpr (..),
@@ -59,7 +51,6 @@ module Skeletest.Internal.GHC (
 import Data.Data (Data)
 import Data.Data qualified as Data
 import Data.Function ((&))
-import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Typeable qualified as Typeable
@@ -142,9 +133,6 @@ modifyModuleExprs f parsedModule = parsedModule{ghcModule = go <$> ghcModule par
           Just Typeable.Refl | Just expr <- f $ toHsExpr x -> fromHsExpr fromHsName expr
           _ -> x
 
-getModuleExports :: ParsedModule -> ModuleExports
-getModuleExports = toModuleExports . GHC.hsmodExports . unLoc . ghcModule
-
 data FunDef = FunDef
   { funName :: Text
   , funType :: HsType
@@ -176,32 +164,6 @@ addModuleFun FunDef{..} parsedModule = parsedModule{ghcModule = update <$> ghcMo
             ]
       ]
 
-addModuleExport :: ModuleExport -> ParsedModule -> ParsedModule
-addModuleExport export parsedModule = parsedModule{ghcModule = update <$> ghcModule parsedModule}
-  where
-    ParsedModule{fromHsName} = parsedModule
-
-    update modl =
-      modl
-        { GHC.hsmodExports =
-            case GHC.hsmodExports modl of
-              -- no explicit export list, export is already there
-              Nothing -> Nothing
-              -- explicit export list
-              Just lexports -> Just $ (genLoc export' :) <$> lexports
-        }
-
-    fromName = genLoc . GHC.IEName GHC.noExtField . genLoc . fromHsName
-    export' =
-      case export of
-        ModuleExportVar name -> GHC.IEVar GHC.noAnn (fromName name) Nothing
-        ModuleExportPattern name -> GHC.IEThingAbs GHC.noAnn (fromName name) Nothing
-        ModuleExportType name contents ->
-          case contents of
-            ModuleExportTypeNoContents -> GHC.IEThingAbs GHC.noAnn (fromName name) Nothing
-            ModuleExportTypeEverything -> GHC.IEThingAll GHC.noAnn (fromName name) Nothing
-            ModuleExportTypeList contents' -> GHC.IEThingWith GHC.noAnn (fromName name) GHC.NoIEWildcard (map fromName contents') Nothing
-
 {----- ModuleVal -----}
 
 data ModuleVal
@@ -216,63 +178,6 @@ toModuleVals :: GHC.HsBind GhcPs -> [ModuleVal]
 toModuleVals = \case
   GHC.FunBind{fun_id} -> [ModuleValFun $ hsRdrName $ unLoc fun_id]
   _ -> []
-
-{----- ModuleExport -----}
-
-data ModuleExports
-  = ModuleExportEverything
-  | ModuleExportList [ModuleExport]
-  deriving (Show, Eq)
-
-data ModuleExport
-  = ModuleExportVar HsName
-  | ModuleExportPattern HsName
-  | ModuleExportType HsName ModuleExportTypeContents
-  deriving (Show, Eq)
-
-data ModuleExportTypeContents
-  = ModuleExportTypeNoContents
-    -- ^ An export item without any contents, either because it can't (type),
-    -- or it's not exporting anything (typeclass)
-  | ModuleExportTypeEverything
-    -- ^ An export item exporting everything
-  | ModuleExportTypeList [HsName]
-    -- ^ An export item exporting the given names
-  deriving (Show, Eq)
-
-moduleExportName :: ModuleExport -> HsName
-moduleExportName = \case
-  ModuleExportVar name -> name
-  ModuleExportPattern name -> name
-  ModuleExportType name _ -> name
-
-toModuleExports :: Maybe (GHC.LocatedL [GHC.LIE GhcPs]) -> ModuleExports
-toModuleExports = \case
-  Nothing -> ModuleExportEverything
-  Just (L _ exports) -> ModuleExportList $ mapMaybe (fromIE . unLoc) exports
-  where
-    fromIE = \case
-      GHC.IEVar _ wrappedName _ -> fromIEWrappedName $ unLoc wrappedName
-      GHC.IEThingAbs _ wrappedName _ -> do
-        name <- unwrapName wrappedName
-        pure $ ModuleExportType name ModuleExportTypeNoContents
-      GHC.IEThingAll _ wrappedName _ -> do
-        name <- unwrapName wrappedName
-        pure $ ModuleExportType name ModuleExportTypeEverything
-      GHC.IEThingWith _ wrappedName _ contents _ -> do
-        name <- unwrapName wrappedName
-        pure . ModuleExportType name . ModuleExportTypeList $
-          mapMaybe unwrapName contents
-      _ -> Nothing
-
-    unwrapName :: GHC.LIEWrappedName GhcPs -> Maybe HsName
-    unwrapName = fmap moduleExportName . fromIEWrappedName . unLoc
-
-    fromIEWrappedName :: GHC.IEWrappedName GhcPs -> Maybe ModuleExport
-    fromIEWrappedName = \case
-      GHC.IEName _ name -> Just $ ModuleExportVar $ hsRdrName $ unLoc name
-      GHC.IEPattern _ name -> Just $ ModuleExportPattern $ hsRdrName $ unLoc name
-      GHC.IEType _ _ -> Nothing
 
 {----- HsExpr -----}
 

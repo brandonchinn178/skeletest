@@ -6,7 +6,6 @@ module Skeletest.Internal.Plugin (
   plugin,
 ) where
 
-import Data.Function ((&))
 import Data.Functor.Const (Const (..))
 import Data.Text qualified as Text
 
@@ -14,7 +13,6 @@ import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
 import Skeletest.Internal.Error (skeletestPluginError)
 import Skeletest.Internal.GHC
 import Skeletest.Internal.Predicate qualified as P
-import Skeletest.Internal.Spec (Spec)
 import Skeletest.Internal.Utils.HList (HList (..))
 import Skeletest.Main qualified as Main
 
@@ -63,7 +61,7 @@ transformMainModule modl = addModuleFun mainFun modl
         }
 
 transformTestModule :: ParsedModule -> ParsedModule
-transformTestModule = replaceConMatch . addSpec
+transformTestModule = replaceConMatch
 
 -- | Replace all uses of P.con with P.conMatches. See P.con.
 --
@@ -152,35 +150,3 @@ replaceConMatch = modifyModuleExprs go
     mkNamesList = mkHList $ \name -> HsExprApp (HsExprCon $ hsName 'Const) (HsExprLitString $ renderHsName name)
     mkValsList = mkHList $ \val -> HsExprApp (HsExprVar $ hsName 'pure) (HsExprVar val)
     mkPredList = mkHList id
-
--- | If a module does not export a 'spec' identifier (e.g. if the module
--- only contains test utilities), add an empty spec.
-addSpec :: ParsedModule -> ParsedModule
-addSpec modl
-  -- if spec is not defined, generate one
-  | not isSpecDefined =
-      modl
-        & addModuleFun specFun
-        & addModuleExport (ModuleExportVar $ hsNewName "spec")
-  -- if spec is defined but not exported, error
-  | not isSpecExported =
-      skeletestPluginError . unlines $
-        [ "`spec` is defined as a top-level value but not exported."
-        , "If this is a test file, export it. Otherwise, rename it."
-        ]
-  -- if spec is defined + exported, we're good to go
-  | otherwise = modl
-  where
-    isSpecDefined = any (== "spec") [getHsName name | ModuleValFun name <- getModuleVals modl]
-    isSpecExported =
-      case getModuleExports modl of
-        ModuleExportEverything -> True
-        ModuleExportList exports -> any (== "spec") [getHsName name | ModuleExportVar name <- exports]
-
-    specFun =
-      FunDef
-        { funName = "spec"
-        , funType = HsTypeCon $ hsName ''Spec
-        , funPats = []
-        , funBody = hsApps (HsExprVar $ hsName 'pure) [HsExprTuple []]
-        }

@@ -67,6 +67,7 @@ findTestModules path = mapMaybe toTestModule <$> listDirectoryRecursive testDir
     toTestModule fp = do
       guard (fp /= path)
       (fpNoExt, ".hs") <- pure $ splitExtensions fp
+      guard ("Spec" `Text.isSuffixOf` Text.pack fpNoExt)
       name <- moduleNameFromPath $ Text.pack $ makeRelative testDir fpNoExt
       pure (fp, name)
 

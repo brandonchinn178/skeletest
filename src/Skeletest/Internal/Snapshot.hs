@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -13,6 +14,9 @@ module Skeletest.Internal.Snapshot (
   -- * Rendering
   SnapshotRenderer (..),
   defaultSnapshotRenderers,
+  setSnapshotRenderers,
+  getSnapshotRenderers,
+  renderWithShow,
 
   -- * Infrastructure
   getAndIncSnapshotIndex,
@@ -33,8 +37,16 @@ import Debug.RecoverRTTI (anythingToString)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (replaceExtension, splitFileName, takeDirectory, (</>))
 import System.IO.Error (isDoesNotExistError)
+import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.Exception (throwIO, try)
-import UnliftIO.IORef (IORef, atomicModifyIORef', modifyIORef', newIORef, readIORef)
+import UnliftIO.IORef (
+  IORef,
+  atomicModifyIORef',
+  modifyIORef',
+  newIORef,
+  readIORef,
+  writeIORef,
+ )
 
 import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..))
 import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
@@ -306,3 +318,16 @@ renderVal renderers a =
 -- | Ensure there's exactly one trailing newline.
 normalizeTrailingNewlines :: Text -> Text
 normalizeTrailingNewlines s = Text.dropWhileEnd (== '\n') s <> "\n"
+
+snapshotRenderersRef :: IORef [SnapshotRenderer]
+snapshotRenderersRef = unsafePerformIO $ newIORef []
+{-# NOINLINE snapshotRenderersRef #-}
+
+setSnapshotRenderers :: [SnapshotRenderer] -> IO ()
+setSnapshotRenderers = writeIORef snapshotRenderersRef
+
+getSnapshotRenderers :: IO [SnapshotRenderer]
+getSnapshotRenderers = readIORef snapshotRenderersRef
+
+renderWithShow :: forall a. (Typeable a, Show a) => SnapshotRenderer
+renderWithShow = SnapshotRenderer (Text.pack . show @a)

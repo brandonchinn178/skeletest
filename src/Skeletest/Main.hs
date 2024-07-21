@@ -11,6 +11,7 @@ module Skeletest.Main (
 
   -- * Snapshots
   SnapshotRenderer (..),
+  renderWithShow,
 
   -- * Plugins
   Plugin,
@@ -25,7 +26,13 @@ import Data.Text qualified as Text
 import System.Exit (exitFailure)
 
 import Skeletest.Internal.CLI (Flag, flag, loadCliArgs)
-import Skeletest.Internal.Snapshot (SnapshotRenderer (..), SnapshotUpdateFlag)
+import Skeletest.Internal.Snapshot (
+  SnapshotRenderer (..),
+  SnapshotUpdateFlag,
+  defaultSnapshotRenderers,
+  renderWithShow,
+  setSnapshotRenderers,
+ )
 import Skeletest.Internal.Spec (
   Spec,
   SpecInfo (..),
@@ -41,6 +48,8 @@ runSkeletest = runSkeletest' . mconcat
 runSkeletest' :: Plugin -> [(FilePath, String, Spec)] -> IO ()
 runSkeletest' Plugin{..} testModules = do
   selections <- loadCliArgs builtinFlags cliFlags
+  setSnapshotRenderers (snapshotRenderers <> defaultSnapshotRenderers)
+
   let initialSpecs = map mkSpec testModules
   success <- runSpecs . pruneSpec . applyTestSelections selections $ initialSpecs
   unless success exitFailure

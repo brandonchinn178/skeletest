@@ -24,3 +24,32 @@ spec = do
     code `shouldBe` ExitFailure 1
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
+
+  integration . it "uses registered snapshot renderers" $ do
+    runner <- getFixture
+    setMainFile runner $
+      [ "import Skeletest.Main"
+      , "import Lib.User"
+      , "snapshotRenderers ="
+      , "  [ renderWithShow @User"
+      , "  ]"
+      ]
+    addTestFile runner "Lib/User.hs" $
+      [ "module Lib.User (User (..)) where"
+      , "data User = User {name :: String, age :: Int} deriving (Show)"
+      ]
+    addTestFile runner "ExampleSpec.hs" $
+      [ "module ExampleSpec (spec) where"
+      , ""
+      , "import Lib.User"
+      , "import Skeletest"
+      , "import qualified Skeletest.Predicate as P"
+      , ""
+      , "spec = it \"test user\" $ do"
+      , "  let testUser = User {name = \"Alice\", age = 30}"
+      , "  testUser `shouldSatisfy` P.matchesSnapshot"
+      ]
+
+    _ <- expectSuccess $ runTests runner ["-u"]
+    snapshot <- readTestFile runner "__snapshots__/ExampleSpec.snap.md"
+    snapshot `shouldSatisfy` P.hasInfix "User {name = \"Alice\", age = 30}"

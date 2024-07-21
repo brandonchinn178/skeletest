@@ -74,8 +74,8 @@ import Skeletest.Internal.Snapshot (
   SnapshotResult (..),
   SnapshotUpdateFlag (..),
   checkSnapshot,
-  defaultSnapshotRenderers,
   getAndIncSnapshotIndex,
+  getSnapshotRenderers,
   updateSnapshot,
  )
 import Skeletest.Internal.TestInfo (getTestInfo)
@@ -452,9 +452,10 @@ matchesSnapshot =
         SnapshotUpdateFlag doUpdate <- getFlag
         testInfo <- getTestInfo
         snapshotIndex <- getAndIncSnapshotIndex
+        renderers <- getSnapshotRenderers
         let ctx =
               SnapshotContext
-                { snapshotRenderers = customRenderers <> defaultSnapshotRenderers
+                { snapshotRenderers = renderers
                 , snapshotTestInfo = testInfo
                 , snapshotIndex
                 }
@@ -482,9 +483,6 @@ matchesSnapshot =
     , predicateDisp = "matches snapshot"
     , predicateDispNeg = "does not match snapshot"
     }
-  where
-    -- FIXME: load from SkeletestOptions
-    customRenderers = []
 
 {----- Utilities -----}
 

@@ -1,3 +1,5 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -13,6 +15,10 @@ module Skeletest.Internal.Snapshot (
   -- * Rendering
   SnapshotRenderer (..),
   defaultSnapshotRenderers,
+  setSnapshotRenderers,
+  getSnapshotRenderers,
+  plainRenderer,
+  renderWithShow,
 
   -- * Infrastructure
   getAndIncSnapshotIndex,
@@ -20,12 +26,16 @@ module Skeletest.Internal.Snapshot (
 ) where
 
 import Control.Monad.Trans.Except (runExceptT, throwE)
+import Data.Aeson qualified as Aeson
+import Data.Aeson.Encode.Pretty qualified as Aeson
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
+import Data.Text.Lazy qualified as TextL
+import Data.Text.Lazy.Encoding qualified as TextL
 import Data.Typeable (Typeable)
 import Data.Typeable qualified as Typeable
 import Data.Void (absurd)
@@ -33,8 +43,16 @@ import Debug.RecoverRTTI (anythingToString)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (replaceExtension, splitFileName, takeDirectory, (</>))
 import System.IO.Error (isDoesNotExistError)
+import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.Exception (throwIO, try)
-import UnliftIO.IORef (IORef, atomicModifyIORef', modifyIORef', newIORef, readIORef)
+import UnliftIO.IORef (
+  IORef,
+  atomicModifyIORef',
+  modifyIORef',
+  newIORef,
+  readIORef,
+  writeIORef,
+ )
 
 import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..))
 import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
@@ -45,7 +63,7 @@ import Skeletest.Internal.Fixtures (
   noCleanup,
   withCleanup,
  )
-import Skeletest.Internal.State (TestInfo (..), getTestInfo)
+import Skeletest.Internal.TestInfo (TestInfo (..), getTestInfo)
 import Skeletest.Internal.Utils.Map qualified as Map.Utils
 
 {----- Infrastructure -----}
@@ -147,12 +165,13 @@ updateSnapshot snapshotContext testResult = do
     -- >>> setAt 3 "x" ["a"] == ["a", "", "", "x"]
     setAt i0 v =
       let go = \cases
-            i [] -> replicate i mempty <> [v]
+            i [] -> replicate i emptySnapshotVal <> [v]
             0 (_ : xs) -> v : xs
             i (x : xs) -> x : go (i - 1) xs
        in if i0 < 0
             then invariantViolation $ "Got negative snapshot index: " <> show i0
             else go i0
+    emptySnapshotVal = SnapshotValue{snapshotContent = "", snapshotLang = Nothing}
 
 data SnapshotResult
   = SnapshotMissing
@@ -174,8 +193,9 @@ checkSnapshot snapshotContext testResult =
         Just SnapshotFile{snapshots} -> pure snapshots
 
     let snapshots = Map.Utils.findOrEmpty (toTestIdentifier testInfo) fileSnapshots
-    snapshotContent <- maybe (returnE SnapshotMissing) pure $ safeIndex snapshots snapshotIndex
+    snapshot <- maybe (returnE SnapshotMissing) pure $ safeIndex snapshots snapshotIndex
 
+    let (snapshotContent, renderedTestResult) = (getContent snapshot, getContent renderedTestResultVal)
     returnE $
       if snapshotContent == renderedTestResult
         then SnapshotMatches
@@ -188,7 +208,7 @@ checkSnapshot snapshotContext testResult =
       } = snapshotContext
 
     returnE = throwE
-    renderedTestResult = renderVal renderers testResult
+    renderedTestResultVal = renderVal renderers testResult
 
     safeIndex xs0 i0 =
       let go = \cases
@@ -202,11 +222,20 @@ checkSnapshot snapshotContext testResult =
 -- TODO: keep ordered by test order?
 data SnapshotFile = SnapshotFile
   { moduleName :: Text
-  , snapshots :: Map TestIdentifier [Text]
+  , snapshots :: Map TestIdentifier [SnapshotValue]
   -- ^ full test identifier => snapshots
   -- e.g. ["group1", "group2", "returns val1 and val2"] => ["val1", "val2"]
   }
   deriving (Eq)
+
+data SnapshotValue = SnapshotValue
+  { snapshotContent :: Text
+  , snapshotLang :: Maybe Text
+  }
+  deriving (Eq)
+
+getContent :: SnapshotValue -> Text
+getContent SnapshotValue{snapshotContent} = snapshotContent
 
 type TestIdentifier = [Text]
 
@@ -252,10 +281,16 @@ decodeSnapshotFile = parseFile . Text.lines
             let snapshotFile' = snapshotFile{snapshots = Map.insert testIdentifier [] snapshots}
             parseSections snapshotFile' (Just testIdentifier) rest
         -- found the beginning of a snapshot
-        | "```" <- Text.strip line -> do
+        | Just lang <- (Text.stripPrefix "```" . Text.strip) line -> do
             testIdentifier <- mTest
             (snapshot, rest') <- parseSnapshot [] rest
-            let snapshotFile' = snapshotFile{snapshots = Map.adjust (<> [snapshot]) testIdentifier snapshots}
+            let
+              snapshotVal =
+                SnapshotValue
+                  { snapshotContent = snapshot
+                  , snapshotLang = if Text.null lang then Nothing else Just lang
+                  }
+              snapshotFile' = snapshotFile{snapshots = Map.adjust (<> [snapshotVal]) testIdentifier snapshots}
             parseSections snapshotFile' mTest rest'
         -- anything else is invalid
         | otherwise -> Nothing
@@ -277,7 +312,12 @@ encodeSnapshotFile SnapshotFile{..} =
 
     h1 s = "# " <> s <> "\n"
     h2 s = "## " <> s <> "\n"
-    codeBlock s = "```\n" <> normalizeTrailingNewlines s <> "```\n"
+    codeBlock SnapshotValue{..} =
+      Text.concat
+        [ "```" <> fromMaybe "" snapshotLang <> "\n"
+        , normalizeTrailingNewlines snapshotContent
+        , "```\n"
+        ]
 
 {----- Renderers -----}
 
@@ -286,23 +326,60 @@ data SnapshotRenderer
   (Typeable a) =>
   SnapshotRenderer
   { render :: a -> Text
+  , snapshotLang :: Maybe Text
   }
+
+plainRenderer :: (Typeable a) => (a -> Text) -> SnapshotRenderer
+plainRenderer render =
+  SnapshotRenderer
+    { render
+    , snapshotLang = Nothing
+    }
 
 defaultSnapshotRenderers :: [SnapshotRenderer]
 defaultSnapshotRenderers =
-  [ SnapshotRenderer @String Text.pack
-  , SnapshotRenderer @Text id
+  [ plainRenderer @String Text.pack
+  , plainRenderer @Text id
+  , jsonRenderer
   ]
+  where
+    jsonRenderer =
+      SnapshotRenderer
+        { render = TextL.toStrict . TextL.decodeUtf8 . Aeson.encodePretty @Aeson.Value
+        , snapshotLang = Just "json"
+        }
 
-renderVal :: (Typeable a) => [SnapshotRenderer] -> a -> Text
+renderVal :: (Typeable a) => [SnapshotRenderer] -> a -> SnapshotValue
 renderVal renderers a =
-  normalizeTrailingNewlines $
+  normalize $
     case mapMaybe tryRender renderers of
-      [] -> Text.pack $ anythingToString a
+      [] ->
+        SnapshotValue
+          { snapshotContent = Text.pack $ anythingToString a
+          , snapshotLang = Nothing
+          }
       rendered : _ -> rendered
   where
-    tryRender SnapshotRenderer{render} = render <$> Typeable.cast a
+    tryRender SnapshotRenderer{..} =
+      let toValue v = SnapshotValue{snapshotContent = render v, snapshotLang}
+       in toValue <$> Typeable.cast a
+
+    normalize SnapshotValue{snapshotContent, ..} =
+      SnapshotValue{snapshotContent = normalizeTrailingNewlines snapshotContent, ..}
 
 -- | Ensure there's exactly one trailing newline.
 normalizeTrailingNewlines :: Text -> Text
 normalizeTrailingNewlines s = Text.dropWhileEnd (== '\n') s <> "\n"
+
+snapshotRenderersRef :: IORef [SnapshotRenderer]
+snapshotRenderersRef = unsafePerformIO $ newIORef []
+{-# NOINLINE snapshotRenderersRef #-}
+
+setSnapshotRenderers :: [SnapshotRenderer] -> IO ()
+setSnapshotRenderers = writeIORef snapshotRenderersRef
+
+getSnapshotRenderers :: IO [SnapshotRenderer]
+getSnapshotRenderers = readIORef snapshotRenderersRef
+
+renderWithShow :: forall a. (Typeable a, Show a) => SnapshotRenderer
+renderWithShow = plainRenderer (Text.pack . show @a)

@@ -4,11 +4,14 @@
 module Skeletest.TestUtils.Integration (
   integration,
 
-  -- * runTests
+  -- * Test runner
   FixtureTestRunner,
   FileContents,
   setMainFile,
   addTestFile,
+  readTestFile,
+
+  -- * runTests
   runTests,
   expectSuccess,
 
@@ -73,6 +76,9 @@ addTestFile :: FixtureTestRunner -> FilePath -> FileContents -> IO ()
 addTestFile FixtureTestRunner{testRunnerSettingsRef} fp contents =
   modifyIORef testRunnerSettingsRef $ \settings ->
     settings{testFiles = (fp, contents) : testFiles settings}
+
+readTestFile :: FixtureTestRunner -> FilePath -> IO String
+readTestFile FixtureTestRunner{testRunnerDir} fp = readFile $ testRunnerDir </> fp
 
 runTests :: FixtureTestRunner -> [String] -> IO (ExitCode, String, String)
 runTests FixtureTestRunner{..} args = do

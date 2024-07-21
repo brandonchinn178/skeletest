@@ -20,7 +20,7 @@ library
     Skeletest.Internal.Preprocessor
     Skeletest.Internal.Snapshot
     Skeletest.Internal.Spec
-    Skeletest.Internal.State
+    Skeletest.Internal.TestInfo
     Skeletest.Internal.TestTargets
     Skeletest.Internal.Utils.Diff
     Skeletest.Internal.Utils.HList
@@ -33,6 +33,8 @@ library
     Skeletest.Prop.Range
   build-depends:
       base
+    , aeson
+    , aeson-pretty
     , ansi-terminal
     , containers
     , Diff
@@ -78,6 +80,7 @@ test-suite skeletest-tests
     Skeletest.TestUtils.Integration
   build-depends:
       base
+    , aeson
     , directory
     , filepath
     , skeletest

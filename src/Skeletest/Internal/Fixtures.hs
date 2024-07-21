@@ -21,24 +21,24 @@ module Skeletest.Internal.Fixtures (
 import Control.Concurrent (ThreadId, myThreadId)
 import Control.Monad (forM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.IORef (IORef, atomicModifyIORef, newIORef)
+import Data.Map (Map)
+import Data.Map qualified as Map
+import Data.Map.Ordered (OMap)
 import Data.Map.Ordered qualified as OMap
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy (..))
 import Data.Text qualified as Text
-import Data.Typeable (Typeable, eqT, typeOf, typeRep, (:~:) (Refl))
+import Data.Typeable (TypeRep, Typeable, eqT, typeOf, typeRep, (:~:) (Refl))
 import System.Directory (createDirectory, getTemporaryDirectory, removePathForcibly)
 import System.FilePath ((</>))
+import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.Exception (throwIO, tryAny)
 
 import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
-import Skeletest.Internal.State (
-  FixtureCleanup (..),
-  FixtureMap,
-  FixtureRegistry (..),
-  FixtureStatus (..),
+import Skeletest.Internal.TestInfo (
   TestInfo (testFile),
   getTestInfo,
-  modifyFixtureRegistry,
  )
 import Skeletest.Internal.Utils.Map qualified as Map.Utils
 
@@ -54,6 +54,10 @@ data FixtureScope
   | PerFileFixture
   | PerSessionFixture
   deriving (Show)
+
+data FixtureCleanup
+  = NoCleanup
+  | CleanupFunc (IO ())
 
 data FixtureScopeKey
   = PerTestFixtureKey ThreadId
@@ -145,6 +149,35 @@ cleanupFixtures scopeKey = do
     fromLeft = \case
       Left x -> Just x
       Right _ -> Nothing
+
+{----- Fixtures registry -----}
+
+-- | The registry of active fixtures, in order of activation.
+data FixtureRegistry = FixtureRegistry
+  { sessionFixtures :: FixtureMap
+  , fileFixtures :: Map FilePath FixtureMap
+  , testFixtures :: Map ThreadId FixtureMap
+  }
+
+type FixtureMap = OMap TypeRep FixtureStatus
+
+data FixtureStatus
+  = FixtureInProgress
+  | forall a. (Typeable a) => FixtureLoaded (a, FixtureCleanup)
+
+fixtureRegistryRef :: IORef FixtureRegistry
+fixtureRegistryRef = unsafePerformIO $ newIORef emptyFixtureRegistry
+  where
+    emptyFixtureRegistry =
+      FixtureRegistry
+        { sessionFixtures = OMap.empty
+        , fileFixtures = Map.empty
+        , testFixtures = Map.empty
+        }
+{-# NOINLINE fixtureRegistryRef #-}
+
+modifyFixtureRegistry :: (FixtureRegistry -> (FixtureRegistry, a)) -> IO a
+modifyFixtureRegistry = atomicModifyIORef fixtureRegistryRef
 
 getScopedAccessors ::
   FixtureScopeKey

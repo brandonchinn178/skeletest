@@ -17,6 +17,22 @@ spec = do
     stdout `shouldBe` ""
     stderr `shouldSatisfy` P.matchesSnapshot
 
+  integration . it "ignores non-test files" $ do
+    runner <- getFixture
+    addTestFile runner "ExampleSpec.hs" $
+      [ "module ExampleSpec (spec) where"
+      , "import Skeletest"
+      , "import TestUtils"
+      , "spec = it \"should run\" $ testUserName `shouldBe` \"Alice\""
+      ]
+    addTestFile runner "TestUtils.hs" $
+      [ "module TestUtils where"
+      , "testUserName = \"Alice\""
+      ]
+
+    _ <- expectSuccess $ runTests runner []
+    pure ()
+
   integration . it "errors if main function defined" $ do
     runner <- getFixture
     setMainFile runner $
@@ -30,9 +46,6 @@ spec = do
     code `shouldBe` ExitFailure 1
     stdout `shouldBe` ""
     stderr `shouldSatisfy` P.matchesSnapshot
-
-  -- FIXME
-  integration . it "registers extra snapshot renderers" $ pure ()
 
 minimalTest :: String -> FileContents
 minimalTest name =

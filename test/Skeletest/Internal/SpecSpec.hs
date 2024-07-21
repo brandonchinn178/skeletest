@@ -20,8 +20,7 @@ spec = do
         , "  it \"should not run either\" $ undefined"
         ]
 
-      (code, stdout, stderr) <- runTests runner []
-      code `shouldBe` ExitSuccess
+      (stdout, stderr) <- expectSuccess $ runTests runner []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -38,8 +37,7 @@ spec = do
         , "  it \"should fail too\" $ undefined"
         ]
 
-      (code, stdout, stderr) <- runTests runner []
-      code `shouldBe` ExitSuccess
+      (stdout, stderr) <- expectSuccess $ runTests runner []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -76,8 +74,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (code, stdout, stderr) <- runTests runner ["@foo"]
-      code `shouldBe` ExitSuccess
+      (stdout, stderr) <- expectSuccess $ runTests runner ["@foo"]
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and
@@ -103,8 +100,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (code, stdout, stderr) <- runTests runner ["@foo"]
-      code `shouldBe` ExitSuccess
+      (stdout, stderr) <- expectSuccess $ runTests runner ["@foo"]
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and
@@ -129,8 +125,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (code, stdout, stderr) <- runTests runner []
-      code `shouldBe` ExitSuccess
+      (stdout, stderr) <- expectSuccess $ runTests runner []
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and
@@ -155,8 +150,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (code, stdout, stderr) <- runTests runner ["*"]
-      code `shouldBe` ExitSuccess
+      (stdout, stderr) <- expectSuccess $ runTests runner ["*"]
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and
@@ -185,8 +179,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (code, stdout, stderr) <- runTests runner ["@my-marker"]
-      code `shouldBe` ExitSuccess
+      (stdout, stderr) <- expectSuccess $ runTests runner ["@my-marker"]
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and
@@ -216,8 +209,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (code, stdout, stderr) <- runTests runner []
-      code `shouldBe` ExitSuccess
+      (stdout, stderr) <- expectSuccess $ runTests runner []
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and
@@ -247,8 +239,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (code, stdout, stderr) <- runTests runner ["*"]
-      code `shouldBe` ExitSuccess
+      (stdout, stderr) <- expectSuccess $ runTests runner ["*"]
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and

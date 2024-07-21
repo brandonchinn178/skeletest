@@ -10,6 +10,7 @@ module Skeletest.TestUtils.Integration (
   setMainFile,
   addTestFile,
   runTests,
+  expectSuccess,
 
   -- * Re-exports
   ExitCode (..),
@@ -106,3 +107,10 @@ runTests FixtureTestRunner{..} args = do
       case Text.breakOn "\x1b" s of
         (_, "") -> s
         (pre, post) -> pre <> stripControlChars (Text.drop 1 . Text.dropWhile (/= 'm') $ post)
+
+expectSuccess :: (HasCallStack) => IO (ExitCode, String, String) -> IO (String, String)
+expectSuccess m = do
+  (code, stdout, stderr) <- m
+  context (unlines ["===== stdout =====", stdout, "===== stderr =====", stderr]) $
+    code `shouldBe` ExitSuccess
+  pure (stdout, stderr)

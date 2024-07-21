@@ -26,6 +26,7 @@ library
     Skeletest.Internal.Utils.HList
     Skeletest.Internal.Utils.Map
     Skeletest.Main
+    Skeletest.Plugin
     Skeletest.Predicate
     Skeletest.Prop.Gen
     Skeletest.Prop.Internal
@@ -67,6 +68,7 @@ test-suite skeletest-tests
   main-is: Main.hs
   other-modules:
     ExampleSpec
+    Skeletest.AssertionsSpec
     Skeletest.Internal.CLISpec
     Skeletest.Internal.FixturesSpec
     Skeletest.Internal.SnapshotSpec

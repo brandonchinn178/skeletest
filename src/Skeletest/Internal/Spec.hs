@@ -27,9 +27,9 @@ module Skeletest.Internal.Spec (
 
   -- ** Markers
   IsMarker (..),
-  withMarker,
   withMarkers,
   withManualMarkers,
+  withMarker,
 ) where
 
 import Control.Concurrent (myThreadId)
@@ -55,6 +55,7 @@ import UnliftIO.Exception (
  )
 
 import Skeletest.Assertions (TestFailure (..))
+import Skeletest.Internal.Error (SkeletestError)
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.Markers (
   AnonMarker (..),
@@ -169,6 +170,7 @@ runSpecs specs =
         Text.putStr $ indent lvl (testName <> ": ")
 
         -- TODO: timeout
+        -- TODO: show timing info for long tests
         let testInfo' =
               testInfo
                 { TestInfo.testName = testName
@@ -200,6 +202,10 @@ runSpecs specs =
             | Just failure <- fromException e -> do
                 Text.putStrLn $ red "FAIL"
                 Text.putStrLn =<< renderTestFailure failure
+                pure False
+            | Just (err :: SkeletestError) <- fromException e -> do
+                Text.putStrLn $ red "ERROR"
+                Text.putStrLn $ indent (lvl + 1) (Text.pack $ displayException err)
                 pure False
             | otherwise -> do
                 Text.putStrLn $ red "ERROR"

@@ -37,10 +37,14 @@ module Skeletest.Internal.Predicate (
   (<<<),
   (>>>),
   not,
-  -- FIXME: P.any, P.all
+  -- FIXME: P.any, P.all, P.elem, P.or
+  and,
 
-  -- * Containers
-  -- FIXME: P.contains (Containable: [a], Text)
+  -- * Subsequences
+  HasSubsequences (..),
+  hasPrefix,
+  hasInfix,
+  hasSuffix,
 
   -- * IO
   returns,
@@ -54,12 +58,14 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.Functor.Const (Const (..))
 import Data.Functor.Identity (Identity (..))
+import Data.List qualified as List
+import Data.Maybe (isNothing, listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Typeable (Typeable)
 import Debug.RecoverRTTI (anythingToString)
 import GHC.Generics ((:*:) (..))
-import Prelude hiding (abs, not)
+import Prelude hiding (abs, and, not)
 import Prelude qualified
 
 import Skeletest.Internal.CLI (getFlag)
@@ -211,7 +217,7 @@ left Predicate{..} =
 -- Record fields that are omitted are not checked at all; i.e.
 -- @P.con Foo{}@ and @P.con Foo{a = P.anything}@ are equivalent.
 con :: a -> Predicate a
-con =
+con = -- FIXME: test
   -- A placeholder that will be replaced with conMatches in the plugin.
   error "P.con was not replaced"
 
@@ -329,6 +335,99 @@ not Predicate{..} =
     , predicateDisp = predicateDispNeg
     , predicateDispNeg = predicateDisp
     }
+
+and :: [Predicate a] -> Predicate a
+and preds =
+  Predicate
+    { predicateFunc = \actual -> do
+        results <- mapM (\p -> predicateFunc p actual) preds
+        let firstFailure = listToMaybe $ filter (Prelude.not . predicateSuccess) results
+        pure
+          PredicateFuncResult
+            { predicateSuccess = isNothing firstFailure
+            , predicateFailMsg =
+                case firstFailure of
+                  Just p -> predicateFailMsg p
+                  -- shouldn't happen
+                  Nothing -> msgNeg
+            , predicatePassMsg = Text.intercalate " and " $ map predicatePassMsg results
+            , predicateNested = True
+            }
+    , predicateDisp = msg
+    , predicateDispNeg = msgNeg
+    }
+  where
+    msg = Text.intercalate " and " $ map predicateDisp preds
+    msgNeg = "not " <> msg
+
+{----- Subsequences -----}
+
+class HasSubsequences a where
+  isPrefixOf :: a -> a -> Bool
+  isInfixOf :: a -> a -> Bool
+  isSuffixOf :: a -> a -> Bool
+instance Eq a => HasSubsequences [a] where
+  isPrefixOf = List.isPrefixOf
+  isInfixOf = List.isInfixOf
+  isSuffixOf = List.isSuffixOf
+instance HasSubsequences Text where
+  isPrefixOf = Text.isPrefixOf
+  isInfixOf = Text.isInfixOf
+  isSuffixOf = Text.isSuffixOf
+
+hasPrefix :: HasSubsequences a => a -> Predicate a
+hasPrefix prefix =
+  Predicate
+    { predicateFunc = \val ->
+        pure
+          PredicateFuncResult
+            { predicateSuccess = prefix `isPrefixOf` val
+            , predicateFailMsg = render val <> " " <> msgNeg
+            , predicatePassMsg = render val <> " " <> msg
+            , predicateNested = True
+            }
+    , predicateDisp = msg
+    , predicateDispNeg = msgNeg
+    }
+  where
+    msg = "has prefix " <> render prefix
+    msgNeg = "does not have prefix " <> render prefix
+
+hasInfix :: HasSubsequences a => a -> Predicate a
+hasInfix elems =
+  Predicate
+    { predicateFunc = \val ->
+        pure
+          PredicateFuncResult
+            { predicateSuccess = elems `isInfixOf` val
+            , predicateFailMsg = render val <> " " <> msgNeg
+            , predicatePassMsg = render val <> " " <> msg
+            , predicateNested = True
+            }
+    , predicateDisp = msg
+    , predicateDispNeg = msgNeg
+    }
+  where
+    msg = "has infix " <> render elems
+    msgNeg = "does not have infix " <> render elems
+
+hasSuffix :: HasSubsequences a => a -> Predicate a
+hasSuffix suffix =
+  Predicate
+    { predicateFunc = \val ->
+        pure
+          PredicateFuncResult
+            { predicateSuccess = suffix `isSuffixOf` val
+            , predicateFailMsg = render val <> " " <> msgNeg
+            , predicatePassMsg = render val <> " " <> msg
+            , predicateNested = True
+            }
+    , predicateDisp = msg
+    , predicateDispNeg = msgNeg
+    }
+  where
+    msg = "has suffix " <> render suffix
+    msgNeg = "does not have suffix " <> render suffix
 
 {----- IO -----}
 

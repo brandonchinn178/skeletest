@@ -13,6 +13,9 @@ module Skeletest.Internal.Fixtures (
   noCleanup,
   withCleanup,
   cleanupFixtures,
+
+  -- * Built-in fixtures
+  FixtureTmpDir (..),
 ) where
 
 import Control.Concurrent (ThreadId, myThreadId)
@@ -23,6 +26,8 @@ import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy (..))
 import Data.Text qualified as Text
 import Data.Typeable (Typeable, eqT, typeOf, typeRep, (:~:) (Refl))
+import System.Directory (createDirectory, getTemporaryDirectory, removePathForcibly)
+import System.FilePath ((</>))
 import UnliftIO.Exception (throwIO, tryAny)
 
 import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
@@ -48,11 +53,13 @@ data FixtureScope
   = PerTestFixture
   | PerFileFixture
   | PerSessionFixture
+  deriving (Show)
 
 data FixtureScopeKey
   = PerTestFixtureKey ThreadId
   | PerFileFixtureKey FilePath
   | PerSessionFixtureKey
+  deriving (Show)
 
 -- | A helper for specifying no cleanup.
 noCleanup :: a -> (a, FixtureCleanup)
@@ -90,7 +97,6 @@ getFixture = liftIO $ do
                 , "Got: " <> show (typeOf fixture)
                 ]
         Just FixtureInProgress ->
-          -- FIXME: add test
           -- get list of fixtures causing a circular dependency
           let fixtures = map fst . filter (isInProgress . snd) . OMap.assocs $ getScopedFixtures registry
            in (registry, Left $ FixtureCircularDependency $ map (Text.pack . show) (fixtures <> [rep]))
@@ -126,7 +132,7 @@ cleanupFixtures scopeKey = do
 
   errors <-
     forM (reverse . map snd . OMap.assocs $ fixtures) $ \case
-      FixtureInProgress -> invariantViolation "Fixture was unexpectedly in progress in cleanupFixtures"
+      FixtureInProgress -> pure Nothing
       FixtureLoaded (_, NoCleanup) -> pure Nothing
       FixtureLoaded (_, CleanupFunc io) -> fromLeft <$> tryAny io
 
@@ -159,3 +165,17 @@ getScopedAccessors scopeKey =
       ( sessionFixtures
       , \f registry -> registry{sessionFixtures = f (sessionFixtures registry)}
       )
+
+{----- Built-in fixtures -----}
+
+-- | A fixture that provides a temporary directory that can be used in a test.
+newtype FixtureTmpDir = FixtureTmpDir FilePath
+
+instance Fixture FixtureTmpDir where
+  fixtureAction = do
+    tmpdir <- getTemporaryDirectory
+    let dir = tmpdir </> "skeletest-tmp-dir"
+    removePathForcibly dir
+    createDirectory dir
+    pure . withCleanup (FixtureTmpDir dir) $
+      removePathForcibly dir

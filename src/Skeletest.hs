@@ -12,9 +12,9 @@ module Skeletest (
 
   -- ** Markers
   IsMarker (..),
-  withMarker,
   withMarkers,
   withManualMarkers,
+  withMarker,
 
   -- * Assertions
   shouldBe,
@@ -29,6 +29,9 @@ module Skeletest (
   getFixture,
   noCleanup,
   withCleanup,
+
+  -- ** Built-in fixtures
+  FixtureTmpDir (..),
 
   -- * CLI flags
   Flag (..),

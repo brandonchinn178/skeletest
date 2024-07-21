@@ -67,12 +67,18 @@ test-suite skeletest-tests
   main-is: Main.hs
   other-modules:
     ExampleSpec
-    Skeletest.Internal.PluginSpec
+    Skeletest.Internal.CLISpec
+    Skeletest.Internal.FixturesSpec
+    Skeletest.Internal.SnapshotSpec
     Skeletest.Internal.SpecSpec
     Skeletest.Internal.TestTargetsSpec
+    Skeletest.TestUtils.Integration
   build-depends:
       base
+    , directory
+    , filepath
     , skeletest
+    , process
     , text
   default-language: GHC2021
   ghc-options: -Wall -Wcompat

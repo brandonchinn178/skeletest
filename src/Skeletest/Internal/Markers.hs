@@ -10,6 +10,9 @@ import Data.Typeable (Typeable, cast)
 
 class (Show a, Typeable a) => IsMarker a where
   -- | The name of the marker that can be selected with '@name' syntax.
+  --
+  -- Marker names must only include alphanumeric characters, hyphens,
+  -- underscores, and periods.
   getMarkerName :: a -> String
 
   -- | If true, skips tests if no selections are specified on the command

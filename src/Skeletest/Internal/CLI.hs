@@ -118,7 +118,6 @@ getFlag =
               , "Expected: " <> show rep <> "."
               , "Got: " <> show dyn
               ]
-      -- FIXME: add test
       Nothing -> throwIO $ CliFlagNotFound (Text.pack $ flagName @a)
   where
     rep = typeRep (Proxy @a)

@@ -57,7 +57,7 @@ data SnapshotTestFixture = SnapshotTestFixture
 instance Fixture SnapshotTestFixture where
   fixtureAction = do
     snapshotIndexRef <- newIORef 0
-    -- TODO: if --update, clean up extraneous snapshots when test finishes
+    -- TODO: if --update, clean up extraneous snapshots when test
     pure . noCleanup $ SnapshotTestFixture{..}
 
 getAndIncSnapshotIndex :: IO Int
@@ -84,11 +84,12 @@ instance Fixture SnapshotFileFixture where
         Right contents ->
           case decodeSnapshotFile contents of
             Just snapshotFile -> pure $ Just snapshotFile
-            -- FIXME: add test
             Nothing -> throwIO $ SnapshotFileCorrupted snapshotPath
     let snapshotChanged newSnapshot = mSnapshotFile /= Just newSnapshot
 
     snapshotFileRef <- newIORef mSnapshotFile
+    -- TODO: don't remove snapshot if test failed before checking (after cleaning up
+    -- extraneous snapshots with --update)
     pure . withCleanup SnapshotFileFixture{..} $
       -- write snapshot back out when file is done
       readIORef snapshotFileRef >>= \case

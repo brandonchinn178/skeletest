@@ -78,7 +78,7 @@ import Skeletest.Internal.Snapshot (
   getAndIncSnapshotIndex,
   updateSnapshot,
  )
-import Skeletest.Internal.State (getTestInfo)
+import Skeletest.Internal.TestInfo (getTestInfo)
 import Skeletest.Internal.Utils.Diff (showLineDiff)
 import Skeletest.Internal.Utils.HList (HList (..))
 import Skeletest.Internal.Utils.HList qualified as HList

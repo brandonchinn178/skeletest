@@ -36,7 +36,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.Exception (throwIO, tryAny)
 
 import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
-import Skeletest.Internal.State (
+import Skeletest.Internal.TestInfo (
   TestInfo (testFile),
   getTestInfo,
  )

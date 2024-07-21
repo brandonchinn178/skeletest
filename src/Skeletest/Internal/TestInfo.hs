@@ -1,7 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Skeletest.Internal.State (
-  -- * Test info
+module Skeletest.Internal.TestInfo (
   TestInfo (..),
   withTestInfo,
   getTestInfo,
@@ -19,22 +18,6 @@ import UnliftIO.Exception (bracket_)
 import Skeletest.Internal.Error (invariantViolation)
 import Skeletest.Internal.Markers (SomeMarker)
 
--- | The global state shared by all of Skeletest.
-data GlobalState = GlobalState
-  { testInfoMap :: Map ThreadId TestInfo
-  }
-
-globalStateRef :: IORef GlobalState
-globalStateRef = unsafePerformIO $ newIORef newState
-  where
-    newState =
-      GlobalState
-        { testInfoMap = Map.empty
-        }
-{-# NOINLINE globalStateRef #-}
-
-{----- Test info -----}
-
 data TestInfo = TestInfo
   { testModule :: Text
   , testContexts :: [Text]
@@ -45,18 +28,24 @@ data TestInfo = TestInfo
   }
   deriving (Show)
 
+type TestInfoMap = Map ThreadId TestInfo
+
+testInfoMapRef :: IORef TestInfoMap
+testInfoMapRef = unsafePerformIO $ newIORef Map.empty
+{-# NOINLINE testInfoMapRef #-}
+
 withTestInfo :: TestInfo -> IO a -> IO a
 withTestInfo info m = do
   tid <- myThreadId
   bracket_ (set tid) (unset tid) m
   where
-    set tid = modifyIORef globalStateRef $ \s -> s{testInfoMap = Map.insert tid info (testInfoMap s)}
-    unset tid = modifyIORef globalStateRef $ \s -> s{testInfoMap = Map.delete tid (testInfoMap s)}
+    set tid = modifyIORef testInfoMapRef $ Map.insert tid info
+    unset tid = modifyIORef testInfoMapRef $ Map.delete tid
 
 lookupTestInfo :: IO (Maybe TestInfo)
 lookupTestInfo = do
   tid <- myThreadId
-  Map.lookup tid . testInfoMap <$> readIORef globalStateRef
+  Map.lookup tid <$> readIORef testInfoMapRef
 
 getTestInfo :: IO TestInfo
 getTestInfo =

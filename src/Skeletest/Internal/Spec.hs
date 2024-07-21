@@ -63,8 +63,8 @@ import Skeletest.Internal.Markers (
   SomeMarker (..),
   findMarker,
  )
-import Skeletest.Internal.State (TestInfo (TestInfo), withTestInfo)
-import Skeletest.Internal.State qualified as TestInfo (TestInfo (..))
+import Skeletest.Internal.TestInfo (TestInfo (TestInfo), withTestInfo)
+import Skeletest.Internal.TestInfo qualified as TestInfo
 import Skeletest.Internal.TestTargets (TestTarget, TestTargets, matchesTest)
 import Skeletest.Internal.TestTargets qualified as TestTargets
 import Skeletest.Prop.Internal (Property, runProperty)

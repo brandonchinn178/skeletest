@@ -25,7 +25,7 @@ import Skeletest.Internal.Predicate (
   runPredicate,
  )
 import Skeletest.Internal.Predicate qualified as P
-import Skeletest.Internal.State (TestInfo, getTestInfo)
+import Skeletest.Internal.TestInfo (TestInfo, getTestInfo)
 
 shouldBe :: (HasCallStack, Eq a) => a -> a -> IO ()
 actual `shouldBe` expected = GHC.withFrozenCallStack $ actual `shouldSatisfy` P.eq expected

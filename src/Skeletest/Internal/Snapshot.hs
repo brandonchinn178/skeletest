@@ -45,7 +45,7 @@ import Skeletest.Internal.Fixtures (
   noCleanup,
   withCleanup,
  )
-import Skeletest.Internal.State (TestInfo (..), getTestInfo)
+import Skeletest.Internal.TestInfo (TestInfo (..), getTestInfo)
 import Skeletest.Internal.Utils.Map qualified as Map.Utils
 
 {----- Infrastructure -----}

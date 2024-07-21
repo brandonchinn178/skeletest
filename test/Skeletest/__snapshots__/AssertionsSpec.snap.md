@@ -82,3 +82,28 @@ Example
 -1 ≯ 0
 --------------------------------------------------------------------------------
 ```
+
+## shows backtrace of failed assertions
+
+```
+Example
+    should fail: FAIL
+--------------------------------------------------------------------------------
+./ExampleSpec.hs:6:
+|
+| spec = it "should fail" $ expectPositive (-1)
+|                           ^^^^^^^^^^^^^^
+
+./ExampleSpec.hs:9:
+|
+| expectPositive = expectGT 0
+|                  ^^^^^^^^
+
+./ExampleSpec.hs:12:
+|
+| expectGT x actual = actual `shouldSatisfy` P.gt x
+|                            ^^^^^^^^^^^^^^^
+
+-1 ≯ 0
+--------------------------------------------------------------------------------
+```

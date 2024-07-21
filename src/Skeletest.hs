@@ -22,6 +22,7 @@ module Skeletest (
   shouldSatisfy,
   shouldNotSatisfy,
   failTest,
+  HasCallStack,
 
   -- * Fixtures
   Fixture (..),
@@ -40,6 +41,8 @@ module Skeletest (
   FlagSpec (..),
   getFlag,
 ) where
+
+import GHC.Stack (HasCallStack)
 
 import Skeletest.Assertions
 import Skeletest.Internal.CLI

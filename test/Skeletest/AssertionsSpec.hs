@@ -100,3 +100,25 @@ spec = do
       code `shouldBe` ExitFailure 1
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
+
+  integration . it "shows backtrace of failed assertions" $ do
+    runner <- getFixture
+    addTestFile runner "ExampleSpec.hs" $
+      [ "module ExampleSpec (spec) where"
+      , ""
+      , "import Skeletest"
+      , "import qualified Skeletest.Predicate as P"
+      , ""
+      , "spec = it \"should fail\" $ expectPositive (-1)"
+      , ""
+      , "expectPositive :: HasCallStack => Int -> IO ()"
+      , "expectPositive = expectGT 0"
+      , ""
+      , "expectGT :: HasCallStack => Int -> Int -> IO ()"
+      , "expectGT x actual = actual `shouldSatisfy` P.gt x"
+      ]
+
+    (code, stdout, stderr) <- runTests runner []
+    code `shouldBe` ExitFailure 1
+    stderr `shouldBe` ""
+    stdout `shouldSatisfy` P.matchesSnapshot

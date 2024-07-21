@@ -86,9 +86,9 @@ import Skeletest.Internal.Utils.HList qualified as HList
 data Predicate a = Predicate
   { predicateFunc :: a -> IO PredicateFuncResult
   , predicateDisp :: Text
-    -- ^ The rendered representation of the predicate
+  -- ^ The rendered representation of the predicate
   , predicateDispNeg :: Text
-    -- ^ The rendered representation of the negation of the predicate
+  -- ^ The rendered representation of the negation of the predicate
   }
 
 data PredicateResult
@@ -122,11 +122,11 @@ renderPredicate = predicateDisp
 data PredicateFuncResult = PredicateFuncResult
   { predicateSuccess :: Bool
   , predicateFailMsg :: Text
-    -- ^ The message to show on failure
+  -- ^ The message to show on failure
   , predicatePassMsg :: Text
-    -- ^ The message to show on unexpected pass
+  -- ^ The message to show on unexpected pass
   , predicateNested :: Bool
-    -- ^ Did this result come from a nested predicate?
+  -- ^ Did this result come from a nested predicate?
   }
 
 setNested :: PredicateFuncResult -> PredicateFuncResult
@@ -152,10 +152,10 @@ anything =
 {----- Ord -----}
 
 -- TODO: if rendered vals are too long, show a diff
-eq :: Eq a => a -> Predicate a
+eq :: (Eq a) => a -> Predicate a
 eq = mkPredicateOp "=" "≠" $ \actual expected -> actual == expected
 
-gt :: Ord a => a -> Predicate a
+gt :: (Ord a) => a -> Predicate a
 gt = mkPredicateOp ">" "≯" $ \actual expected -> actual > expected
 
 {----- Data types -----}
@@ -217,7 +217,8 @@ left Predicate{..} =
 -- Record fields that are omitted are not checked at all; i.e.
 -- @P.con Foo{}@ and @P.con Foo{a = P.anything}@ are equivalent.
 con :: a -> Predicate a
-con = -- FIXME: test
+con =
+  -- FIXME: test
   -- A placeholder that will be replaced with conMatches in the plugin.
   error "P.con was not replaced"
 
@@ -264,7 +265,7 @@ conMatches conNameS mFieldNames deconstruct preds =
           let
             renderField (Const fieldName :*: p) = Text.pack fieldName <> " = " <> parens (predicateDisp p)
             fields = HList.toListWith renderField $ HList.hzip fieldNames preds
-          in
+           in
             conName <> "{" <> Text.intercalate ", " fields <> "}"
         Nothing ->
           Text.unwords $ conName : map parens (HList.toListWith predicateDisp preds)
@@ -366,7 +367,7 @@ class HasSubsequences a where
   isPrefixOf :: a -> a -> Bool
   isInfixOf :: a -> a -> Bool
   isSuffixOf :: a -> a -> Bool
-instance Eq a => HasSubsequences [a] where
+instance (Eq a) => HasSubsequences [a] where
   isPrefixOf = List.isPrefixOf
   isInfixOf = List.isInfixOf
   isSuffixOf = List.isSuffixOf
@@ -375,7 +376,7 @@ instance HasSubsequences Text where
   isInfixOf = Text.isInfixOf
   isSuffixOf = Text.isSuffixOf
 
-hasPrefix :: HasSubsequences a => a -> Predicate a
+hasPrefix :: (HasSubsequences a) => a -> Predicate a
 hasPrefix prefix =
   Predicate
     { predicateFunc = \val ->
@@ -393,7 +394,7 @@ hasPrefix prefix =
     msg = "has prefix " <> render prefix
     msgNeg = "does not have prefix " <> render prefix
 
-hasInfix :: HasSubsequences a => a -> Predicate a
+hasInfix :: (HasSubsequences a) => a -> Predicate a
 hasInfix elems =
   Predicate
     { predicateFunc = \val ->
@@ -411,7 +412,7 @@ hasInfix elems =
     msg = "has infix " <> render elems
     msgNeg = "does not have infix " <> render elems
 
-hasSuffix :: HasSubsequences a => a -> Predicate a
+hasSuffix :: (HasSubsequences a) => a -> Predicate a
 hasSuffix suffix =
   Predicate
     { predicateFunc = \val ->
@@ -444,7 +445,7 @@ returns Predicate{..} =
 
 {----- Snapshot -----}
 
-matchesSnapshot :: Typeable a => Predicate a
+matchesSnapshot :: (Typeable a) => Predicate a
 matchesSnapshot =
   Predicate
     { predicateFunc = \actual -> do
@@ -488,10 +489,14 @@ matchesSnapshot =
 {----- Utilities -----}
 
 mkPredicateOp ::
-  Text -- ^ operator
-  -> Text -- ^ negative operator
-  -> (a -> a -> Bool) -- ^ actual -> expected -> success
-  -> a -- ^ expected
+  Text
+  -- ^ operator
+  -> Text
+  -- ^ negative operator
+  -> (a -> a -> Bool)
+  -- ^ actual -> expected -> success
+  -> a
+  -- ^ expected
   -> Predicate a
 mkPredicateOp op negOp f expected =
   Predicate

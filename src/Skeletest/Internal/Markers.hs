@@ -31,10 +31,10 @@ instance IsMarker AnonMarker where
   getMarkerName = anonMarkerName
   isManualMarker = anonMarkerManual
 
-data SomeMarker = forall a. IsMarker a => SomeMarker a
+data SomeMarker = forall a. (IsMarker a) => SomeMarker a
 
 deriving instance Show SomeMarker
 
 -- | Find the first marker in the given list with the given type.
-findMarker :: forall a. IsMarker a => [SomeMarker] -> Maybe a
+findMarker :: forall a. (IsMarker a) => [SomeMarker] -> Maybe a
 findMarker = listToMaybe . mapMaybe (\(SomeMarker m) -> cast m)

@@ -18,8 +18,8 @@ module Skeletest.TestUtils.Integration (
 import Data.IORef (IORef, modifyIORef, newIORef, readIORef)
 import Data.Text qualified as Text
 import Skeletest
-import System.Exit (ExitCode (..))
 import System.Directory (createDirectoryIfMissing)
+import System.Exit (ExitCode (..))
 import System.FilePath (takeDirectory, (</>))
 import System.Process (CreateProcess (..), proc, readCreateProcessWithExitCode)
 

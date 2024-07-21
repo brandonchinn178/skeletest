@@ -77,7 +77,7 @@ newtype Spec' a = Spec (Writer [SpecTree] a)
 getSpecTrees :: Spec -> [SpecTree]
 getSpecTrees (Spec spec) = execWriter spec
 
-withSpecTrees :: Monad m => ([SpecTree] -> m [SpecTree]) -> Spec -> m Spec
+withSpecTrees :: (Monad m) => ([SpecTree] -> m [SpecTree]) -> Spec -> m Spec
 withSpecTrees f = fmap (Spec . tell) . f . getSpecTrees
 
 data SpecTree
@@ -88,13 +88,13 @@ data SpecTree
   | SpecTest
       { testName :: Text
       , testMarkers :: [SomeMarker]
-        -- ^ Markers, in order from least to most recently applied.
-        --
-        -- >>> withMarker MarkerA . withMarker MarkerB $ test ...
-        --
-        -- will contain
-        --
-        -- >>> SpecTest { testMarkers = [MarkerA, MarkerB] }
+      -- ^ Markers, in order from least to most recently applied.
+      --
+      -- >>> withMarker MarkerA . withMarker MarkerB $ test ...
+      --
+      -- will contain
+      --
+      -- >>> SpecTest { testMarkers = [MarkerA, MarkerB] }
       , testAction :: IO ()
       }
 
@@ -105,7 +105,7 @@ data SpecTree
 -- >>> traverseSpecTrees (\go -> post <=< mapM go <=< pre) spec
 traverseSpecTrees ::
   forall m.
-  Monad m =>
+  (Monad m) =>
   ( (SpecTree -> m SpecTree)
     -> [SpecTree]
     -> m [SpecTree]
@@ -333,7 +333,7 @@ applyTestSelections' selections info = info{specSpec = applySelections $ specSpe
 {----- Defining a Spec -----}
 
 describe :: String -> Spec -> Spec
-describe name = runIdentity . withSpecTrees (pure . (:[]) . mkGroup)
+describe name = runIdentity . withSpecTrees (pure . (: []) . mkGroup)
   where
     mkGroup trees =
       SpecGroup
@@ -350,7 +350,7 @@ instance Testable (IO ()) where
 instance Testable Property where
   runTest = runProperty
 
-test :: Testable a => String -> a -> Spec
+test :: (Testable a) => String -> a -> Spec
 test name t = Spec $ tell [mkTest]
   where
     mkTest =
@@ -432,7 +432,7 @@ instance IsMarker MarkerSkip where
 -- | Adds the given marker to all the tests in the given spec.
 --
 -- Useful for selecting tests from the command line or identifying tests in hooks
-withMarker :: IsMarker a => a -> Spec -> Spec
+withMarker :: (IsMarker a) => a -> Spec -> Spec
 withMarker m = mapSpecTrees (\go -> map (addMarker . go))
   where
     marker = SomeMarker m

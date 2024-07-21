@@ -77,9 +77,9 @@ type Plugin = GHC.Plugin
 data PluginDef = PluginDef
   { isPure :: Bool
   , afterParse ::
-      Text -- ^ Module name
-      -> ParsedModule -- ^ Parsed module
-      -> ParsedModule -- ^ Post-processed module
+      Text -- Module name
+      -> ParsedModule -- Parsed module
+      -> ParsedModule -- Post-processed module
   }
 
 mkPlugin :: PluginDef -> Plugin
@@ -96,11 +96,11 @@ mkPlugin PluginDef{..} =
               { ghcModule = modl
               , fromHsName = unsafePerformIO . hsNameToRdrName (GHC.hsc_NC env)
               }
-        pure $
-          (ghcModule . afterParse moduleNameT . mkParsedModule)
+        pure
+          $ (ghcModule . afterParse moduleNameT . mkParsedModule)
             & modifyHpmModule
             & modifyParsedResultModule
-            $ result
+          $ result
     }
   where
     modifyParsedResultModule f x = x{GHC.parsedResultModule = f $ GHC.parsedResultModule x}
@@ -126,7 +126,7 @@ modifyModuleExprs f parsedModule = parsedModule{ghcModule = go <$> ghcModule par
   where
     ParsedModule{fromHsName} = parsedModule
 
-    go :: Data a => a -> a
+    go :: (Data a) => a -> a
     go = Data.gmapT $ \(x :: a) ->
       go $
         case Typeable.eqT @(GHC.LHsExpr GhcPs) @a of
@@ -211,15 +211,16 @@ toHsExpr = \case
       else HsExprVar (hsRdrName name)
   L _ (GHC.HsApp _ lhs rhs) -> HsExprApp (toHsExpr lhs) (toHsExpr rhs)
   L _ (GHC.ExplicitList _ lexprs) -> HsExprList $ map toHsExpr lexprs
-  L _ (GHC.ExplicitTuple _ args _) | Just presentArgs <- mapM getPresentTupArg args ->
-    HsExprTuple $ map toHsExpr presentArgs
+  L _ (GHC.ExplicitTuple _ args _)
+    | Just presentArgs <- mapM getPresentTupArg args ->
+        HsExprTuple $ map toHsExpr presentArgs
   L _ (GHC.RecordCon _ conName GHC.HsRecFields{rec_flds}) ->
     let
       getField GHC.HsFieldBind{hfbLHS = field, hfbRHS = expr} =
         ( hsRdrName . unLoc . GHC.foLabel . unLoc $ field
         , toHsExpr expr
         )
-    in
+     in
       HsExprRecordCon (hsRdrName $ unLoc conName) $ map (getField . unLoc) rec_flds
   L _ (GHC.HsLit _ (GHC.HsString _ s)) -> HsExprLitString $ Text.pack $ GHC.unpackFS s
   L _ (GHC.HsPar _ expr) -> toHsExpr expr
@@ -413,8 +414,9 @@ renderHsName = \case
 
 mkSigD :: GHC.LIdP GhcPs -> GHC.LHsType GhcPs -> GHC.LHsDecl GhcPs
 mkSigD name ty =
-  genLoc . GHC.SigD GHC.noExtField $ GHC.TypeSig GHC.noAnn [name] $
-    GHC.HsWC GHC.noExtField (genLoc $ GHC.HsSig GHC.noExtField (GHC.HsOuterImplicit GHC.noExtField) ty)
+  genLoc . GHC.SigD GHC.noExtField $
+    GHC.TypeSig GHC.noAnn [name] $
+      GHC.HsWC GHC.noExtField (genLoc $ GHC.HsSig GHC.noExtField (GHC.HsOuterImplicit GHC.noExtField) ty)
 
 {----- Locations -----}
 
@@ -431,5 +433,5 @@ fsText = GHC.fsLit . Text.unpack
 newtype WithShow a = WithShow a
   deriving (Eq)
 
-instance GHC.Outputable a => Show (WithShow a) where
+instance (GHC.Outputable a) => Show (WithShow a) where
   show (WithShow a) = GHC.showSDocUnsafe $ GHC.ppr a

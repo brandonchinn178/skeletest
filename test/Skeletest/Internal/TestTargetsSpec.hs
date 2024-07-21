@@ -21,35 +21,43 @@ spec = do
       [ it label $
           matchesTest selection attrs `shouldBe` True
       | (label, selection, attrs) <-
-          [ ( "matches any test"
+          [
+            ( "matches any test"
             , TestTargetEverything
             , someAttrs
             )
-          , ( "matches tests in file"
+          ,
+            ( "matches tests in file"
             , TestTargetFile "FooSpec.hs"
             , someAttrs{testPath = "FooSpec.hs"}
             )
-          , ( "matches test name substring"
+          ,
+            ( "matches test name substring"
             , TestTargetName "foo"
             , someAttrs{testIdentifier = ["group1", "group2", "my foo test"]}
             )
-          , ( "matches group name substring"
+          ,
+            ( "matches group name substring"
             , TestTargetName "fooFunc"
             , someAttrs{testIdentifier = ["fooFunction", "does a thing"]}
             )
-          , ( "matches a marker exactly"
+          ,
+            ( "matches a marker exactly"
             , TestTargetMarker "fast"
             , someAttrs{testMarkers = ["fast", "slow"]}
             )
-          , ( "matches a NOT target when target does not match"
+          ,
+            ( "matches a NOT target when target does not match"
             , TestTargetNot (TestTargetFile "FooSpec.hs")
             , someAttrs{testPath = "BarSpec.hs"}
             )
-          , ( "matches an AND target when target matches both"
+          ,
+            ( "matches an AND target when target matches both"
             , TestTargetAnd (TestTargetFile "FooSpec.hs") (TestTargetMarker "fast")
             , someAttrs{testPath = "FooSpec.hs", testMarkers = ["fast"]}
             )
-          , ( "matches an OR target when target matches one"
+          ,
+            ( "matches an OR target when target matches one"
             , TestTargetOr (TestTargetFile "FooSpec.hs") (TestTargetMarker "fast")
             , someAttrs{testPath = "FooSpec.hs", testMarkers = []}
             )
@@ -60,27 +68,33 @@ spec = do
       [ it label $
           matchesTest selection attrs `shouldBe` False
       | (label, selection, attrs) <-
-          [ ( "does not match test in another file"
+          [
+            ( "does not match test in another file"
             , TestTargetFile "FooSpec.hs"
             , someAttrs{testPath = "BarSpec.hs"}
             )
-          , ( "does not match test not containing name"
+          ,
+            ( "does not match test not containing name"
             , TestTargetName "foo"
             , someAttrs{testIdentifier = ["group1", "group2", "other test"]}
             )
-          , ( "does not match marker substring"
+          ,
+            ( "does not match marker substring"
             , TestTargetMarker "fastish"
             , someAttrs{testMarkers = ["fast"]}
             )
-          , ( "does not match a NOT target when target matches"
+          ,
+            ( "does not match a NOT target when target matches"
             , TestTargetNot (TestTargetFile "FooSpec.hs")
             , someAttrs{testPath = "FooSpec.hs"}
             )
-          , ( "does not match an AND target when target does not match one"
+          ,
+            ( "does not match an AND target when target does not match one"
             , TestTargetAnd (TestTargetFile "FooSpec.hs") (TestTargetMarker "fast")
             , someAttrs{testPath = "BarSpec.hs", testMarkers = ["fast"]}
             )
-          , ( "does not match an OR target when target does not match either"
+          ,
+            ( "does not match an OR target when target does not match either"
             , TestTargetOr (TestTargetFile "FooSpec.hs") (TestTargetMarker "fast")
             , someAttrs{testPath = "BarSpec.hs", testMarkers = []}
             )
@@ -92,55 +106,68 @@ spec = do
       [ it label $
           parseTestTargets input `shouldBe` Right (Just expected)
       | (label, input, expected) <-
-          [ ( "parses everything"
+          [
+            ( "parses everything"
             , ["*"]
             , TestTargetEverything
             )
-          , ( "parses file name"
+          ,
+            ( "parses file name"
             , ["test/MyLib/FooSpec.hs"]
             , TestTargetFile "test/MyLib/FooSpec.hs"
             )
-          , ( "parses test name"
+          ,
+            ( "parses test name"
             , ["[test]"]
             , TestTargetName "test"
             )
-          , ( "parses test marker"
+          ,
+            ( "parses test marker"
             , ["@fast"]
             , TestTargetMarker "fast"
             )
-          , ( "parses file name with test name"
+          ,
+            ( "parses file name with test name"
             , ["test/FooSpec.hs[fooFunc]"]
             , TestTargetAnd (TestTargetFile "test/FooSpec.hs") (TestTargetName "fooFunc")
             )
-          , ( "parses not operations"
+          ,
+            ( "parses not operations"
             , ["not [fooFunc]"]
             , TestTargetNot (TestTargetName "fooFunc")
             )
-          , ( "parses and operations between test names"
+          ,
+            ( "parses and operations between test names"
             , ["[fooFunc] and [barFunc]"]
             , TestTargetAnd (TestTargetName "fooFunc") (TestTargetName "barFunc")
             )
-          , ( "parses and operations between markers"
+          ,
+            ( "parses and operations between markers"
             , ["@foo and @fast"]
             , TestTargetAnd (TestTargetMarker "foo") (TestTargetMarker "fast")
             )
-          , ( "parses or operations between test names"
+          ,
+            ( "parses or operations between test names"
             , ["[fooFunc] or [barFunc]"]
             , TestTargetOr (TestTargetName "fooFunc") (TestTargetName "barFunc")
             )
-          , ( "parses or operations between markers"
+          ,
+            ( "parses or operations between markers"
             , ["@foo or @fast"]
             , TestTargetOr (TestTargetMarker "foo") (TestTargetMarker "fast")
             )
-          , ( "parses or operations between files"
+          ,
+            ( "parses or operations between files"
             , ["FooSpec.hs or BarSpec.hs"]
             , TestTargetOr (TestTargetFile "FooSpec.hs") (TestTargetFile "BarSpec.hs")
             )
-          , ( "joins multiple targets with or"
+          ,
+            ( "joins multiple targets with or"
             , ["[fooFunc]", "test/BarSpec.hs"]
             , TestTargetOr (TestTargetName "fooFunc") (TestTargetFile "test/BarSpec.hs")
             )
-          , ( "parses multiple binary operations"
+          ,
+            ( "parses multiple binary operations"
             , ["[a] or [b] and [c] or [d]"]
             , TestTargetOr
                 ( TestTargetAnd
@@ -149,7 +176,8 @@ spec = do
                 )
                 (TestTargetName "d")
             )
-          , ( "parses parenthesized expressions"
+          ,
+            ( "parses parenthesized expressions"
             , ["([a] or [b]) and ([c] or [d])"]
             , TestTargetAnd
                 (TestTargetOr (TestTargetName "a") (TestTargetName "b"))

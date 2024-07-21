@@ -1,7 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NoFieldSelectors #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 module Skeletest.Internal.CLI (
   Flag (..),
@@ -73,12 +73,12 @@ import Skeletest.Internal.TestTargets (TestTargets, parseTestTargets)
 --   [ flag @MyFlag
 --   ]
 -- @
-data Flag = forall a. IsFlag a => Flag (Proxy a)
+data Flag = forall a. (IsFlag a) => Flag (Proxy a)
 
-flag :: forall a. IsFlag a => Flag
+flag :: forall a. (IsFlag a) => Flag
 flag = Flag (Proxy @a)
 
-class Typeable a => IsFlag a where
+class (Typeable a) => IsFlag a where
   flagName :: String
 
   flagShort :: Maybe Char
@@ -259,7 +259,7 @@ parseCliArgs flags args = either id id $ do
         , Just shortFlag <- pure $ flagShort @a
         ]
 
-    toFlagMap :: Ord name => (name -> Text) -> [(name, a)] -> Either CLIParseResult (Map name a)
+    toFlagMap :: (Ord name) => (name -> Text) -> [(name, a)] -> Either CLIParseResult (Map name a)
     toFlagMap renderFlag vals =
       let go seen = \case
             [] -> Right $ Map.fromList vals
@@ -289,7 +289,7 @@ parseCliArgsWith longFlags shortFlags = Trans.runExcept . flip Trans.execStateT 
     parseLongFlag = parseFlag renderLongFlag longFlags
     parseShortFlag = parseFlag renderShortFlag shortFlags
 
-    parseFlag :: Ord name => (name -> Text) -> Map name Flag -> name -> [String] -> ArgParserM ()
+    parseFlag :: (Ord name) => (name -> Text) -> Map name Flag -> name -> [String] -> ArgParserM ()
     parseFlag renderFlag flagMap name args = do
       Flag (Proxy :: Proxy a) <-
         case Map.lookup name flagMap of
@@ -309,7 +309,7 @@ parseCliArgsWith longFlags shortFlags = Trans.runExcept . flip Trans.execStateT 
     addArgs :: [String] -> ArgParserM ()
     addArgs args = Trans.modify (first (<> map Text.pack args))
 
-    addFlagStore :: Typeable a => a -> ArgParserM ()
+    addFlagStore :: (Typeable a) => a -> ArgParserM ()
     addFlagStore x = Trans.modify (second (insertFlagStore x))
 
 resolveFlags :: [Flag] -> CLIFlagStore -> Either Text CLIFlagStore
@@ -339,7 +339,7 @@ resolveFlags = flip (foldlM go)
         z' <- f z x
         foldlM f z' xs
 
-insertFlagStore :: Typeable a => a -> CLIFlagStore -> CLIFlagStore
+insertFlagStore :: (Typeable a) => a -> CLIFlagStore -> CLIFlagStore
 insertFlagStore x = Map.insert (typeOf x) (toDyn x)
 
 renderLongFlag :: Text -> Text

@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NoFieldSelectors #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 module Skeletest.Internal.Snapshot (
   -- * Running snapshot
@@ -36,7 +36,7 @@ import System.IO.Error (isDoesNotExistError)
 import UnliftIO.Exception (throwIO, try)
 import UnliftIO.IORef (IORef, atomicModifyIORef', modifyIORef', newIORef, readIORef)
 
-import Skeletest.Internal.CLI (IsFlag (..), FlagSpec (..))
+import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..))
 import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
 import Skeletest.Internal.Fixtures (
   Fixture (..),
@@ -118,7 +118,7 @@ data SnapshotContext = SnapshotContext
   , snapshotIndex :: Int
   }
 
-updateSnapshot :: Typeable a => SnapshotContext -> a -> IO ()
+updateSnapshot :: (Typeable a) => SnapshotContext -> a -> IO ()
 updateSnapshot snapshotContext testResult = do
   SnapshotFileFixture{snapshotFileRef} <- getFixture
   modifyIORef' snapshotFileRef (Just . setSnapshot . fromMaybe emptySnapshotFile)
@@ -150,10 +150,9 @@ updateSnapshot snapshotContext testResult = do
             i [] -> replicate i mempty <> [v]
             0 (_ : xs) -> v : xs
             i (x : xs) -> x : go (i - 1) xs
-       in
-        if i0 < 0
-          then invariantViolation $ "Got negative snapshot index: " <> show i0
-          else go i0
+       in if i0 < 0
+            then invariantViolation $ "Got negative snapshot index: " <> show i0
+            else go i0
 
 data SnapshotResult
   = SnapshotMissing
@@ -165,7 +164,7 @@ data SnapshotResult
   deriving (Show, Eq)
 
 -- TODO: use a per-file fixture to cache snapshot files and write it all back in cleanup?
-checkSnapshot :: Typeable a => SnapshotContext -> a -> IO SnapshotResult
+checkSnapshot :: (Typeable a) => SnapshotContext -> a -> IO SnapshotResult
 checkSnapshot snapshotContext testResult =
   fmap (either id absurd) . runExceptT $ do
     SnapshotFileFixture{snapshotFileRef} <- getFixture
@@ -204,8 +203,8 @@ checkSnapshot snapshotContext testResult =
 data SnapshotFile = SnapshotFile
   { moduleName :: Text
   , snapshots :: Map TestIdentifier [Text]
-    -- ^ full test identifier => snapshots
-    -- e.g. ["group1", "group2", "returns val1 and val2"] => ["val1", "val2"]
+  -- ^ full test identifier => snapshots
+  -- e.g. ["group1", "group2", "returns val1 and val2"] => ["val1", "val2"]
   }
   deriving (Eq)
 
@@ -235,9 +234,12 @@ decodeSnapshotFile = parseFile . Text.lines
       _ -> Nothing
 
     parseSections ::
-      SnapshotFile -- ^ The parsed snapshot file so far
-      -> Maybe [Text] -- ^ The current test identifier, if one is set
-      -> [Text] -- ^ The rest of the lines to process
+      SnapshotFile
+      -- \^ The parsed snapshot file so far
+      -> Maybe [Text]
+      -- \^ The current test identifier, if one is set
+      -> [Text]
+      -- \^ The rest of the lines to process
       -> Maybe SnapshotFile
     parseSections snapshotFile@SnapshotFile{snapshots} mTest = \case
       [] -> pure snapshotFile
@@ -279,12 +281,12 @@ encodeSnapshotFile SnapshotFile{..} =
 
 {----- Renderers -----}
 
-data SnapshotRenderer =
-  forall a.
-  Typeable a =>
+data SnapshotRenderer
+  = forall a.
+  (Typeable a) =>
   SnapshotRenderer
-    { render :: a -> Text
-    }
+  { render :: a -> Text
+  }
 
 defaultSnapshotRenderers :: [SnapshotRenderer]
 defaultSnapshotRenderers =
@@ -292,7 +294,7 @@ defaultSnapshotRenderers =
   , SnapshotRenderer @Text id
   ]
 
-renderVal :: Typeable a => [SnapshotRenderer] -> a -> Text
+renderVal :: (Typeable a) => [SnapshotRenderer] -> a -> Text
 renderVal renderers a =
   normalizeTrailingNewlines $
     case mapMaybe tryRender renderers of

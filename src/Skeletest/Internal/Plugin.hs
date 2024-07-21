@@ -111,8 +111,9 @@ replaceConMatch = modifyModuleExprs go
               ]
           _ -> skeletestPluginError "P.con must be applied to a constructor"
       -- Check if P.con is being applied more than once
-      HsExprApp (HsExprApp (HsExprVar name) _) _ | isCon name ->
-        skeletestPluginError "P.con must be applied to exactly one argument"
+      HsExprApp (HsExprApp (HsExprVar name) _) _
+        | isCon name ->
+            skeletestPluginError "P.con must be applied to exactly one argument"
       _ -> Nothing
 
     -- TODO: Make this more precise. It seems like the only information we get here is P.con,

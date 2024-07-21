@@ -28,7 +28,7 @@ import Data.Map qualified as Map
 import Data.Map.Ordered (OMap)
 import Data.Map.Ordered qualified as OMap
 import Data.Text (Text)
-import Data.Typeable (Typeable, TypeRep)
+import Data.Typeable (TypeRep, Typeable)
 import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.Exception (bracket_)
 
@@ -66,7 +66,7 @@ type FixtureMap = OMap TypeRep FixtureStatus
 
 data FixtureStatus
   = FixtureInProgress
-  | forall a. Typeable a => FixtureLoaded (a, FixtureCleanup)
+  | forall a. (Typeable a) => FixtureLoaded (a, FixtureCleanup)
 
 data FixtureCleanup
   = NoCleanup
@@ -104,7 +104,7 @@ data TestInfo = TestInfo
   , testName :: Text
   , testMarkers :: [SomeMarker]
   , testFile :: FilePath
-    -- ^ Relative to CWD
+  -- ^ Relative to CWD
   }
   deriving (Show)
 

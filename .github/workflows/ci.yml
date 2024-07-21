@@ -1,0 +1,73 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_call:
+
+jobs:
+  build_and_test:
+    strategy:
+      matrix:
+        ghc_version:
+          # FIXME: reenable
+          # - '9.6'
+          # - '9.8'
+          - '9.10'
+        # FIXME: reenable
+        # include:
+        #   - ghc_version: '9.6'
+        #     oldest: true
+
+    name: build_and_test (${{ matrix.ghc_version }})
+    runs-on: ubuntu-latest
+
+    steps:
+      -
+        uses: actions/checkout@v3
+      -
+        id: setup
+        name: Set up GHC ${{ matrix.ghc_version }}
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: ${{ matrix.ghc_version }}
+      -
+        name: Configure the build
+        run:
+          cabal configure
+            --enable-test
+            --test-show-details=streaming
+      -
+        if: ${{ matrix.oldest }}
+        name: Use oldest dependencies
+        run: cabal configure --enable-append --prefer-oldest
+      -
+        name: Get build plan
+        run: cabal build --dry-run
+      -
+        name: Get current month to clear cache
+        run: echo "CURR_MONTH=$(date +%B)" | tee -a "$GITHUB_ENV"
+      -
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ runner.os }}-cabal-cache-${{ env.CURR_MONTH }}-${{ matrix.ghc_version }}-${{ hashFiles('**/plan.json') }}
+          restore-keys: |
+               ${{ runner.os }}-cabal-cache-${{ env.CURR_MONTH }}-${{ matrix.ghc_version }}-
+      -
+        name: Build + Test
+        run: cabal test --test-option='not @integration'
+      -
+        name: Check tests were run
+        # check if test log file contains at least 10 lines. can't be 0 because the log
+        # contains lines like "Test suite skeletest-tests: RUNNING..."
+        run: |
+          LOG_FILE="$(find dist-newstyle -name '*-skeletest-tests.log')"
+          if [[ $(wc "${LOG_FILE}" | awk '{ print $1 }') -lt 10 ]]; then
+            >&2 echo "Tests not run"
+            exit 1
+          fi
+      -
+        name: Run integration tests
+        run: cabal exec -- cabal test --test-option='@integration'

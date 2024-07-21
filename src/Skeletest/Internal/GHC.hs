@@ -10,7 +10,7 @@ All GHC operations should go through this API, to isolate
 the rest of the logic from GHC internals logic, which can
 include breaking changes between versions.
 
-TODO: support 9.6 + 9.8
+FIXME: support 9.6 + 9.8
 -}
 module Skeletest.Internal.GHC (
   Plugin,

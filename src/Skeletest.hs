@@ -21,6 +21,7 @@ module Skeletest (
   shouldNotBe,
   shouldSatisfy,
   shouldNotSatisfy,
+  failTest,
 
   -- * Fixtures
   Fixture (..),

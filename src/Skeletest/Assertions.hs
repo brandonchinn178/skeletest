@@ -6,10 +6,12 @@ module Skeletest.Assertions (
   shouldNotBe,
   shouldSatisfy,
   shouldNotSatisfy,
+  failTest,
   TestFailure (..),
 ) where
 
 import Data.Text (Text)
+import Data.Text qualified as Text
 import GHC.Stack (CallStack, HasCallStack)
 import GHC.Stack qualified as GHC
 import UnliftIO.Exception (Exception (..), throwIO)
@@ -30,19 +32,26 @@ actual `shouldNotBe` expected = GHC.withFrozenCallStack $ actual `shouldNotSatis
 
 shouldSatisfy :: (HasCallStack) => a -> Predicate a -> IO ()
 actual `shouldSatisfy` p =
-  runPredicate p actual >>= \case
-    PredicateSuccess -> pure ()
-    PredicateFail msg -> do
-      testInfo <- getTestInfo
-      throwIO
-        TestFailure
-          { testInfo
-          , testFailMessage = msg
-          , callStack = GHC.callStack
-          }
+  GHC.withFrozenCallStack $
+    runPredicate p actual >>= \case
+      PredicateSuccess -> pure ()
+      PredicateFail msg -> failTest' msg
 
 shouldNotSatisfy :: (HasCallStack) => a -> Predicate a -> IO ()
 actual `shouldNotSatisfy` p = GHC.withFrozenCallStack $ actual `shouldSatisfy` P.not p
+
+failTest :: (HasCallStack) => String -> IO a
+failTest = GHC.withFrozenCallStack $ failTest' . Text.pack
+
+failTest' :: (HasCallStack) => Text -> IO a
+failTest' msg = do
+  testInfo <- getTestInfo
+  throwIO
+    TestFailure
+      { testInfo
+      , testFailMessage = msg
+      , callStack = GHC.callStack
+      }
 
 data TestFailure = TestFailure
   { testInfo :: TestInfo

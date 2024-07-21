@@ -21,8 +21,9 @@ import Control.Monad.Trans.Class qualified as Trans
 import Control.Monad.Trans.Except qualified as Trans
 import Control.Monad.Trans.State qualified as Trans
 import Data.Bifunctor (first, second)
-import Data.Dynamic (fromDynamic, toDyn)
+import Data.Dynamic (Dynamic, fromDynamic, toDyn)
 import Data.Foldable1 qualified as Foldable1
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -31,14 +32,14 @@ import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
-import Data.Typeable (Typeable, typeOf, typeRep)
+import Data.Typeable (TypeRep, Typeable, typeOf, typeRep)
 import System.Environment (getArgs)
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (stderr)
+import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.Exception (throwIO)
 
 import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
-import Skeletest.Internal.State (CLIFlagStore, lookupCliFlag, setCliFlagStore)
 import Skeletest.Internal.TestTargets (TestTargets, parseTestTargets)
 
 -- | Register a CLI flag.
@@ -339,11 +340,25 @@ resolveFlags = flip (foldlM go)
         z' <- f z x
         foldlM f z' xs
 
-insertFlagStore :: (Typeable a) => a -> CLIFlagStore -> CLIFlagStore
-insertFlagStore x = Map.insert (typeOf x) (toDyn x)
-
 renderLongFlag :: Text -> Text
 renderLongFlag = ("--" <>)
 
 renderShortFlag :: Char -> Text
 renderShortFlag c = Text.pack ['-', c]
+
+{----- CLIFlagStore -----}
+
+type CLIFlagStore = Map TypeRep Dynamic
+
+insertFlagStore :: (Typeable a) => a -> CLIFlagStore -> CLIFlagStore
+insertFlagStore x = Map.insert (typeOf x) (toDyn x)
+
+cliFlagStoreRef :: IORef CLIFlagStore
+cliFlagStoreRef = unsafePerformIO $ newIORef Map.empty
+{-# NOINLINE cliFlagStoreRef #-}
+
+setCliFlagStore :: CLIFlagStore -> IO ()
+setCliFlagStore = writeIORef cliFlagStoreRef
+
+lookupCliFlag :: TypeRep -> IO (Maybe Dynamic)
+lookupCliFlag rep = Map.lookup rep <$> readIORef cliFlagStoreRef

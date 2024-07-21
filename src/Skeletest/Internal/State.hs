@@ -8,11 +8,6 @@ module Skeletest.Internal.State (
   FixtureCleanup (..),
   modifyFixtureRegistry,
 
-  -- * CLI options
-  CLIFlagStore,
-  setCliFlagStore,
-  lookupCliFlag,
-
   -- * Test info
   TestInfo (..),
   withTestInfo,
@@ -21,7 +16,6 @@ module Skeletest.Internal.State (
 ) where
 
 import Control.Concurrent (ThreadId, myThreadId)
-import Data.Dynamic (Dynamic)
 import Data.IORef (IORef, atomicModifyIORef, modifyIORef, newIORef, readIORef)
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -38,7 +32,6 @@ import Skeletest.Internal.Markers (SomeMarker)
 -- | The global state shared by all of Skeletest.
 data GlobalState = GlobalState
   { fixturesRegistry :: FixtureRegistry
-  , cliFlags :: CLIFlagStore
   , testInfoMap :: Map ThreadId TestInfo
   }
 
@@ -48,7 +41,6 @@ globalStateRef = unsafePerformIO $ newIORef newState
     newState =
       GlobalState
         { fixturesRegistry = emptyFixtureRegistry
-        , cliFlags = Map.empty
         , testInfoMap = Map.empty
         }
 {-# NOINLINE globalStateRef #-}
@@ -85,16 +77,6 @@ modifyFixtureRegistry f =
   atomicModifyIORef globalStateRef $ \s ->
     let (registry, a) = f (fixturesRegistry s)
      in (s{fixturesRegistry = registry}, a)
-
-{----- CLI flags -----}
-
-type CLIFlagStore = Map TypeRep Dynamic
-
-setCliFlagStore :: CLIFlagStore -> IO ()
-setCliFlagStore flags = modifyIORef globalStateRef $ \s -> s{cliFlags = flags}
-
-lookupCliFlag :: TypeRep -> IO (Maybe Dynamic)
-lookupCliFlag rep = Map.lookup rep . cliFlags <$> readIORef globalStateRef
 
 {----- Test info -----}
 

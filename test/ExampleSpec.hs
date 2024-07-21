@@ -58,7 +58,7 @@ spec = do
 data MyType
   = ConA
   | ConB Int Int
-  | ConC { conC1 :: Int, conC2 :: Int }
+  | ConC {conC1 :: Int, conC2 :: Int}
 
 -- Do not add a Show instance
 data UserNoShow = UserNoShow
@@ -68,6 +68,7 @@ data UserNoShow = UserNoShow
 
 -- | A helper for tracing fixtures
 newtype TraceFixture = TraceFixture (IORef [String])
+
 instance Fixture TraceFixture where
   fixtureAction = do
     traceRef <- newIORef []

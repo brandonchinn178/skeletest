@@ -19,7 +19,7 @@ data HList f xs where
 toListWith :: (forall x. f x -> y) -> HList f xs -> [y]
 toListWith f = runIdentity . toListWithM (pure . f)
 
-toListWithM :: Monad m => (forall x. f x -> m y) -> HList f xs -> m [y]
+toListWithM :: (Monad m) => (forall x. f x -> m y) -> HList f xs -> m [y]
 toListWithM f = \case
   HNil -> pure []
   HCons x xs -> (:) <$> f x <*> toListWithM f xs

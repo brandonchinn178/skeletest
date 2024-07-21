@@ -37,12 +37,12 @@ import Skeletest.Internal.State (
   FixtureRegistry (..),
   FixtureStatus (..),
   TestInfo (testFile),
-  modifyFixtureRegistry,
   getTestInfo,
+  modifyFixtureRegistry,
  )
 import Skeletest.Internal.Utils.Map qualified as Map.Utils
 
-class Typeable a => Fixture a where
+class (Typeable a) => Fixture a where
   -- | The scope of the fixture, defaults to per-test
   fixtureScope :: FixtureScope
   fixtureScope = PerTestFixture

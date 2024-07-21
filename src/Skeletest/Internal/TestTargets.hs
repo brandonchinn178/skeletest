@@ -14,9 +14,9 @@ import Control.Monad.Combinators.Expr qualified as Parser
 import Data.Bifunctor (first)
 import Data.Char (isAlphaNum)
 import Data.Foldable1 qualified as Foldable1
+import Data.List.NonEmpty qualified as NonEmpty
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.List.NonEmpty qualified as NonEmpty
 import Data.Void (Void)
 import Text.Megaparsec (Parsec)
 import Text.Megaparsec qualified as Parser
@@ -26,9 +26,9 @@ import Text.Megaparsec.Char.Lexer qualified as Parser.L
 type TestTargets = Maybe TestTarget
 
 data TestTarget
-  = TestTargetEverything
-    -- ^ Useful for selecting all tests, whether manual or not.
+  = -- | Useful for selecting all tests, whether manual or not.
     -- TODO: replace with allowing globs in TestTargetFile
+    TestTargetEverything
   | TestTargetFile FilePath
   | TestTargetName Text
   | TestTargetMarker Text
@@ -122,7 +122,7 @@ showTestTargetParseError bundle =
       case err of
         Parser.TrivialError _ (Just (Parser.Tokens s)) _ -> length s
         _ -> 1
-  in
+   in
     Text.concat
       [ "Could not parse test target: " <> Text.pack (Parser.parseErrorTextPretty err)
       , " |\n"

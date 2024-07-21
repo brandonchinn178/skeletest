@@ -28,7 +28,7 @@ actual `shouldBe` expected = GHC.withFrozenCallStack $ actual `shouldSatisfy` P.
 shouldNotBe :: (HasCallStack, Eq a) => a -> a -> IO ()
 actual `shouldNotBe` expected = GHC.withFrozenCallStack $ actual `shouldNotSatisfy` P.eq expected
 
-shouldSatisfy :: HasCallStack => a -> Predicate a -> IO ()
+shouldSatisfy :: (HasCallStack) => a -> Predicate a -> IO ()
 actual `shouldSatisfy` p =
   runPredicate p actual >>= \case
     PredicateSuccess -> pure ()
@@ -41,7 +41,7 @@ actual `shouldSatisfy` p =
           , callStack = GHC.callStack
           }
 
-shouldNotSatisfy :: HasCallStack => a -> Predicate a -> IO ()
+shouldNotSatisfy :: (HasCallStack) => a -> Predicate a -> IO ()
 actual `shouldNotSatisfy` p = GHC.withFrozenCallStack $ actual `shouldSatisfy` P.not p
 
 data TestFailure = TestFailure

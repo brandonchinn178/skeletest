@@ -7,6 +7,7 @@ module Skeletest.Internal.Plugin (
 ) where
 
 import Data.Functor.Const (Const (..))
+import Data.Maybe (listToMaybe)
 import Data.Text qualified as Text
 
 import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
@@ -15,6 +16,7 @@ import Skeletest.Internal.GHC
 import Skeletest.Internal.Predicate qualified as P
 import Skeletest.Internal.Utils.HList (HList (..))
 import Skeletest.Main qualified as Main
+import Skeletest.Plugin qualified as Plugin
 
 -- | The plugin to convert a module in the tests directory.
 -- Injected by the preprocessor.
@@ -33,14 +35,13 @@ plugin =
 transformMainModule :: ParsedModule -> ParsedModule
 transformMainModule modl = addModuleFun mainFun modl
   where
-    -- FIXME: if `cliFlags` value exists in `getModuleVals modl`, use `HsExprVar "cliFlags"`
-    cliFlagsExpr = HsExprList []
+    moduleVals = map moduleValName $ getModuleVals modl
+    getVal name = listToMaybe $ filter ((== name) . getHsName) moduleVals
+    varOr name def = maybe def HsExprVar (getVal name)
 
-    -- FIXME: if `snapshotRenderers` value exists in `getModuleVals modl`, use `HsExprVar "snapshotRenderers"`
-    snapshotRenderersExpr = HsExprList []
-
-    -- FIXME: if `plugins` value exists in `getModuleVals modl`, use `HsExprVar "plugins"`
-    pluginsExpr = HsExprList []
+    cliFlagsExpr = varOr "cliFlags" (HsExprList [])
+    snapshotRenderersExpr = varOr "snapshotRenderers" (HsExprList [])
+    pluginsExpr = varOr "plugins" (HsExprList [])
 
     mainFun =
       FunDef
@@ -50,11 +51,13 @@ transformMainModule modl = addModuleFun mainFun modl
         , funBody =
             hsApps
               (HsExprVar $ hsName 'Main.runSkeletest)
-              [ HsExprRecordCon
-                  (hsName 'Main.SkeletestOptions)
-                  [ (hsName 'Main.cliFlags, cliFlagsExpr)
-                  , (hsName 'Main.snapshotRenderers, snapshotRenderersExpr)
-                  , (hsName 'Main.plugins, pluginsExpr)
+              [ hsApps (HsExprVar (hsName '(:))) $
+                  [ HsExprRecordCon
+                      (hsName 'Plugin.Plugin)
+                      [ (hsName 'Plugin.cliFlags, cliFlagsExpr)
+                      , (hsName 'Plugin.snapshotRenderers, snapshotRenderersExpr)
+                      ]
+                  , pluginsExpr
                   ]
               , HsExprVar $ hsNewName mainFileSpecsListIdentifier
               ]

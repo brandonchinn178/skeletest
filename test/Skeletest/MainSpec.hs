@@ -10,7 +10,7 @@ spec = do
   integration . it "errors if Skeletest.Main not imported" $ do
     runner <- getFixture
     setMainFile runner []
-    addTestFile runner "ExampleSpec.hs" minimalTest
+    addTestFile runner "ExampleSpec.hs" (minimalTest "ExampleSpec")
 
     (code, stdout, stderr) <- runTests runner []
     code `shouldBe` ExitFailure 1
@@ -24,20 +24,19 @@ spec = do
       , ""
       , "main = putStrLn \"hello world\""
       ]
-    addTestFile runner "ExampleSpec.hs" minimalTest
+    addTestFile runner "ExampleSpec.hs" (minimalTest "ExampleSpec")
 
     (code, stdout, stderr) <- runTests runner []
     code `shouldBe` ExitFailure 1
     stdout `shouldBe` ""
     stderr `shouldSatisfy` P.matchesSnapshot
 
-  integration . it "registers extra CLI flags" $ pure ()
-
+  -- FIXME
   integration . it "registers extra snapshot renderers" $ pure ()
 
-minimalTest :: FileContents
-minimalTest =
-  [ "module ExampleSpec (spec) where"
+minimalTest :: String -> FileContents
+minimalTest name =
+  [ "module " <> name <> " (spec) where"
   , "import Skeletest"
   , "spec = it \"should run\" $ pure ()"
   ]

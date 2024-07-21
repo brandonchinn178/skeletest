@@ -26,6 +26,7 @@ library
     Skeletest.Internal.Utils.HList
     Skeletest.Internal.Utils.Map
     Skeletest.Main
+    Skeletest.Plugin
     Skeletest.Predicate
     Skeletest.Prop.Gen
     Skeletest.Prop.Internal

@@ -4,8 +4,6 @@
 
 module Skeletest.Main (
   runSkeletest,
-  SkeletestOptions (..),
-  defaultOptions,
 
   -- * CLI flags
   Flag,
@@ -35,27 +33,13 @@ import Skeletest.Internal.Spec (
   pruneSpec,
   runSpecs,
  )
+import Skeletest.Plugin (Plugin (..))
 
--- TODO: a plugin should return a SkeletestOptions to merge with the other options
-type Plugin = ()
+runSkeletest :: [Plugin] -> [(FilePath, String, Spec)] -> IO ()
+runSkeletest = runSkeletest' . mconcat
 
-data SkeletestOptions = SkeletestOptions
-  { cliFlags :: [Flag]
-  , snapshotRenderers :: [SnapshotRenderer]
-  , plugins :: [Plugin]
-  }
-
--- TODO: allow registering hooks to modify test execution
-defaultOptions :: SkeletestOptions
-defaultOptions =
-  SkeletestOptions
-    { cliFlags = []
-    , snapshotRenderers = []
-    , plugins = []
-    }
-
-runSkeletest :: SkeletestOptions -> [(FilePath, String, Spec)] -> IO ()
-runSkeletest SkeletestOptions{..} testModules = do
+runSkeletest' :: Plugin -> [(FilePath, String, Spec)] -> IO ()
+runSkeletest' Plugin{..} testModules = do
   selections <- loadCliArgs builtinFlags cliFlags
   let initialSpecs = map mkSpec testModules
   success <- runSpecs . pruneSpec . applyTestSelections selections $ initialSpecs

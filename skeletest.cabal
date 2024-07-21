@@ -72,6 +72,7 @@ test-suite skeletest-tests
     Skeletest.Internal.SnapshotSpec
     Skeletest.Internal.SpecSpec
     Skeletest.Internal.TestTargetsSpec
+    Skeletest.MainSpec
     Skeletest.TestUtils.Integration
   build-depends:
       base

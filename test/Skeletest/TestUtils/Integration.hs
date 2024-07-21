@@ -6,6 +6,7 @@ module Skeletest.TestUtils.Integration (
 
   -- * runTests
   FixtureTestRunner,
+  FileContents,
   setMainFile,
   addTestFile,
   runTests,
@@ -41,10 +42,8 @@ data FixtureTestRunner = FixtureTestRunner
 
 data TestRunnerSettings = TestRunnerSettings
   { mainFile :: FileContents
-  , testFiles :: TestFiles
+  , testFiles :: [(FilePath, FileContents)]
   }
-
-type TestFiles = [(FilePath, FileContents)]
 
 -- | File contents as a list of lines.
 type FileContents = [String]

@@ -1,13 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 
 module Skeletest.Internal.State (
-  -- * Fixtures
-  FixtureRegistry (..),
-  FixtureMap,
-  FixtureStatus (..),
-  FixtureCleanup (..),
-  modifyFixtureRegistry,
-
   -- * Test info
   TestInfo (..),
   withTestInfo,
@@ -16,13 +9,10 @@ module Skeletest.Internal.State (
 ) where
 
 import Control.Concurrent (ThreadId, myThreadId)
-import Data.IORef (IORef, atomicModifyIORef, modifyIORef, newIORef, readIORef)
+import Data.IORef (IORef, modifyIORef, newIORef, readIORef)
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Map.Ordered (OMap)
-import Data.Map.Ordered qualified as OMap
 import Data.Text (Text)
-import Data.Typeable (TypeRep, Typeable)
 import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.Exception (bracket_)
 
@@ -31,8 +21,7 @@ import Skeletest.Internal.Markers (SomeMarker)
 
 -- | The global state shared by all of Skeletest.
 data GlobalState = GlobalState
-  { fixturesRegistry :: FixtureRegistry
-  , testInfoMap :: Map ThreadId TestInfo
+  { testInfoMap :: Map ThreadId TestInfo
   }
 
 globalStateRef :: IORef GlobalState
@@ -40,43 +29,9 @@ globalStateRef = unsafePerformIO $ newIORef newState
   where
     newState =
       GlobalState
-        { fixturesRegistry = emptyFixtureRegistry
-        , testInfoMap = Map.empty
+        { testInfoMap = Map.empty
         }
 {-# NOINLINE globalStateRef #-}
-
-{----- Fixtures -----}
-
--- | The registry of active fixtures, in order of activation.
-data FixtureRegistry = FixtureRegistry
-  { sessionFixtures :: FixtureMap
-  , fileFixtures :: Map FilePath FixtureMap
-  , testFixtures :: Map ThreadId FixtureMap
-  }
-
-type FixtureMap = OMap TypeRep FixtureStatus
-
-data FixtureStatus
-  = FixtureInProgress
-  | forall a. (Typeable a) => FixtureLoaded (a, FixtureCleanup)
-
-data FixtureCleanup
-  = NoCleanup
-  | CleanupFunc (IO ())
-
-emptyFixtureRegistry :: FixtureRegistry
-emptyFixtureRegistry =
-  FixtureRegistry
-    { sessionFixtures = OMap.empty
-    , fileFixtures = Map.empty
-    , testFixtures = Map.empty
-    }
-
-modifyFixtureRegistry :: (FixtureRegistry -> (FixtureRegistry, a)) -> IO a
-modifyFixtureRegistry f =
-  atomicModifyIORef globalStateRef $ \s ->
-    let (registry, a) = f (fixturesRegistry s)
-     in (s{fixturesRegistry = registry}, a)
 
 {----- Test info -----}
 

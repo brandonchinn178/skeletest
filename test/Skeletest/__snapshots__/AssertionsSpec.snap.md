@@ -1,5 +1,23 @@
 # Skeletest.Assertions
 
+## context / should show failure context
+
+```
+Example
+    should fail: FAIL
+--------------------------------------------------------------------------------
+./ExampleSpec.hs:7:
+|
+|     1 `shouldBe` (2 :: Int)
+|       ^^^^^^^^^^
+
+hello
+world
+
+1 ≠ 2
+--------------------------------------------------------------------------------
+```
+
 ## failTest / should show failure
 
 ```

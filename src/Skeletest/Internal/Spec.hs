@@ -236,15 +236,16 @@ runSpecs specs =
 renderTestFailure :: TestFailure -> IO Text
 renderTestFailure TestFailure{..} = do
   prettyStackTrace <- mapM renderCallLine . reverse $ GHC.getCallStack callStack
-  pure . Text.intercalate "\n" $
-    [ border
-    , Text.intercalate "\n\n" prettyStackTrace
-    , ""
-    , testFailMessage
-    , border
+  pure . withBorder . Text.intercalate "\n\n" . concat $
+    [ prettyStackTrace
+    , if null testFailContext
+        then []
+        else [Text.intercalate "\n" $ reverse testFailContext]
+    , [testFailMessage]
     ]
   where
     border = Text.replicate 80 "-"
+    withBorder msg = Text.intercalate "\n" [border, msg, border]
 
     renderCallLine (_, loc) = do
       let

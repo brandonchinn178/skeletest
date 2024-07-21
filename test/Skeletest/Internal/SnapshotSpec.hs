@@ -1,5 +1,7 @@
 module Skeletest.Internal.SnapshotSpec (spec) where
 
+import Data.Aeson qualified as Aeson
+import Data.String (fromString)
 import Skeletest
 import Skeletest.Predicate qualified as P
 
@@ -53,3 +55,7 @@ spec = do
     _ <- expectSuccess $ runTests runner ["-u"]
     snapshot <- readTestFile runner "__snapshots__/ExampleSpec.snap.md"
     snapshot `shouldSatisfy` P.hasInfix "User {name = \"Alice\", age = 30}"
+
+  it "renders JSON values" $ do
+    let result = Aeson.decode $ fromString "{\"hello\": [\"world\", 1]}"
+    (result :: Maybe Aeson.Value) `shouldSatisfy` P.just P.matchesSnapshot

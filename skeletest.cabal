@@ -33,6 +33,8 @@ library
     Skeletest.Prop.Range
   build-depends:
       base
+    , aeson
+    , aeson-pretty
     , ansi-terminal
     , containers
     , Diff
@@ -78,6 +80,7 @@ test-suite skeletest-tests
     Skeletest.TestUtils.Integration
   build-depends:
       base
+    , aeson
     , directory
     , filepath
     , skeletest

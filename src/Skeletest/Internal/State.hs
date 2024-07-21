@@ -32,6 +32,7 @@ import Data.Typeable (Typeable, TypeRep)
 import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.Exception (bracket_)
 
+import Skeletest.Internal.Error (invariantViolation)
 import Skeletest.Internal.Markers (SomeMarker)
 
 -- | The global state shared by all of Skeletest.
@@ -124,4 +125,6 @@ getTestInfo :: IO TestInfo
 getTestInfo =
   lookupTestInfo >>= \case
     Just info -> pure info
-    Nothing -> error "test info not initialized" -- FIXME: better error
+    -- it's not possible for a user to write code that's executed within a test,
+    -- because we define the entire main function.
+    Nothing -> invariantViolation "test info not initialized"

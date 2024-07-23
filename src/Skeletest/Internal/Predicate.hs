@@ -69,6 +69,7 @@ import Prelude hiding (abs, and, not)
 import Prelude qualified
 
 import Skeletest.Internal.CLI (getFlag)
+import Skeletest.Internal.Error (invariantViolation)
 import Skeletest.Internal.Snapshot (
   SnapshotContext (..),
   SnapshotResult (..),
@@ -218,9 +219,8 @@ left Predicate{..} =
 -- @P.con Foo{}@ and @P.con Foo{a = P.anything}@ are equivalent.
 con :: a -> Predicate a
 con =
-  -- FIXME: test
   -- A placeholder that will be replaced with conMatches in the plugin.
-  error "P.con was not replaced"
+  invariantViolation "P.con was not replaced"
 
 -- | A predicate for checking that a value matches the given constructor.
 -- Assumes that the arguments correctly match the constructor being tested,
@@ -277,12 +277,12 @@ conMatches conNameS mFieldNames deconstruct preds =
 -- Useful for checking equality with floats, which might not be exactly equal.
 -- For more information, see: https://jvns.ca/blog/2023/01/13/examples-of-floating-point-problems/.
 --
--- >>> 0.1 + 0.2 `shouldSatisfy` P.approx P.tol 0.3
--- >>> 0.1 + 0.2 `shouldSatisfy` P.approx P.tol{P.rel = Just 1e-6} 0.3
--- >>> 0.1 + 0.2 `shouldSatisfy` P.approx P.tol{P.abs = 1e-12} 0.3
--- >>> 0.1 + 0.2 `shouldSatisfy` P.approx P.tol{P.rel = Just 1e-6, P.abs = 1e-12} 0.3
--- >>> 0.1 + 0.2 `shouldSatisfy` P.approx P.tol{P.rel = Nothing} 0.3
--- >>> 0.1 + 0.2 `shouldSatisfy` P.approx P.tol{P.rel = Nothing, P.abs = 1e-12} 0.3
+-- >>> (0.1 + 0.2) `shouldSatisfy` P.approx P.tol 0.3
+-- >>> (0.1 + 0.2) `shouldSatisfy` P.approx P.tol{P.rel = Just 1e-6} 0.3
+-- >>> (0.1 + 0.2) `shouldSatisfy` P.approx P.tol{P.abs = 1e-12} 0.3
+-- >>> (0.1 + 0.2) `shouldSatisfy` P.approx P.tol{P.rel = Just 1e-6, P.abs = 1e-12} 0.3
+-- >>> (0.1 + 0.2) `shouldSatisfy` P.approx P.tol{P.rel = Nothing} 0.3
+-- >>> (0.1 + 0.2) `shouldSatisfy` P.approx P.tol{P.rel = Nothing, P.abs = 1e-12} 0.3
 approx :: (Fractional a, Ord a) => Tolerance -> a -> Predicate a
 approx Tolerance{..} =
   mkPredicateOp "≈" "≉" $ \actual expected ->

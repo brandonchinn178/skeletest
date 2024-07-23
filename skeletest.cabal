@@ -73,6 +73,7 @@ test-suite skeletest-tests
     Skeletest.AssertionsSpec
     Skeletest.Internal.CLISpec
     Skeletest.Internal.FixturesSpec
+    Skeletest.Internal.PredicateSpec
     Skeletest.Internal.SnapshotSpec
     Skeletest.Internal.SpecSpec
     Skeletest.Internal.TestTargetsSpec

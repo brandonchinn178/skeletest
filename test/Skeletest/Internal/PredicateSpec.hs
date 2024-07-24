@@ -64,8 +64,8 @@ spec = do
         (1, True, "hello", 1.2) `shouldSatisfy` P.tup (P.eq 1, P.eq True, P.eq "hello", P.gt 0)
 
       it "shows a helpful failure message" $ do
-        runPredicate (P.tup (P.eq 0, P.eq "")) (1, "") `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
-        runPredicate (P.not $ P.tup (P.eq 1, P.eq "")) (1, "") `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
+        snapshotFailure (P.tup (P.eq 0, P.eq "")) (1, "")
+        snapshotFailure (P.not $ P.tup (P.eq 1, P.eq "")) (1, "")
 
     describe "con" $ do
       it "checks record fields" $ do
@@ -214,14 +214,14 @@ spec = do
         1 `shouldSatisfy` (P.gt 5 P.<<< (* 10))
 
       it "shows a helpful failure message" $ do
-        runPredicate (P.gt 10 P.<<< (* 2)) 1 `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
+        snapshotFailure (P.gt 10 P.<<< (* 2)) 1
 
     describe ">>>" $ do
       it "transforms the input" $ do
         1 `shouldSatisfy` (show P.>>> P.eq "1")
 
       it "shows a helpful failure message" $ do
-        runPredicate (show P.>>> P.eq "2") 1 `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
+        snapshotFailure (show P.>>> P.eq "2") 1
 
     describe "not" $ do
       it "negates a predicate" $ do
@@ -262,7 +262,7 @@ spec = do
         action `shouldNotSatisfy` P.returns (P.just (P.gt 10))
 
       it "shows a helpful failure message" $ do
-        runPredicate (P.returns (P.eq 0)) (pure 1) `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
+        snapshotFailure (P.returns (P.eq 0)) (pure 1)
 
     describe "throws" $ do
       let throw404 = throwIO $ HttpException 404
@@ -273,5 +273,8 @@ spec = do
         throw404 `shouldNotSatisfy` P.throws (exc 500)
 
       it "shows a helpful failure message" $ do
-        runPredicate (P.throws (exc 500)) throw404 `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
-        runPredicate (P.throws (exc 500)) (pure 1) `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
+        snapshotFailure (P.throws (exc 500)) throw404
+        snapshotFailure (P.throws (exc 500)) (pure 1)
+
+snapshotFailure :: (HasCallStack) => Predicate a -> a -> IO ()
+snapshotFailure p x = runPredicate p x `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)

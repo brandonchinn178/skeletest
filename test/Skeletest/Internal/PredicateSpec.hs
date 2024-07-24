@@ -261,8 +261,9 @@ spec = do
         action `shouldSatisfy` P.returns (P.just (P.gt 0))
         action `shouldNotSatisfy` P.returns (P.just (P.gt 10))
 
-      it "shows a helpful failure message" $ do
-        snapshotFailure (P.returns (P.eq 0)) (pure 1)
+      it "shows helpful failure messages" $ do
+        snapshotFailure (P.returns (P.left $ P.eq 0)) (pure $ Left 1)
+        snapshotFailure (P.not $ P.returns (P.left $ P.eq 0)) (pure $ Left 0)
 
     describe "throws" $ do
       let throw404 = throwIO $ HttpException 404
@@ -272,9 +273,10 @@ spec = do
         throw404 `shouldSatisfy` P.throws (exc 404)
         throw404 `shouldNotSatisfy` P.throws (exc 500)
 
-      it "shows a helpful failure message" $ do
+      it "shows helpful failure messages" $ do
         snapshotFailure (P.throws (exc 500)) throw404
         snapshotFailure (P.throws (exc 500)) (pure 1)
+        snapshotFailure (P.not $ P.throws (exc 404)) throw404
 
 snapshotFailure :: (HasCallStack) => Predicate a -> a -> IO ()
 snapshotFailure p x = runPredicate p x `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)

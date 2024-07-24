@@ -65,7 +65,7 @@ import Data.Text qualified as Text
 import Data.Typeable (Typeable)
 import Debug.RecoverRTTI (anythingToString)
 import GHC.Generics ((:*:) (..))
-import UnliftIO.Exception (Exception, try)
+import UnliftIO.Exception (Exception, displayException, try)
 import Prelude hiding (abs, and, not)
 import Prelude qualified
 
@@ -105,7 +105,7 @@ runPredicate Predicate{..} val = do
       then PredicateSuccess
       else
         PredicateFail $
-          if Prelude.not predicateNested
+          if Prelude.not $ unTentative predicateNested
             then predicateFailMsg
             else
               Text.intercalate "\n" $
@@ -115,8 +115,6 @@ runPredicate Predicate{..} val = do
                 , "Got:"
                 , indent $ render val
                 ]
-  where
-    indent = Text.intercalate "\n" . map ("  " <>) . Text.splitOn "\n"
 
 renderPredicate :: Predicate a -> Text
 renderPredicate = predicateDisp
@@ -127,12 +125,26 @@ data PredicateFuncResult = PredicateFuncResult
   -- ^ The message to show on failure
   , predicatePassMsg :: Text
   -- ^ The message to show on unexpected pass
-  , predicateNested :: Bool
+  , predicateNested :: Tentative Bool
   -- ^ Did this result come from a nested predicate?
   }
 
+data Tentative a
+  = Tentative a
+  | Force a
+
+setTentative :: a -> Tentative a -> Tentative a
+setTentative a = \case
+  Tentative _ -> Tentative a
+  Force x -> Force x
+
+unTentative :: Tentative a -> a
+unTentative = \case
+  Tentative a -> a
+  Force a -> a
+
 setNested :: PredicateFuncResult -> PredicateFuncResult
-setNested result = result{predicateNested = True}
+setNested result = result{predicateNested = setTentative True $ predicateNested result}
 
 {----- General -----}
 
@@ -145,7 +157,7 @@ anything =
             { predicateSuccess = True
             , predicateFailMsg = "anything"
             , predicatePassMsg = "not anything"
-            , predicateNested = False
+            , predicateNested = Tentative False
             }
     , predicateDisp = "anything"
     , predicateDispNeg = "not anything"
@@ -173,7 +185,7 @@ just Predicate{..} =
               { predicateSuccess = False
               , predicateFailMsg = "Nothing ≠ " <> disp
               , predicatePassMsg = "Nothing = " <> disp
-              , predicateNested = False
+              , predicateNested = Tentative False
               }
     , predicateDisp = disp
     , predicateDispNeg = "not " <> disp
@@ -192,7 +204,7 @@ left Predicate{..} =
               { predicateSuccess = False
               , predicateFailMsg = render x <> " ≠ " <> disp
               , predicatePassMsg = render x <> " = " <> disp
-              , predicateNested = False
+              , predicateNested = Tentative False
               }
     , predicateDisp = disp
     , predicateDispNeg = "not " <> disp
@@ -258,7 +270,7 @@ tup preds =
                   -- shouldn't happen
                   Nothing -> msgNeg
             , predicatePassMsg = tupify $ map predicatePassMsg results
-            , predicateNested = True
+            , predicateNested = Tentative True
             }
     , predicateDisp = msg
     , predicateDispNeg = msgNeg
@@ -317,7 +329,7 @@ conMatches conNameS mFieldNames deconstruct preds =
         { predicateSuccess = success
         , predicateFailMsg = render actual <> " ≠ " <> rhs
         , predicatePassMsg = render actual <> " = " <> rhs
-        , predicateNested = False
+        , predicateNested = Tentative False
         }
 
     predsDisp =
@@ -386,14 +398,8 @@ not :: Predicate a -> Predicate a
 not Predicate{..} =
   Predicate
     { predicateFunc = \actual -> do
-        PredicateFuncResult{..} <- predicateFunc actual
-        pure
-          PredicateFuncResult
-            { predicateSuccess = Prelude.not predicateSuccess
-            , predicateFailMsg = predicatePassMsg
-            , predicatePassMsg = predicateFailMsg
-            , predicateNested = True
-            }
+        result <- predicateFunc actual
+        pure . setNested $ result{predicateSuccess = Prelude.not (predicateSuccess result)}
     , predicateDisp = predicateDispNeg
     , predicateDispNeg = predicateDisp
     }
@@ -413,7 +419,7 @@ and preds =
                   -- shouldn't happen
                   Nothing -> msgNeg
             , predicatePassMsg = Text.intercalate " and " $ map predicatePassMsg results
-            , predicateNested = True
+            , predicateNested = Tentative True
             }
     , predicateDisp = msg
     , predicateDispNeg = msgNeg
@@ -446,7 +452,7 @@ hasPrefix prefix =
             { predicateSuccess = prefix `isPrefixOf` val
             , predicateFailMsg = render val <> " " <> msgNeg
             , predicatePassMsg = render val <> " " <> msg
-            , predicateNested = True
+            , predicateNested = Tentative False
             }
     , predicateDisp = msg
     , predicateDispNeg = msgNeg
@@ -464,7 +470,7 @@ hasInfix elems =
             { predicateSuccess = elems `isInfixOf` val
             , predicateFailMsg = render val <> " " <> msgNeg
             , predicatePassMsg = render val <> " " <> msg
-            , predicateNested = True
+            , predicateNested = Tentative False
             }
     , predicateDisp = msg
     , predicateDispNeg = msgNeg
@@ -482,7 +488,7 @@ hasSuffix suffix =
             { predicateSuccess = suffix `isSuffixOf` val
             , predicateFailMsg = render val <> " " <> msgNeg
             , predicatePassMsg = render val <> " " <> msg
-            , predicateNested = True
+            , predicateNested = Tentative False
             }
     , predicateDisp = msg
     , predicateDispNeg = msgNeg
@@ -496,10 +502,23 @@ hasSuffix suffix =
 returns :: Predicate a -> Predicate (IO a)
 returns Predicate{..} =
   Predicate
-    { predicateFunc = \io ->
-        -- don't add 'setNested'; it's technically nested,
-        -- but this predicate is supposed to be transparent
-        io >>= predicateFunc
+    { predicateFunc = \io -> do
+        x <- io
+        PredicateFuncResult{..} <- predicateFunc x
+        pure
+          PredicateFuncResult
+            { predicateSuccess = predicateSuccess
+            , predicateFailMsg =
+                Text.intercalate "\n" $
+                  [ predicateFailMsg
+                  , "Expected:"
+                  , indent predicateDisp
+                  , "Got:"
+                  , indent $ render x
+                  ]
+            , predicatePassMsg = predicatePassMsg
+            , predicateNested = Force False
+            }
     , predicateDisp = predicateDisp
     , predicateDispNeg = predicateDispNeg
     }
@@ -509,20 +528,36 @@ throws Predicate{..} =
   Predicate
     { predicateFunc = \io ->
         try io >>= \case
-          Left e -> setNested <$> predicateFunc e
+          Left e -> do
+            PredicateFuncResult{..} <- predicateFunc e
+            pure
+              PredicateFuncResult
+                { predicateSuccess = predicateSuccess
+                , predicateFailMsg =
+                    Text.intercalate "\n" $
+                      [ predicateFailMsg
+                      , "Expected:"
+                      , indent disp
+                      , "Got:"
+                      , indent $ Text.pack $ displayException e
+                      ]
+                , predicatePassMsg = predicatePassMsg
+                , predicateNested = Force False
+                }
           Right x ->
             pure
               PredicateFuncResult
                 { predicateSuccess = False
                 , predicateFailMsg = render x <> " ≠ " <> disp
                 , predicatePassMsg = render x <> " = " <> disp
-                , predicateNested = False
+                , predicateNested = Force False
                 }
-    , predicateDisp = predicateDisp
-    , predicateDispNeg = predicateDispNeg
+    , predicateDisp = disp
+    , predicateDispNeg = dispNeg
     }
   where
     disp = "throws (" <> predicateDisp <> ")"
+    dispNeg = "does not throw (" <> predicateDisp <> ")"
 
 {----- Snapshot -----}
 
@@ -559,7 +594,7 @@ matchesSnapshot =
                       , showLineDiff ("expected", snapshot) ("actual", renderedActual)
                       ]
             , predicatePassMsg = "matches snapshot"
-            , predicateNested = False
+            , predicateNested = Tentative False
             }
     , predicateDisp = "matches snapshot"
     , predicateDispNeg = "does not match snapshot"
@@ -585,7 +620,7 @@ mkPredicateOp op negOp f expected =
             { predicateSuccess = f actual expected
             , predicateFailMsg = explainOp (Just actual) negOp
             , predicatePassMsg = explainOp (Just actual) op
-            , predicateNested = False
+            , predicateNested = Tentative False
             }
     , predicateDisp = explainOp Nothing op
     , predicateDispNeg = explainOp Nothing negOp
@@ -605,3 +640,6 @@ parens s =
   if " " `Text.isInfixOf` s
     then "(" <> s <> ")"
     else s
+
+indent :: Text -> Text
+indent = Text.intercalate "\n" . map ("  " <>) . Text.splitOn "\n"

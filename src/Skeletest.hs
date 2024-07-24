@@ -24,6 +24,7 @@ module Skeletest (
   context,
   failTest,
   HasCallStack,
+  Predicate,
 
   -- * Fixtures
   Fixture (..),
@@ -49,3 +50,4 @@ import Skeletest.Assertions
 import Skeletest.Internal.CLI
 import Skeletest.Internal.Fixtures
 import Skeletest.Internal.Spec
+import Skeletest.Predicate

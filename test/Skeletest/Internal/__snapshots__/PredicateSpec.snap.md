@@ -110,22 +110,42 @@ Got:
   (1,[])
 ```
 
-## IO / returns / shows a helpful failure message
+## IO / returns / shows helpful failure messages
 
 ```
 1 ≠ 0
+Expected:
+  Left (= 0)
+Got:
+  Left 1
 ```
 
-## IO / throws / shows a helpful failure message
+```
+0 ≠ 0
+Expected:
+  not (Left (= 0))
+Got:
+  Left 0
+```
+
+## IO / throws / shows helpful failure messages
 
 ```
 404 ≠ 500
 Expected:
-  matches HttpException (= 500)
+  throws (matches HttpException (= 500))
 Got:
-  <Fun>
+  HttpException 404
 ```
 
 ```
 1 ≠ throws (matches HttpException (= 500))
+```
+
+```
+HttpException 404 ≠ HttpException (= 404)
+Expected:
+  not (throws (matches HttpException (= 404)))
+Got:
+  HttpException 404
 ```

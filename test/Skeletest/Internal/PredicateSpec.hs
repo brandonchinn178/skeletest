@@ -2,6 +2,7 @@ module Skeletest.Internal.PredicateSpec (spec) where
 
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Skeletest
+import Skeletest.Predicate (PredicateResult (..), runPredicate)
 import Skeletest.Predicate qualified as P
 
 import Skeletest.TestUtils.Integration
@@ -118,6 +119,57 @@ spec = do
         stdout `shouldBe` ""
         stderr `shouldSatisfy` P.matchesSnapshot
 
+      integration . it "fails to compile with non-constructor" $ do
+        runner <- getFixture
+        addTestFile runner "ExampleSpec.hs" $
+          [ "module ExampleSpec (spec) where"
+          , ""
+          , "import Skeletest"
+          , "import qualified Skeletest.Predicate as P"
+          , ""
+          , "spec = it \"should error\" $ do"
+          , "  \"\" `shouldSatisfy` P.con \"\""
+          ]
+
+        (code, stdout, stderr) <- runTests runner []
+        code `shouldBe` ExitFailure 1
+        stdout `shouldBe` ""
+        stderr `shouldSatisfy` P.matchesSnapshot
+
+      integration . it "fails to compile when not applied to anything" $ do
+        runner <- getFixture
+        addTestFile runner "ExampleSpec.hs" $
+          [ "module ExampleSpec (spec) where"
+          , ""
+          , "import Skeletest"
+          , "import qualified Skeletest.Predicate as P"
+          , ""
+          , "spec = it \"should error\" $ do"
+          , "  \"\" `shouldSatisfy` P.con"
+          ]
+
+        (code, stdout, stderr) <- runTests runner []
+        code `shouldBe` ExitFailure 1
+        stdout `shouldBe` ""
+        stderr `shouldSatisfy` P.matchesSnapshot
+
+      integration . it "fails to compile when applied to multiple arguments" $ do
+        runner <- getFixture
+        addTestFile runner "ExampleSpec.hs" $
+          [ "module ExampleSpec (spec) where"
+          , ""
+          , "import Skeletest"
+          , "import qualified Skeletest.Predicate as P"
+          , ""
+          , "spec = it \"should error\" $ do"
+          , "  \"\" `shouldSatisfy` P.con 1 2"
+          ]
+
+        (code, stdout, stderr) <- runTests runner []
+        code `shouldBe` ExitFailure 1
+        stdout `shouldBe` ""
+        stderr `shouldSatisfy` P.matchesSnapshot
+
   describe "Numeric" $ do
     describe "approx" $ do
       let x = 0.1 + 0.2 :: Double
@@ -141,9 +193,15 @@ spec = do
       it "transforms the input" $ do
         one `shouldSatisfy` (P.gt 5 P.<<< (* 10))
 
+      it "shows a helpful failure message" $ do
+        runPredicate (P.gt 10 P.<<< (* 2)) one `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
+
     describe ">>>" $ do
       it "transforms the input" $ do
         one `shouldSatisfy` (show P.>>> P.eq "1")
+
+      it "shows a helpful failure message" $ do
+        runPredicate (show P.>>> P.eq "2") one `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
 
     describe "not" $ do
       it "negates a predicate" $ do

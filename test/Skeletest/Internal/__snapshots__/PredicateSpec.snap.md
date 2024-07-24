@@ -1,5 +1,52 @@
 # Skeletest.Internal.Predicate
 
+## Combinators / <<< / shows a helpful failure message
+
+```
+2 ≯ 10
+Expected:
+  > 10
+Got:
+  1
+```
+
+## Combinators / >>> / shows a helpful failure message
+
+```
+"1" ≠ "2"
+Expected:
+  = "2"
+Got:
+  1
+```
+
+## Data types / con / fails to compile when applied to multiple arguments
+
+```
+<no location info>: error:
+    
+******************** skeletest failure ********************
+P.con must be applied to exactly one argument
+```
+
+## Data types / con / fails to compile when not applied to anything
+
+```
+<no location info>: error:
+    
+******************** skeletest failure ********************
+P.con must be applied to a constructor
+```
+
+## Data types / con / fails to compile with non-constructor
+
+```
+<no location info>: error:
+    
+******************** skeletest failure ********************
+P.con must be applied to a constructor
+```
+
 ## Data types / con / fails to compile with omitted positional fields
 
 ```

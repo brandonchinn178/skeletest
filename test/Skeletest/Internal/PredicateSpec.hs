@@ -58,6 +58,9 @@ spec = do
         User "alice" (Just 10) `shouldSatisfy` P.con (User (P.eq "alice") (P.just (P.gt 0)))
         User "alice" (Just 10) `shouldNotSatisfy` P.con (User (P.eq "") (P.just (P.gt 0)))
 
+        -- works with dollar sign
+        User "alice" (Just 10) `shouldSatisfy` (P.con $ User (P.eq "alice") (P.just (P.gt 0)))
+
       integration . it "shows a helpful failure message" $ do
         runner <- getFixture
         addTestFile runner "ExampleSpec.hs" $

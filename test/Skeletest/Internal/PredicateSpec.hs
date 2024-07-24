@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-type-defaults #-}
+
 module Skeletest.Internal.PredicateSpec (spec) where
 
 import Data.IORef (newIORef, readIORef, writeIORef)
@@ -6,9 +8,6 @@ import Skeletest.Predicate (PredicateResult (..), runPredicate)
 import Skeletest.Predicate qualified as P
 
 import Skeletest.TestUtils.Integration
-
-one :: Int
-one = 1
 
 data User = User
   { name :: String
@@ -20,32 +19,32 @@ spec = do
   describe "General" $ do
     describe "anything" $ do
       it "matches anything" $ do
-        one `shouldSatisfy` P.anything
+        1 `shouldSatisfy` P.anything
         "hello" `shouldSatisfy` P.anything
 
   describe "Ord" $ do
     describe "eq" $ do
       it "checks equality" $ do
-        one `shouldSatisfy` P.eq 1
-        one `shouldNotSatisfy` P.eq 2
+        1 `shouldSatisfy` P.eq 1
+        1 `shouldNotSatisfy` P.eq 2
 
     describe "gt" $ do
       it "checks inequality" $ do
-        one `shouldSatisfy` P.gt 0
-        one `shouldNotSatisfy` P.gt 2
+        1 `shouldSatisfy` P.gt 0
+        1 `shouldNotSatisfy` P.gt 2
 
   describe "Data types" $ do
     describe "just" $ do
       it "checks Maybe" $ do
-        Just one `shouldSatisfy` P.just (P.gt 0)
-        Just one `shouldNotSatisfy` P.just (P.gt 2)
+        Just 1 `shouldSatisfy` P.just (P.gt 0)
+        Just 1 `shouldNotSatisfy` P.just (P.gt 2)
         Nothing `shouldNotSatisfy` P.just P.anything
 
     describe "left" $ do
       it "checks Either" $ do
-        Left one `shouldSatisfy` P.left (P.gt 0)
-        Left one `shouldNotSatisfy` P.left (P.gt 2)
-        Right one `shouldNotSatisfy` P.left P.anything
+        Left 1 `shouldSatisfy` P.left (P.gt 0)
+        Left 1 `shouldNotSatisfy` P.left (P.gt 2)
+        Right 1 `shouldNotSatisfy` P.left P.anything
 
     describe "con" $ do
       it "checks record fields" $ do
@@ -191,29 +190,29 @@ spec = do
   describe "Combinators" $ do
     describe "<<<" $ do
       it "transforms the input" $ do
-        one `shouldSatisfy` (P.gt 5 P.<<< (* 10))
+        1 `shouldSatisfy` (P.gt 5 P.<<< (* 10))
 
       it "shows a helpful failure message" $ do
-        runPredicate (P.gt 10 P.<<< (* 2)) one `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
+        runPredicate (P.gt 10 P.<<< (* 2)) 1 `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
 
     describe ">>>" $ do
       it "transforms the input" $ do
-        one `shouldSatisfy` (show P.>>> P.eq "1")
+        1 `shouldSatisfy` (show P.>>> P.eq "1")
 
       it "shows a helpful failure message" $ do
-        runPredicate (show P.>>> P.eq "2") one `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
+        runPredicate (show P.>>> P.eq "2") 1 `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
 
     describe "not" $ do
       it "negates a predicate" $ do
-        one `shouldSatisfy` P.not (P.gt 10)
-        one `shouldNotSatisfy` P.not (P.gt 0)
+        1 `shouldSatisfy` P.not (P.gt 10)
+        1 `shouldNotSatisfy` P.not (P.gt 0)
 
     describe "and" $ do
       it "checks all predicates are true" $ do
-        one `shouldSatisfy` P.and [P.eq 1, P.gt 0]
-        one `shouldNotSatisfy` P.and [P.eq 1, P.gt 10]
-        one `shouldNotSatisfy` P.and [P.eq 2, P.gt 0]
-        one `shouldNotSatisfy` P.and [P.eq 2, P.gt 10]
+        1 `shouldSatisfy` P.and [P.eq 1, P.gt 0]
+        1 `shouldNotSatisfy` P.and [P.eq 1, P.gt 10]
+        1 `shouldNotSatisfy` P.and [P.eq 2, P.gt 0]
+        1 `shouldNotSatisfy` P.and [P.eq 2, P.gt 10]
 
   describe "Subsequences" $ do
     describe "hasPrefix" $ do
@@ -236,7 +235,7 @@ spec = do
       it "checks result" $ do
         let action = do
               ref <- newIORef Nothing
-              writeIORef ref (Just one)
+              writeIORef ref (Just 1)
               readIORef ref
         action `shouldSatisfy` P.returns (P.just (P.gt 0))
         action `shouldNotSatisfy` P.returns (P.just (P.gt 10))

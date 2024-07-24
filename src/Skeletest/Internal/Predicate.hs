@@ -47,7 +47,7 @@ module Skeletest.Internal.Predicate (
 
   -- * IO
   returns,
-  -- FIXME: throws
+  throws,
 
   -- * Snapshot testing
   matchesSnapshot,
@@ -65,6 +65,7 @@ import Data.Text qualified as Text
 import Data.Typeable (Typeable)
 import Debug.RecoverRTTI (anythingToString)
 import GHC.Generics ((:*:) (..))
+import UnliftIO.Exception (Exception, try)
 import Prelude hiding (abs, and, not)
 import Prelude qualified
 
@@ -502,6 +503,26 @@ returns Predicate{..} =
     , predicateDisp = predicateDisp
     , predicateDispNeg = predicateDispNeg
     }
+
+throws :: (Exception e) => Predicate e -> Predicate (IO a)
+throws Predicate{..} =
+  Predicate
+    { predicateFunc = \io ->
+        try io >>= \case
+          Left e -> setNested <$> predicateFunc e
+          Right x ->
+            pure
+              PredicateFuncResult
+                { predicateSuccess = False
+                , predicateFailMsg = render x <> " ≠ " <> disp
+                , predicatePassMsg = render x <> " = " <> disp
+                , predicateNested = False
+                }
+    , predicateDisp = predicateDisp
+    , predicateDispNeg = predicateDispNeg
+    }
+  where
+    disp = "throws (" <> predicateDisp <> ")"
 
 {----- Snapshot -----}
 

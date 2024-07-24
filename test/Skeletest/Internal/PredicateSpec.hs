@@ -6,6 +6,7 @@ import Data.IORef (newIORef, readIORef, writeIORef)
 import Skeletest
 import Skeletest.Predicate (PredicateResult (..), runPredicate)
 import Skeletest.Predicate qualified as P
+import UnliftIO.Exception (Exception, throwIO)
 
 import Skeletest.TestUtils.Integration
 
@@ -13,6 +14,11 @@ data User = User
   { name :: String
   , age :: Maybe Int
   }
+
+data HttpException = HttpException Int
+  deriving (Show)
+
+instance Exception HttpException
 
 spec :: Spec
 spec = do
@@ -254,3 +260,18 @@ spec = do
               readIORef ref
         action `shouldSatisfy` P.returns (P.just (P.gt 0))
         action `shouldNotSatisfy` P.returns (P.just (P.gt 10))
+
+      it "shows a helpful failure message" $ do
+        runPredicate (P.returns (P.eq 0)) (pure 1) `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
+
+    describe "throws" $ do
+      let throw404 = throwIO $ HttpException 404
+      let exc code = P.con $ HttpException (P.eq code)
+
+      it "checks exception" $ do
+        throw404 `shouldSatisfy` P.throws (exc 404)
+        throw404 `shouldNotSatisfy` P.throws (exc 500)
+
+      it "shows a helpful failure message" $ do
+        runPredicate (P.throws (exc 500)) throw404 `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
+        runPredicate (P.throws (exc 500)) (pure 1) `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)

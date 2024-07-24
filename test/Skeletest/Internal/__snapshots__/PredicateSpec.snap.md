@@ -109,3 +109,23 @@ Expected:
 Got:
   (1,[])
 ```
+
+## IO / returns / shows a helpful failure message
+
+```
+1 ≠ 0
+```
+
+## IO / throws / shows a helpful failure message
+
+```
+404 ≠ 500
+Expected:
+  matches HttpException (= 500)
+Got:
+  <Fun>
+```
+
+```
+1 ≠ throws (matches HttpException (= 500))
+```

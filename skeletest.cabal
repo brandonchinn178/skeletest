@@ -87,5 +87,6 @@ test-suite skeletest-tests
     , skeletest
     , process
     , text
+    , unliftio
   default-language: GHC2021
   ghc-options: -Wall -Wcompat

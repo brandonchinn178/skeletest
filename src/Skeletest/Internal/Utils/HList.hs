@@ -7,6 +7,7 @@ module Skeletest.Internal.Utils.HList (
   toListWith,
   toListWithM,
   hzip,
+  hzipWithM,
 ) where
 
 import Data.Functor.Identity (runIdentity)
@@ -28,3 +29,13 @@ hzip :: HList f xs -> HList g xs -> HList (f :*: g) xs
 hzip = \cases
   HNil HNil -> HNil
   (HCons f fs) (HCons g gs) -> HCons (f :*: g) (hzip fs gs)
+
+hzipWithM ::
+  (Monad m) =>
+  (forall x. f x -> g x -> m (h x))
+  -> HList f xs
+  -> HList g xs
+  -> m (HList h xs)
+hzipWithM k = \cases
+  HNil HNil -> pure HNil
+  (HCons f fs) (HCons g gs) -> HCons <$> k f g <*> hzipWithM k fs gs

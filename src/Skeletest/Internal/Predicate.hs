@@ -1,7 +1,9 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeData #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Skeletest.Internal.Predicate (
   Predicate,
@@ -21,10 +23,7 @@ module Skeletest.Internal.Predicate (
   left,
   -- FIXME: implement
   -- nothing,
-  -- tup2,
-  -- tup3,
-  -- tup4,
-  -- tup,
+  tup,
   con,
   conMatches,
 
@@ -58,6 +57,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.Functor.Const (Const (..))
 import Data.Functor.Identity (Identity (..))
+import Data.Kind (Type)
 import Data.List qualified as List
 import Data.Maybe (isNothing, listToMaybe)
 import Data.Text (Text)
@@ -199,13 +199,73 @@ left Predicate{..} =
   where
     disp = "Left (" <> predicateDisp <> ")"
 
--- -- | A predicate for checking that the given tuple matches the given predicates.
--- tup2 :: (Predicate a, Predicate b) -> Predicate (a, b)
--- tup2 (predA, predB) =
---   Predicate
---     { predicateFunc = \(a, b) ->
---         predicateFunc predA a
---     }
+class IsTuple a where
+  type TupleArgs a :: [Type]
+  toHList :: a -> HList Identity (TupleArgs a)
+instance IsTuple (a, b) where
+  type TupleArgs (a, b) = '[a, b]
+  toHList (a, b) = HCons (pure a) . HCons (pure b) $ HNil
+instance IsTuple (a, b, c) where
+  type TupleArgs (a, b, c) = '[a, b, c]
+  toHList (a, b, c) = HCons (pure a) . HCons (pure b) . HCons (pure c) $ HNil
+instance IsTuple (a, b, c, d) where
+  type TupleArgs (a, b, c, d) = '[a, b, c, d]
+  toHList (a, b, c, d) = HCons (pure a) . HCons (pure b) . HCons (pure c) . HCons (pure d) $ HNil
+instance IsTuple (a, b, c, d, e) where
+  type TupleArgs (a, b, c, d, e) = '[a, b, c, d, e]
+  toHList (a, b, c, d, e) = HCons (pure a) . HCons (pure b) . HCons (pure c) . HCons (pure d) . HCons (pure e) $ HNil
+instance IsTuple (a, b, c, d, e, f) where
+  type TupleArgs (a, b, c, d, e, f) = '[a, b, c, d, e, f]
+  toHList (a, b, c, d, e, f) = HCons (pure a) . HCons (pure b) . HCons (pure c) . HCons (pure d) . HCons (pure e) . HCons (pure f) $ HNil
+
+class (IsTuple (UnPredTuple a)) => IsPredTuple a where
+  type UnPredTuple a
+  toHListPred :: a -> HList Predicate (TupleArgs (UnPredTuple a))
+instance IsPredTuple (Predicate a, Predicate b) where
+  type UnPredTuple (Predicate a, Predicate b) = (a, b)
+  toHListPred (a, b) = HCons a . HCons b $ HNil
+instance IsPredTuple (Predicate a, Predicate b, Predicate c) where
+  type UnPredTuple (Predicate a, Predicate b, Predicate c) = (a, b, c)
+  toHListPred (a, b, c) = HCons a . HCons b . HCons c $ HNil
+instance IsPredTuple (Predicate a, Predicate b, Predicate c, Predicate d) where
+  type UnPredTuple (Predicate a, Predicate b, Predicate c, Predicate d) = (a, b, c, d)
+  toHListPred (a, b, c, d) = HCons a . HCons b . HCons c . HCons d $ HNil
+instance IsPredTuple (Predicate a, Predicate b, Predicate c, Predicate d, Predicate e) where
+  type UnPredTuple (Predicate a, Predicate b, Predicate c, Predicate d, Predicate e) = (a, b, c, d, e)
+  toHListPred (a, b, c, d, e) = HCons a . HCons b . HCons c . HCons d . HCons e $ HNil
+instance IsPredTuple (Predicate a, Predicate b, Predicate c, Predicate d, Predicate e, Predicate f) where
+  type UnPredTuple (Predicate a, Predicate b, Predicate c, Predicate d, Predicate e, Predicate f) = (a, b, c, d, e, f)
+  toHListPred (a, b, c, d, e, f) = HCons a . HCons b . HCons c . HCons d . HCons e . HCons f $ HNil
+
+tup :: (IsPredTuple a) => a -> Predicate (UnPredTuple a)
+tup preds =
+  Predicate
+    { predicateFunc = \actual -> do
+        results <-
+          fmap (HList.toListWith getConst) $
+            HList.hzipWithM
+              (\p (Identity x) -> Const <$> predicateFunc p x)
+              (toHListPred preds)
+              (toHList actual)
+        let firstFailure = listToMaybe $ filter (Prelude.not . predicateSuccess) results
+        pure
+          PredicateFuncResult
+            { predicateSuccess = isNothing firstFailure
+            , predicateFailMsg =
+                case firstFailure of
+                  Just p -> predicateFailMsg p
+                  -- shouldn't happen
+                  Nothing -> msgNeg
+            , predicatePassMsg = tupify $ map predicatePassMsg results
+            , predicateNested = True
+            }
+    , predicateDisp = msg
+    , predicateDispNeg = msgNeg
+    }
+  where
+    tupify vals = "(" <> Text.intercalate ", " vals <> ")"
+    msg = tupify $ HList.toListWith predicateDisp (toHListPred preds)
+    msgNeg = "not " <> msg
 
 -- | A predicate for checking that a value matches the given constructor.
 --

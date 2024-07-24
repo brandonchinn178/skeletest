@@ -46,6 +46,21 @@ spec = do
         Left 1 `shouldNotSatisfy` P.left (P.gt 2)
         Right 1 `shouldNotSatisfy` P.left P.anything
 
+    describe "tup" $ do
+      it "checks all predicates" $ do
+        (1, "hello") `shouldSatisfy` P.tup (P.eq 1, P.hasPrefix "he")
+        (1, "hello") `shouldNotSatisfy` P.tup (P.eq 1, P.hasPrefix "xx")
+        (1, "hello") `shouldNotSatisfy` P.tup (P.eq 0, P.hasPrefix "he")
+        (1, "hello") `shouldNotSatisfy` P.tup (P.eq 0, P.hasPrefix "xx")
+
+        -- some longer tuples
+        (1, True, "hello") `shouldSatisfy` P.tup (P.eq 1, P.eq True, P.eq "hello")
+        (1, True, "hello", 1.2) `shouldSatisfy` P.tup (P.eq 1, P.eq True, P.eq "hello", P.gt 0)
+
+      it "shows a helpful failure message" $ do
+        runPredicate (P.tup (P.eq 0, P.eq "")) (1, "") `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
+        runPredicate (P.not $ P.tup (P.eq 1, P.eq "")) (1, "") `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
+
     describe "con" $ do
       it "checks record fields" $ do
         User "alice" (Just 10) `shouldSatisfy` P.con User{name = P.eq "alice", age = P.just (P.gt 0)}

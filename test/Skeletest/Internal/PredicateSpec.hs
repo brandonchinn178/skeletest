@@ -262,12 +262,49 @@ spec = do
         1 `shouldSatisfy` P.not (P.gt 10)
         1 `shouldNotSatisfy` P.not (P.gt 0)
 
+    describe "&&" $ do
+      it "checks all predicates are true" $ do
+        1 `shouldSatisfy` (P.eq 1 P.&& P.gt 0)
+        1 `shouldNotSatisfy` (P.eq 1 P.&& P.gt 10)
+        1 `shouldNotSatisfy` (P.eq 2 P.&& P.gt 0)
+        1 `shouldNotSatisfy` (P.eq 2 P.&& P.gt 10)
+
+      it "shows helpful failure messages" $ do
+        snapshotFailure (P.eq 2 P.&& P.gt 0) 1
+        snapshotFailure (P.not $ P.eq 1 P.&& P.gt 0) 1
+
+    describe "||" $ do
+      it "checks all predicates are true" $ do
+        1 `shouldSatisfy` (P.eq 1 P.|| P.gt 0)
+        1 `shouldSatisfy` (P.eq 1 P.|| P.gt 10)
+        1 `shouldSatisfy` (P.eq 2 P.|| P.gt 0)
+        1 `shouldNotSatisfy` (P.eq 2 P.|| P.gt 10)
+
+      it "shows helpful failure messages" $ do
+        snapshotFailure (P.eq 2 P.|| P.gt 1) 1
+        snapshotFailure (P.not $ P.eq 2 P.|| P.gt 0) 1
+
     describe "and" $ do
       it "checks all predicates are true" $ do
         1 `shouldSatisfy` P.and [P.eq 1, P.gt 0]
         1 `shouldNotSatisfy` P.and [P.eq 1, P.gt 10]
         1 `shouldNotSatisfy` P.and [P.eq 2, P.gt 0]
         1 `shouldNotSatisfy` P.and [P.eq 2, P.gt 10]
+
+      it "shows helpful failure messages" $ do
+        snapshotFailure (P.and [P.eq 2, P.gt 0, P.lt 10]) 1
+        snapshotFailure (P.not $ P.and [P.eq 1, P.gt 0, P.lt 10]) 1
+
+    describe "or" $ do
+      it "checks all predicates are true" $ do
+        1 `shouldSatisfy` P.or [P.eq 1, P.gt 0]
+        1 `shouldSatisfy` P.or [P.eq 1, P.gt 10]
+        1 `shouldSatisfy` P.or [P.eq 2, P.gt 0]
+        1 `shouldNotSatisfy` P.or [P.eq 2, P.gt 10]
+
+      it "shows helpful failure messages" $ do
+        snapshotFailure (P.or [P.eq 2, P.gt 1, P.lt 0]) 1
+        snapshotFailure (P.not $ P.or [P.eq 2, P.gt 0, P.lt 0]) 1
 
   describe "Subsequences" $ do
     describe "hasPrefix" $ do

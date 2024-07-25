@@ -39,8 +39,15 @@ module Skeletest.Internal.Predicate (
   (<<<),
   (>>>),
   not,
-  -- FIXME: P.any, P.all, P.elem, P.or, P.&&, P.||
+  (&&),
+  (||),
   and,
+  or,
+
+  -- * Containers
+  -- FIXME: any,
+  -- FIXME: all,
+  -- FIXME: elem,
 
   -- * Subsequences
   HasSubsequences (..),
@@ -62,14 +69,14 @@ import Data.Functor.Identity (Identity (..))
 import Data.Kind (Type)
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NonEmpty
-import Data.Maybe (isNothing, listToMaybe)
+import Data.Maybe (isJust, isNothing, listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Typeable (Typeable)
 import Debug.RecoverRTTI (anythingToString)
 import GHC.Generics ((:*:) (..))
 import UnliftIO.Exception (Exception, displayException, try)
-import Prelude hiding (abs, and, not)
+import Prelude hiding (abs, all, and, any, elem, not, or, (&&), (||))
 import Prelude qualified
 
 import Skeletest.Internal.CLI (getFlag)
@@ -159,6 +166,7 @@ renderFailCtx FailCtx{..} =
   Text.intercalate "\n" $
     [ "Expected:"
     , indent failCtxExpected
+    , ""
     , "Got:"
     , indent failCtxActual
     ]
@@ -166,7 +174,7 @@ renderFailCtx FailCtx{..} =
 withFailCtx :: FailCtx -> ShowFailCtx -> Text -> Text
 withFailCtx failCtx ctx s =
   if shouldShowFailCtx ctx
-    then Text.intercalate "\n" [s, renderFailCtx failCtx]
+    then Text.intercalate "\n" [s, "", renderFailCtx failCtx]
     else s
 
 noCtx :: ShowFailCtx
@@ -204,13 +212,13 @@ gt :: (Ord a) => a -> Predicate a
 gt = mkPredicateOp ">" "≯" $ \actual expected -> actual > expected
 
 gte :: (Ord a) => a -> Predicate a
-gte = mkPredicateOp "≥" "≱" $ \actual expected -> actual > expected || actual == expected
+gte = mkPredicateOp "≥" "≱" $ \actual expected -> actual > expected Prelude.|| actual == expected
 
 lt :: (Ord a) => a -> Predicate a
 lt = mkPredicateOp "<" "≮" $ \actual expected -> actual < expected
 
 lte :: (Ord a) => a -> Predicate a
-lte = mkPredicateOp "≤" "≰" $ \actual expected -> actual < expected || actual == expected
+lte = mkPredicateOp "≤" "≰" $ \actual expected -> actual < expected Prelude.|| actual == expected
 
 {----- Data types -----}
 
@@ -416,17 +424,44 @@ not Predicate{..} =
     , predicateDispNeg = predicateDisp
     }
 
+(&&) :: Predicate a -> Predicate a -> Predicate a
+p1 && p2 = and [p1, p2]
+
+(||) :: Predicate a -> Predicate a -> Predicate a
+p1 || p2 = or [p1, p2]
+
 and :: [Predicate a] -> Predicate a
 and preds =
   Predicate
     { predicateFunc = \actual ->
-        verifyAll (Text.intercalate " and ") <$> mapM (\p -> predicateFunc p actual) preds
-    , predicateDisp = disp
-    , predicateDispNeg = dispNeg
+        verifyAll (const "All predicates passed") <$> mapM (\p -> predicateFunc p actual) preds
+    , predicateDisp = andify predList
+    , predicateDispNeg = "At least one failure:\n" <> andify predList
     }
   where
-    disp = Text.intercalate " and " $ map predicateDisp preds
-    dispNeg = "not " <> disp
+    andify = Text.intercalate "\nand "
+    predList = map (parens . predicateDisp) preds
+
+or :: [Predicate a] -> Predicate a
+or preds =
+  Predicate
+    { predicateFunc = \actual ->
+        verifyAny (const "No predicates passed") <$> mapM (\p -> predicateFunc p actual) preds
+    , predicateDisp = orify predList
+    , predicateDispNeg = "All failures:\n" <> orify predList
+    }
+  where
+    orify = Text.intercalate "\nor "
+    predList = map (parens . predicateDisp) preds
+
+{----- Containers -----}
+
+-- any :: Predicate a -> Predicate [a]
+
+-- all :: Predicate a -> Predicate [a]
+
+-- elem :: (Eq a) => a -> Predicate [a]
+-- elem = any . eq
 
 {----- Subsequences -----}
 
@@ -664,6 +699,19 @@ verifyAll mergeMessages results =
     }
   where
     firstFailure = listToMaybe $ filter (Prelude.not . predicateSuccess) results
+
+verifyAny :: ([Text] -> Text) -> [PredicateFuncResult] -> PredicateFuncResult
+verifyAny mergeMessages results =
+  PredicateFuncResult
+    { predicateSuccess = isJust firstSuccess
+    , predicateExplain =
+        case firstSuccess of
+          Just p -> predicateExplain p
+          Nothing -> mergeMessages $ map predicateExplain results
+    , predicateShowFailCtx = showMergedCtxs results
+    }
+  where
+    firstSuccess = listToMaybe $ filter predicateSuccess results
 
 render :: a -> Text
 render = Text.pack . anythingToString

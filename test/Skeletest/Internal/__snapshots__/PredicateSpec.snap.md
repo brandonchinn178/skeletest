@@ -1,11 +1,38 @@
 # Skeletest.Internal.Predicate
 
+## Combinators / && / shows helpful failure messages
+
+```
+1 ≠ 2
+
+Expected:
+  (= 2)
+  and (> 0)
+
+Got:
+  1
+```
+
+```
+All predicates passed
+
+Expected:
+  At least one failure:
+  (= 1)
+  and (> 0)
+
+Got:
+  1
+```
+
 ## Combinators / <<< / shows a helpful failure message
 
 ```
 2 ≯ 10
+
 Expected:
   > 10
+
 Got:
   1
 ```
@@ -14,8 +41,89 @@ Got:
 
 ```
 "1" ≠ "2"
+
 Expected:
   = "2"
+
+Got:
+  1
+```
+
+## Combinators / and / shows helpful failure messages
+
+```
+1 ≠ 2
+
+Expected:
+  (= 2)
+  and (> 0)
+  and (< 10)
+
+Got:
+  1
+```
+
+```
+All predicates passed
+
+Expected:
+  At least one failure:
+  (= 1)
+  and (> 0)
+  and (< 10)
+
+Got:
+  1
+```
+
+## Combinators / or / shows helpful failure messages
+
+```
+No predicates passed
+
+Expected:
+  (= 2)
+  or (> 1)
+  or (< 0)
+
+Got:
+  1
+```
+
+```
+1 > 0
+
+Expected:
+  All failures:
+  (= 2)
+  or (> 0)
+  or (< 0)
+
+Got:
+  1
+```
+
+## Combinators / || / shows helpful failure messages
+
+```
+No predicates passed
+
+Expected:
+  (= 2)
+  or (> 1)
+
+Got:
+  1
+```
+
+```
+1 > 0
+
+Expected:
+  All failures:
+  (= 2)
+  or (> 0)
+
 Got:
   1
 ```
@@ -85,8 +193,10 @@ Example
 |                ^^^^^^^^^^^^^^^
 
 "alice" ≠ []
+
 Expected:
   matches User{name = (= [])}
+
 Got:
   User "alice"
 --------------------------------------------------------------------------------
@@ -96,16 +206,20 @@ Got:
 
 ```
 1 ≠ 0
+
 Expected:
   (= 0, = [])
+
 Got:
   (1,[])
 ```
 
 ```
 (1 = 1, [] = [])
+
 Expected:
   not (= 1, = [])
+
 Got:
   (1,[])
 ```
@@ -114,8 +228,10 @@ Got:
 
 ```
 1 ≠ 0
+
 Expected:
   matches Left (= 0)
+
 Got:
   Left 1
 ```
@@ -128,8 +244,10 @@ Left (0 = 0)
 
 ```
 404 ≠ 500
+
 Expected:
   throws (matches HttpException (= 500))
+
 Got:
   HttpException 404
 ```
@@ -137,6 +255,7 @@ Got:
 ```
 Expected:
   throws (matches HttpException (= 500))
+
 Got:
   1
 ```
@@ -153,8 +272,10 @@ HttpException (404 = 404)
 
 ```
 1 = 1
+
 Expected:
   ≠ 1
+
 Got:
   1
 ```

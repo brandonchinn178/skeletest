@@ -109,17 +109,19 @@ runPredicate Predicate{..} val = do
                 { failCtxExpected = predicateDisp
                 , failCtxActual = render val
                 }
-         in PredicateFail . withFailCtx failCtx predicateShowFailCtx $ predicateFailMsg
+         in PredicateFail . withFailCtx failCtx predicateShowFailCtx $ predicateExplain
 
 renderPredicate :: Predicate a -> Text
 renderPredicate = predicateDisp
 
 data PredicateFuncResult = PredicateFuncResult
   { predicateSuccess :: Bool
-  , predicateFailMsg :: Text
-  -- ^ The message to show on failure
-  , predicatePassMsg :: Text
-  -- ^ The message to show on unexpected pass
+  , predicateExplain :: Text
+  -- ^ The explanation of the result.
+  --
+  -- If predicateSuccess is true, this is the message to show if the
+  -- success is unexpected. If predicatesSuccess is false, this is
+  -- the message to show on the failure.
   , predicateShowFailCtx :: ShowFailCtx
   -- ^ See 'ShowFailCtx'.
   }
@@ -182,8 +184,7 @@ anything =
         pure
           PredicateFuncResult
             { predicateSuccess = True
-            , predicateFailMsg = "anything"
-            , predicatePassMsg = "not anything"
+            , predicateExplain = "anything"
             , predicateShowFailCtx = noCtx
             }
     , predicateDisp = "anything"
@@ -210,8 +211,7 @@ just Predicate{..} =
           pure
             PredicateFuncResult
               { predicateSuccess = False
-              , predicateFailMsg = "Nothing ≠ " <> disp
-              , predicatePassMsg = "Nothing = " <> disp
+              , predicateExplain = "Nothing ≠ " <> disp
               , predicateShowFailCtx = noCtx
               }
     , predicateDisp = disp
@@ -229,8 +229,7 @@ left Predicate{..} =
           pure
             PredicateFuncResult
               { predicateSuccess = False
-              , predicateFailMsg = render x <> " ≠ " <> disp
-              , predicatePassMsg = render x <> " = " <> disp
+              , predicateExplain = render x <> " ≠ " <> disp
               , predicateShowFailCtx = noCtx
               }
     , predicateDisp = disp
@@ -323,8 +322,7 @@ conMatches conNameS mFieldNames deconstruct preds =
             pure
               PredicateFuncResult
                 { predicateSuccess = False
-                , predicateFailMsg = render actual <> " " <> dispNeg
-                , predicatePassMsg = render actual <> " " <> disp
+                , predicateExplain = render actual <> " " <> dispNeg
                 , predicateShowFailCtx = noCtx
                 }
     , predicateDisp = disp
@@ -400,13 +398,8 @@ not :: Predicate a -> Predicate a
 not Predicate{..} =
   Predicate
     { predicateFunc = \actual -> do
-        result@PredicateFuncResult{..} <- showCtx <$> predicateFunc actual
-        pure
-          result
-            { predicateSuccess = Prelude.not predicateSuccess
-            , predicateFailMsg = predicatePassMsg
-            , predicatePassMsg = predicateFailMsg
-            }
+        result <- showCtx <$> predicateFunc actual
+        pure result{predicateSuccess = Prelude.not $ predicateSuccess result}
     , predicateDisp = predicateDispNeg
     , predicateDispNeg = predicateDisp
     }
@@ -441,12 +434,15 @@ instance HasSubsequences Text where
 hasPrefix :: (HasSubsequences a) => a -> Predicate a
 hasPrefix prefix =
   Predicate
-    { predicateFunc = \val ->
+    { predicateFunc = \val -> do
+        let success = prefix `isPrefixOf` val
         pure
           PredicateFuncResult
-            { predicateSuccess = prefix `isPrefixOf` val
-            , predicateFailMsg = render val <> " " <> dispNeg
-            , predicatePassMsg = render val <> " " <> disp
+            { predicateSuccess = success
+            , predicateExplain =
+                if success
+                  then render val <> " " <> disp
+                  else render val <> " " <> dispNeg
             , predicateShowFailCtx = noCtx
             }
     , predicateDisp = disp
@@ -459,12 +455,15 @@ hasPrefix prefix =
 hasInfix :: (HasSubsequences a) => a -> Predicate a
 hasInfix elems =
   Predicate
-    { predicateFunc = \val ->
+    { predicateFunc = \val -> do
+        let success = elems `isInfixOf` val
         pure
           PredicateFuncResult
-            { predicateSuccess = elems `isInfixOf` val
-            , predicateFailMsg = render val <> " " <> dispNeg
-            , predicatePassMsg = render val <> " " <> disp
+            { predicateSuccess = success
+            , predicateExplain =
+                if success
+                  then render val <> " " <> disp
+                  else render val <> " " <> dispNeg
             , predicateShowFailCtx = noCtx
             }
     , predicateDisp = disp
@@ -477,12 +476,15 @@ hasInfix elems =
 hasSuffix :: (HasSubsequences a) => a -> Predicate a
 hasSuffix suffix =
   Predicate
-    { predicateFunc = \val ->
+    { predicateFunc = \val -> do
+        let success = suffix `isSuffixOf` val
         pure
           PredicateFuncResult
-            { predicateSuccess = suffix `isSuffixOf` val
-            , predicateFailMsg = render val <> " " <> dispNeg
-            , predicatePassMsg = render val <> " " <> disp
+            { predicateSuccess = success
+            , predicateExplain =
+                if success
+                  then render val <> " " <> disp
+                  else render val <> " " <> dispNeg
             , predicateShowFailCtx = noCtx
             }
     , predicateDisp = disp
@@ -503,14 +505,16 @@ returns Predicate{..} =
         pure
           PredicateFuncResult
             { predicateSuccess = predicateSuccess
-            , predicateFailMsg =
-                let failCtx =
-                      FailCtx
-                        { failCtxExpected = predicateDisp
-                        , failCtxActual = render x
-                        }
-                 in withFailCtx failCtx predicateShowFailCtx predicateFailMsg
-            , predicatePassMsg = predicatePassMsg
+            , predicateExplain =
+                if predicateSuccess
+                  then predicateExplain
+                  else
+                    let failCtx =
+                          FailCtx
+                            { failCtxExpected = predicateDisp
+                            , failCtxActual = render x
+                            }
+                     in withFailCtx failCtx predicateShowFailCtx predicateExplain
             , predicateShowFailCtx = HideFailCtx
             }
     , predicateDisp = predicateDisp
@@ -527,27 +531,28 @@ throws Predicate{..} =
             pure
               PredicateFuncResult
                 { predicateSuccess = predicateSuccess
-                , predicateFailMsg =
-                    let failCtx =
-                          FailCtx
-                            { failCtxExpected = disp
-                            , failCtxActual = Text.pack $ displayException e
-                            }
-                     in withFailCtx failCtx predicateShowFailCtx predicateFailMsg
-                , predicatePassMsg = predicatePassMsg
+                , predicateExplain =
+                    if predicateSuccess
+                      then predicateExplain
+                      else
+                        let failCtx =
+                              FailCtx
+                                { failCtxExpected = disp
+                                , failCtxActual = Text.pack $ displayException e
+                                }
+                         in withFailCtx failCtx predicateShowFailCtx predicateExplain
                 , predicateShowFailCtx = HideFailCtx
                 }
           Right x ->
             pure
               PredicateFuncResult
                 { predicateSuccess = False
-                , predicateFailMsg =
+                , predicateExplain =
                     renderFailCtx
                       FailCtx
                         { failCtxExpected = disp
                         , failCtxActual = render x
                         }
-                , predicatePassMsg = render x <> " " <> disp
                 , predicateShowFailCtx = HideFailCtx
                 }
     , predicateDisp = disp
@@ -582,7 +587,7 @@ matchesSnapshot =
         pure
           PredicateFuncResult
             { predicateSuccess = result == SnapshotMatches
-            , predicateFailMsg =
+            , predicateExplain =
                 case result of
                   SnapshotMissing -> "Snapshot does not exist. Update snapshot with --update."
                   SnapshotMatches -> "Matches snapshot"
@@ -591,7 +596,6 @@ matchesSnapshot =
                       [ "Result differed from snapshot. Update snapshot with --update."
                       , showLineDiff ("expected", snapshot) ("actual", renderedActual)
                       ]
-            , predicatePassMsg = "matches snapshot"
             , predicateShowFailCtx = HideFailCtx
             }
     , predicateDisp = "matches snapshot"
@@ -612,12 +616,15 @@ mkPredicateOp ::
   -> Predicate a
 mkPredicateOp op negOp f expected =
   Predicate
-    { predicateFunc = \actual ->
+    { predicateFunc = \actual -> do
+        let success = f actual expected
         pure
           PredicateFuncResult
-            { predicateSuccess = f actual expected
-            , predicateFailMsg = render actual <> " " <> dispNeg
-            , predicatePassMsg = render actual <> " " <> disp
+            { predicateSuccess = success
+            , predicateExplain =
+                if success
+                  then render actual <> " " <> disp
+                  else render actual <> " " <> dispNeg
             , predicateShowFailCtx = noCtx
             }
     , predicateDisp = disp
@@ -634,15 +641,13 @@ runPredicates preds = HList.toListWithM run . HList.hzip preds
     run (p :*: Identity x) = predicateFunc p x
 
 verifyAll :: ([Text] -> Text) -> [PredicateFuncResult] -> PredicateFuncResult
-verifyAll mergePassMsgs results =
+verifyAll mergeMessages results =
   PredicateFuncResult
     { predicateSuccess = isNothing firstFailure
-    , predicateFailMsg =
+    , predicateExplain =
         case firstFailure of
-          Just p -> predicateFailMsg p
-          -- shouldn't happen
-          Nothing -> invariantViolation "predicateFailMsg inspected without failure"
-    , predicatePassMsg = mergePassMsgs $ map predicatePassMsg results
+          Just p -> predicateExplain p
+          Nothing -> mergeMessages $ map predicateExplain results
     , predicateShowFailCtx = showMergedCtxs results
     }
   where

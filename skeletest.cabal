@@ -45,21 +45,21 @@ library
       base
     , aeson
     , aeson-pretty
-    , ansi-terminal
+    , ansi-terminal >= 0.4.0
     , containers
-    , Diff
+    , Diff >= 0.5
     , directory
     , filepath
     , ghc ^>= 9.6 || ^>= 9.8 || ^>= 9.10
     , megaparsec
-    , ordered-containers
+    , ordered-containers >= 0.2.4
     , parser-combinators
     , pretty
     , recover-rtti
     , template-haskell
     , text
     , transformers
-    , unliftio
+    , unliftio >= 0.2.17
   default-language: GHC2021
   ghc-options: -Wall -Wcompat
 

@@ -14,10 +14,9 @@ jobs:
           - '9.6'
           - '9.8'
           - '9.10'
-        # FIXME: reenable
-        # include:
-        #   - ghc_version: '9.6'
-        #     oldest: true
+        include:
+          - ghc_version: '9.6.1'
+            oldest: true
 
     name: build_and_test (${{ matrix.ghc_version }})
     runs-on: ubuntu-latest

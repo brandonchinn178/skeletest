@@ -115,13 +115,13 @@ Got:
 ```
 1 ≠ 0
 Expected:
-  Left (= 0)
+  matches Left (= 0)
 Got:
   Left 1
 ```
 
 ```
-0 = 0
+Left (0 = 0)
 ```
 
 ## IO / throws / shows helpful failure messages

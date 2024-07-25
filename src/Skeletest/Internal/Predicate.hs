@@ -20,9 +20,9 @@ module Skeletest.Internal.Predicate (
 
   -- * Data types
   just,
+  nothing,
   left,
-  -- FIXME: implement
-  -- nothing,
+  right,
   tup,
   con,
   conMatches,
@@ -203,40 +203,40 @@ gt = mkPredicateOp ">" "≯" $ \actual expected -> actual > expected
 {----- Data types -----}
 
 just :: Predicate a -> Predicate (Maybe a)
-just Predicate{..} =
-  Predicate
-    { predicateFunc = \case
-        Just a -> showCtx <$> predicateFunc a
-        Nothing ->
-          pure
-            PredicateFuncResult
-              { predicateSuccess = False
-              , predicateExplain = "Nothing ≠ " <> disp
-              , predicateShowFailCtx = noCtx
-              }
-    , predicateDisp = disp
-    , predicateDispNeg = "not " <> disp
-    }
+just p = conMatches "Just" fieldNames toFields preds
   where
-    disp = "Just (" <> predicateDisp <> ")"
+    fieldNames = Nothing
+    toFields = \case
+      Just x -> Just . HCons (pure x) $ HNil
+      _ -> Nothing
+    preds = HCons p HNil
+
+nothing :: Predicate (Maybe a)
+nothing = conMatches "Nothing" fieldNames toFields preds
+  where
+    fieldNames = Nothing
+    toFields = \case
+      Nothing -> Just HNil
+      _ -> Nothing
+    preds = HNil
 
 left :: Predicate a -> Predicate (Either a b)
-left Predicate{..} =
-  Predicate
-    { predicateFunc = \case
-        Left a -> showCtx <$> predicateFunc a
-        x ->
-          pure
-            PredicateFuncResult
-              { predicateSuccess = False
-              , predicateExplain = render x <> " ≠ " <> disp
-              , predicateShowFailCtx = noCtx
-              }
-    , predicateDisp = disp
-    , predicateDispNeg = "not " <> disp
-    }
+left p = conMatches "Left" fieldNames toFields preds
   where
-    disp = "Left (" <> predicateDisp <> ")"
+    fieldNames = Nothing
+    toFields = \case
+      Left x -> Just . HCons (pure x) $ HNil
+      _ -> Nothing
+    preds = HCons p HNil
+
+right :: Predicate b -> Predicate (Either a b)
+right p = conMatches "Right" fieldNames toFields preds
+  where
+    fieldNames = Nothing
+    toFields = \case
+      Right x -> Just . HCons (pure x) $ HNil
+      _ -> Nothing
+    preds = HCons p HNil
 
 class IsTuple a where
   type TupleArgs a :: [Type]

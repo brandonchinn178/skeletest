@@ -50,11 +50,22 @@ spec = do
         Just 1 `shouldNotSatisfy` P.just (P.gt 2)
         Nothing `shouldNotSatisfy` P.just P.anything
 
+    describe "nothing" $ do
+      it "checks Maybe" $ do
+        Nothing `shouldSatisfy` P.nothing
+        Just 1 `shouldNotSatisfy` P.nothing
+
     describe "left" $ do
       it "checks Either" $ do
         Left 1 `shouldSatisfy` P.left (P.gt 0)
         Left 1 `shouldNotSatisfy` P.left (P.gt 2)
         Right 1 `shouldNotSatisfy` P.left P.anything
+
+    describe "right" $ do
+      it "checks Either" $ do
+        Right 1 `shouldSatisfy` P.right (P.gt 0)
+        Right 1 `shouldNotSatisfy` P.right (P.gt 2)
+        Left 1 `shouldNotSatisfy` P.right P.anything
 
     describe "tup" $ do
       it "checks all predicates" $ do

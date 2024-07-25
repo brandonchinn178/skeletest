@@ -53,8 +53,6 @@ module Skeletest.Internal.Predicate (
   matchesSnapshot,
 ) where
 
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.Foldable1 qualified as Foldable1
 import Data.Functor.Const (Const (..))
 import Data.Functor.Identity (Identity (..))
@@ -270,25 +268,8 @@ instance IsPredTuple (Predicate a, Predicate b, Predicate c, Predicate d, Predic
 tup :: (IsPredTuple a) => a -> Predicate (UnPredTuple a)
 tup preds =
   Predicate
-    { predicateFunc = \actual -> do
-        results <-
-          fmap (HList.toListWith getConst) $
-            HList.hzipWithM
-              (\p (Identity x) -> Const <$> predicateFunc p x)
-              (toHListPred preds)
-              (toHList actual)
-        let firstFailure = listToMaybe $ filter (Prelude.not . predicateSuccess) results
-        pure
-          PredicateFuncResult
-            { predicateSuccess = isNothing firstFailure
-            , predicateFailMsg =
-                case firstFailure of
-                  Just p -> predicateFailMsg p
-                  -- shouldn't happen
-                  Nothing -> msgNeg
-            , predicatePassMsg = tupify $ map predicatePassMsg results
-            , predicateShowFailCtx = showMergedCtxs results
-            }
+    { predicateFunc = \actual ->
+        verifyAll tupify <$> runPredicates (toHListPred preds) (toHList actual)
     , predicateDisp = msg
     , predicateDispNeg = msgNeg
     }
@@ -325,21 +306,14 @@ conMatches conNameS mFieldNames deconstruct preds =
   Predicate
     { predicateFunc = \actual ->
         case deconstruct actual of
-          Just fields -> do
-            runExceptT (HList.toListWithM runPred $ HList.hzip fields preds) >>= \case
-              Left result -> pure $ showCtx result
-              Right _ -> pure $ mkResult True actual predsDisp
+          Just fields -> verifyAll consify <$> runPredicates preds fields
           Nothing -> pure $ mkResult False actual conName
     , predicateDisp = "matches " <> predsDisp
     , predicateDispNeg = "does not match " <> predsDisp
     }
   where
     conName = Text.pack conNameS
-    runPred (Identity field :*: p) = do
-      result@PredicateFuncResult{..} <- liftIO $ predicateFunc p field
-      if predicateSuccess
-        then pure result
-        else throwE result
+    predsDisp = consify $ HList.toListWith predicateDisp preds
 
     mkResult success actual rhs =
       PredicateFuncResult
@@ -349,16 +323,14 @@ conMatches conNameS mFieldNames deconstruct preds =
         , predicateShowFailCtx = noCtx
         }
 
-    predsDisp =
-      case mFieldNames of
+    -- consify ["= 1", "anything"] => User{id = (= 1), name = anything}
+    -- consify ["= 1", "anything"] => Foo (= 1) anything
+    consify vals =
+      case HList.uncheck <$> mFieldNames of
+        Nothing -> Text.unwords $ conName : map parens vals
         Just fieldNames ->
-          let
-            renderField (Const fieldName :*: p) = Text.pack fieldName <> " = " <> parens (predicateDisp p)
-            fields = HList.toListWith renderField $ HList.hzip fieldNames preds
-           in
-            conName <> "{" <> Text.intercalate ", " fields <> "}"
-        Nothing ->
-          Text.unwords $ conName : map parens (HList.toListWith predicateDisp preds)
+          let fields = zipWith (\field v -> Text.pack field <> " = " <> parens v) fieldNames vals
+           in conName <> "{" <> Text.intercalate ", " fields <> "}"
 
 {----- Numeric -----}
 
@@ -429,20 +401,8 @@ not Predicate{..} =
 and :: [Predicate a] -> Predicate a
 and preds =
   Predicate
-    { predicateFunc = \actual -> do
-        results <- mapM (\p -> predicateFunc p actual) preds
-        let firstFailure = listToMaybe $ filter (Prelude.not . predicateSuccess) results
-        pure
-          PredicateFuncResult
-            { predicateSuccess = isNothing firstFailure
-            , predicateFailMsg =
-                case firstFailure of
-                  Just p -> predicateFailMsg p
-                  -- shouldn't happen
-                  Nothing -> msgNeg
-            , predicatePassMsg = Text.intercalate " and " $ map predicatePassMsg results
-            , predicateShowFailCtx = showMergedCtxs results
-            }
+    { predicateFunc = \actual ->
+        verifyAll (Text.intercalate " and ") <$> mapM (\p -> predicateFunc p actual) preds
     , predicateDisp = msg
     , predicateDispNeg = msgNeg
     }
@@ -650,6 +610,27 @@ mkPredicateOp op negOp f expected =
       case mActual of
         Just actual -> render actual <> " " <> op' <> " " <> render expected
         Nothing -> op' <> " " <> render expected
+
+runPredicates :: HList Predicate xs -> HList Identity xs -> IO [PredicateFuncResult]
+runPredicates preds = HList.toListWithM run . HList.hzip preds
+  where
+    run :: (Predicate :*: Identity) a -> IO PredicateFuncResult
+    run (p :*: Identity x) = predicateFunc p x
+
+verifyAll :: ([Text] -> Text) -> [PredicateFuncResult] -> PredicateFuncResult
+verifyAll mergePassMsgs results =
+  PredicateFuncResult
+    { predicateSuccess = isNothing firstFailure
+    , predicateFailMsg =
+        case firstFailure of
+          Just p -> predicateFailMsg p
+          -- shouldn't happen
+          Nothing -> invariantViolation "predicateFailMsg inspected without failure"
+    , predicatePassMsg = mergePassMsgs $ map predicatePassMsg results
+    , predicateShowFailCtx = showMergedCtxs results
+    }
+  where
+    firstFailure = listToMaybe $ filter (Prelude.not . predicateSuccess) results
 
 render :: a -> Text
 render = Text.pack . anythingToString

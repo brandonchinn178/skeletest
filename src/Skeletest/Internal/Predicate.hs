@@ -1,7 +1,9 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeData #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Skeletest.Internal.Predicate (
   Predicate,
@@ -15,16 +17,16 @@ module Skeletest.Internal.Predicate (
   -- * Ord
   eq,
   gt,
+  gte,
+  lt,
+  lte,
 
   -- * Data types
   just,
+  nothing,
   left,
-  -- FIXME: implement
-  -- nothing,
-  -- tup2,
-  -- tup3,
-  -- tup4,
-  -- tup,
+  right,
+  tup,
   con,
   conMatches,
 
@@ -37,8 +39,15 @@ module Skeletest.Internal.Predicate (
   (<<<),
   (>>>),
   not,
-  -- FIXME: P.any, P.all, P.elem, P.or
+  (&&),
+  (||),
   and,
+  or,
+
+  -- * Containers
+  any,
+  all,
+  elem,
 
   -- * Subsequences
   HasSubsequences (..),
@@ -48,27 +57,31 @@ module Skeletest.Internal.Predicate (
 
   -- * IO
   returns,
-  -- FIXME: throws
+  throws,
 
   -- * Snapshot testing
   matchesSnapshot,
 ) where
 
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Except (runExceptT, throwE)
+import Data.Foldable (toList)
+import Data.Foldable1 qualified as Foldable1
 import Data.Functor.Const (Const (..))
 import Data.Functor.Identity (Identity (..))
+import Data.Kind (Type)
 import Data.List qualified as List
-import Data.Maybe (isNothing, listToMaybe)
+import Data.List.NonEmpty qualified as NonEmpty
+import Data.Maybe (isJust, isNothing, listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Typeable (Typeable)
 import Debug.RecoverRTTI (anythingToString)
 import GHC.Generics ((:*:) (..))
-import Prelude hiding (abs, and, not)
+import UnliftIO.Exception (Exception, displayException, try)
+import Prelude hiding (abs, all, and, any, elem, not, or, (&&), (||))
 import Prelude qualified
 
 import Skeletest.Internal.CLI (getFlag)
+import Skeletest.Internal.Error (invariantViolation)
 import Skeletest.Internal.Snapshot (
   SnapshotContext (..),
   SnapshotResult (..),
@@ -102,35 +115,77 @@ runPredicate Predicate{..} val = do
     if predicateSuccess
       then PredicateSuccess
       else
-        PredicateFail $
-          if Prelude.not predicateNested
-            then predicateFailMsg
-            else
-              Text.intercalate "\n" $
-                [ predicateFailMsg
-                , "Expected:"
-                , indent predicateDisp
-                , "Got:"
-                , indent $ render val
-                ]
-  where
-    indent = Text.intercalate "\n" . map ("  " <>) . Text.splitOn "\n"
+        let failCtx =
+              FailCtx
+                { failCtxExpected = predicateDisp
+                , failCtxActual = render val
+                }
+         in PredicateFail . withFailCtx failCtx predicateShowFailCtx $ predicateExplain
 
 renderPredicate :: Predicate a -> Text
 renderPredicate = predicateDisp
 
 data PredicateFuncResult = PredicateFuncResult
   { predicateSuccess :: Bool
-  , predicateFailMsg :: Text
-  -- ^ The message to show on failure
-  , predicatePassMsg :: Text
-  -- ^ The message to show on unexpected pass
-  , predicateNested :: Bool
-  -- ^ Did this result come from a nested predicate?
+  , predicateExplain :: Text
+  -- ^ The explanation of the result.
+  --
+  -- If predicateSuccess is true, this is the message to show if the
+  -- success is unexpected. If predicatesSuccess is false, this is
+  -- the message to show on the failure.
+  , predicateShowFailCtx :: ShowFailCtx
+  -- ^ See 'ShowFailCtx'.
   }
 
-setNested :: PredicateFuncResult -> PredicateFuncResult
-setNested result = result{predicateNested = True}
+-- | Should a predicate show the context of the failure?
+--
+-- When failing `P.left (P.eq 1)`, the failure should show just the specific
+-- thing that failed, e.g. `1 ≠ 2`, but we should show the general context
+-- as well, e.g. `Expected: Left (= 1), Got: Left 2`. Primitive predicates
+-- should generally start as NoFailCtx, then higher-order predicates should
+-- upgrade it to ShowFailCtx. Predicates that explicitly want to hide the
+-- context should set HideFailCtx.
+data ShowFailCtx
+  = NoFailCtx
+  | ShowFailCtx
+  | HideFailCtx
+  deriving (Eq, Ord)
+
+shouldShowFailCtx :: ShowFailCtx -> Bool
+shouldShowFailCtx = \case
+  NoFailCtx -> False
+  ShowFailCtx -> True
+  HideFailCtx -> False
+
+data FailCtx = FailCtx
+  { failCtxExpected :: Text
+  , failCtxActual :: Text
+  }
+
+renderFailCtx :: FailCtx -> Text
+renderFailCtx FailCtx{..} =
+  Text.intercalate "\n" $
+    [ "Expected:"
+    , indent failCtxExpected
+    , ""
+    , "Got:"
+    , indent failCtxActual
+    ]
+
+withFailCtx :: FailCtx -> ShowFailCtx -> Text -> Text
+withFailCtx failCtx ctx s =
+  if shouldShowFailCtx ctx
+    then Text.intercalate "\n" [s, "", renderFailCtx failCtx]
+    else s
+
+noCtx :: ShowFailCtx
+noCtx = NoFailCtx
+
+showMergedCtxs :: [PredicateFuncResult] -> ShowFailCtx
+showMergedCtxs = max ShowFailCtx . maybe NoFailCtx Foldable1.maximum . NonEmpty.nonEmpty . map predicateShowFailCtx
+
+showCtx :: PredicateFuncResult -> PredicateFuncResult
+showCtx result = result{predicateShowFailCtx = max ShowFailCtx $ predicateShowFailCtx result}
 
 {----- General -----}
 
@@ -141,9 +196,8 @@ anything =
         pure
           PredicateFuncResult
             { predicateSuccess = True
-            , predicateFailMsg = "anything"
-            , predicatePassMsg = "not anything"
-            , predicateNested = False
+            , predicateExplain = "anything"
+            , predicateShowFailCtx = noCtx
             }
     , predicateDisp = "anything"
     , predicateDispNeg = "not anything"
@@ -158,53 +212,103 @@ eq = mkPredicateOp "=" "≠" $ \actual expected -> actual == expected
 gt :: (Ord a) => a -> Predicate a
 gt = mkPredicateOp ">" "≯" $ \actual expected -> actual > expected
 
+gte :: (Ord a) => a -> Predicate a
+gte = mkPredicateOp "≥" "≱" $ \actual expected -> actual > expected Prelude.|| actual == expected
+
+lt :: (Ord a) => a -> Predicate a
+lt = mkPredicateOp "<" "≮" $ \actual expected -> actual < expected
+
+lte :: (Ord a) => a -> Predicate a
+lte = mkPredicateOp "≤" "≰" $ \actual expected -> actual < expected Prelude.|| actual == expected
+
 {----- Data types -----}
 
 just :: Predicate a -> Predicate (Maybe a)
-just Predicate{..} =
-  Predicate
-    { predicateFunc = \case
-        Just a -> setNested <$> predicateFunc a
-        Nothing ->
-          pure
-            PredicateFuncResult
-              { predicateSuccess = False
-              , predicateFailMsg = "Nothing ≠ " <> disp
-              , predicatePassMsg = "Nothing = " <> disp
-              , predicateNested = False
-              }
-    , predicateDisp = disp
-    , predicateDispNeg = "not " <> disp
-    }
+just p = conMatches "Just" fieldNames toFields preds
   where
-    disp = "Just (" <> predicateDisp <> ")"
+    fieldNames = Nothing
+    toFields = \case
+      Just x -> Just . HCons (pure x) $ HNil
+      _ -> Nothing
+    preds = HCons p HNil
+
+nothing :: Predicate (Maybe a)
+nothing = conMatches "Nothing" fieldNames toFields preds
+  where
+    fieldNames = Nothing
+    toFields = \case
+      Nothing -> Just HNil
+      _ -> Nothing
+    preds = HNil
 
 left :: Predicate a -> Predicate (Either a b)
-left Predicate{..} =
+left p = conMatches "Left" fieldNames toFields preds
+  where
+    fieldNames = Nothing
+    toFields = \case
+      Left x -> Just . HCons (pure x) $ HNil
+      _ -> Nothing
+    preds = HCons p HNil
+
+right :: Predicate b -> Predicate (Either a b)
+right p = conMatches "Right" fieldNames toFields preds
+  where
+    fieldNames = Nothing
+    toFields = \case
+      Right x -> Just . HCons (pure x) $ HNil
+      _ -> Nothing
+    preds = HCons p HNil
+
+class IsTuple a where
+  type TupleArgs a :: [Type]
+  toHList :: a -> HList Identity (TupleArgs a)
+instance IsTuple (a, b) where
+  type TupleArgs (a, b) = '[a, b]
+  toHList (a, b) = HCons (pure a) . HCons (pure b) $ HNil
+instance IsTuple (a, b, c) where
+  type TupleArgs (a, b, c) = '[a, b, c]
+  toHList (a, b, c) = HCons (pure a) . HCons (pure b) . HCons (pure c) $ HNil
+instance IsTuple (a, b, c, d) where
+  type TupleArgs (a, b, c, d) = '[a, b, c, d]
+  toHList (a, b, c, d) = HCons (pure a) . HCons (pure b) . HCons (pure c) . HCons (pure d) $ HNil
+instance IsTuple (a, b, c, d, e) where
+  type TupleArgs (a, b, c, d, e) = '[a, b, c, d, e]
+  toHList (a, b, c, d, e) = HCons (pure a) . HCons (pure b) . HCons (pure c) . HCons (pure d) . HCons (pure e) $ HNil
+instance IsTuple (a, b, c, d, e, f) where
+  type TupleArgs (a, b, c, d, e, f) = '[a, b, c, d, e, f]
+  toHList (a, b, c, d, e, f) = HCons (pure a) . HCons (pure b) . HCons (pure c) . HCons (pure d) . HCons (pure e) . HCons (pure f) $ HNil
+
+class (IsTuple (UnPredTuple a)) => IsPredTuple a where
+  type UnPredTuple a
+  toHListPred :: a -> HList Predicate (TupleArgs (UnPredTuple a))
+instance IsPredTuple (Predicate a, Predicate b) where
+  type UnPredTuple (Predicate a, Predicate b) = (a, b)
+  toHListPred (a, b) = HCons a . HCons b $ HNil
+instance IsPredTuple (Predicate a, Predicate b, Predicate c) where
+  type UnPredTuple (Predicate a, Predicate b, Predicate c) = (a, b, c)
+  toHListPred (a, b, c) = HCons a . HCons b . HCons c $ HNil
+instance IsPredTuple (Predicate a, Predicate b, Predicate c, Predicate d) where
+  type UnPredTuple (Predicate a, Predicate b, Predicate c, Predicate d) = (a, b, c, d)
+  toHListPred (a, b, c, d) = HCons a . HCons b . HCons c . HCons d $ HNil
+instance IsPredTuple (Predicate a, Predicate b, Predicate c, Predicate d, Predicate e) where
+  type UnPredTuple (Predicate a, Predicate b, Predicate c, Predicate d, Predicate e) = (a, b, c, d, e)
+  toHListPred (a, b, c, d, e) = HCons a . HCons b . HCons c . HCons d . HCons e $ HNil
+instance IsPredTuple (Predicate a, Predicate b, Predicate c, Predicate d, Predicate e, Predicate f) where
+  type UnPredTuple (Predicate a, Predicate b, Predicate c, Predicate d, Predicate e, Predicate f) = (a, b, c, d, e, f)
+  toHListPred (a, b, c, d, e, f) = HCons a . HCons b . HCons c . HCons d . HCons e . HCons f $ HNil
+
+tup :: (IsPredTuple a) => a -> Predicate (UnPredTuple a)
+tup preds =
   Predicate
-    { predicateFunc = \case
-        Left a -> setNested <$> predicateFunc a
-        x ->
-          pure
-            PredicateFuncResult
-              { predicateSuccess = False
-              , predicateFailMsg = render x <> " ≠ " <> disp
-              , predicatePassMsg = render x <> " = " <> disp
-              , predicateNested = False
-              }
+    { predicateFunc = \actual ->
+        verifyAll tupify <$> runPredicates (toHListPred preds) (toHList actual)
     , predicateDisp = disp
-    , predicateDispNeg = "not " <> disp
+    , predicateDispNeg = dispNeg
     }
   where
-    disp = "Left (" <> predicateDisp <> ")"
-
--- -- | A predicate for checking that the given tuple matches the given predicates.
--- tup2 :: (Predicate a, Predicate b) -> Predicate (a, b)
--- tup2 (predA, predB) =
---   Predicate
---     { predicateFunc = \(a, b) ->
---         predicateFunc predA a
---     }
+    tupify vals = "(" <> Text.intercalate ", " vals <> ")"
+    disp = tupify $ HList.toListWith predicateDisp (toHListPred preds)
+    dispNeg = "not " <> disp
 
 -- | A predicate for checking that a value matches the given constructor.
 --
@@ -218,9 +322,8 @@ left Predicate{..} =
 -- @P.con Foo{}@ and @P.con Foo{a = P.anything}@ are equivalent.
 con :: a -> Predicate a
 con =
-  -- FIXME: test
   -- A placeholder that will be replaced with conMatches in the plugin.
-  error "P.con was not replaced"
+  invariantViolation "P.con was not replaced"
 
 -- | A predicate for checking that a value matches the given constructor.
 -- Assumes that the arguments correctly match the constructor being tested,
@@ -235,40 +338,31 @@ conMatches conNameS mFieldNames deconstruct preds =
   Predicate
     { predicateFunc = \actual ->
         case deconstruct actual of
-          Just fields -> do
-            runExceptT (HList.toListWithM runPred $ HList.hzip fields preds) >>= \case
-              Left result -> pure $ setNested result
-              Right _ -> pure $ mkResult True actual predsDisp
-          Nothing -> pure $ mkResult False actual conName
-    , predicateDisp = "matches " <> predsDisp
-    , predicateDispNeg = "does not match " <> predsDisp
+          Just fields -> verifyAll consify <$> runPredicates preds fields
+          Nothing ->
+            pure
+              PredicateFuncResult
+                { predicateSuccess = False
+                , predicateExplain = render actual <> " " <> dispNeg
+                , predicateShowFailCtx = noCtx
+                }
+    , predicateDisp = disp
+    , predicateDispNeg = dispNeg
     }
   where
     conName = Text.pack conNameS
-    runPred (Identity field :*: p) = do
-      result@PredicateFuncResult{..} <- liftIO $ predicateFunc p field
-      if predicateSuccess
-        then pure result
-        else throwE result
+    disp = "matches " <> predsDisp
+    dispNeg = "does not match " <> predsDisp
+    predsDisp = consify $ HList.toListWith predicateDisp preds
 
-    mkResult success actual rhs =
-      PredicateFuncResult
-        { predicateSuccess = success
-        , predicateFailMsg = render actual <> " ≠ " <> rhs
-        , predicatePassMsg = render actual <> " = " <> rhs
-        , predicateNested = False
-        }
-
-    predsDisp =
-      case mFieldNames of
+    -- consify ["= 1", "anything"] => User{id = (= 1), name = anything}
+    -- consify ["= 1", "anything"] => Foo (= 1) anything
+    consify vals =
+      case HList.uncheck <$> mFieldNames of
+        Nothing -> Text.unwords $ conName : map parens vals
         Just fieldNames ->
-          let
-            renderField (Const fieldName :*: p) = Text.pack fieldName <> " = " <> parens (predicateDisp p)
-            fields = HList.toListWith renderField $ HList.hzip fieldNames preds
-           in
-            conName <> "{" <> Text.intercalate ", " fields <> "}"
-        Nothing ->
-          Text.unwords $ conName : map parens (HList.toListWith predicateDisp preds)
+          let fields = zipWith (\field v -> Text.pack field <> " = " <> parens v) fieldNames vals
+           in conName <> "{" <> Text.intercalate ", " fields <> "}"
 
 {----- Numeric -----}
 
@@ -277,12 +371,12 @@ conMatches conNameS mFieldNames deconstruct preds =
 -- Useful for checking equality with floats, which might not be exactly equal.
 -- For more information, see: https://jvns.ca/blog/2023/01/13/examples-of-floating-point-problems/.
 --
--- >>> 0.1 + 0.2 `shouldSatisfy` P.approx P.tol 0.3
--- >>> 0.1 + 0.2 `shouldSatisfy` P.approx P.tol{P.rel = Just 1e-6} 0.3
--- >>> 0.1 + 0.2 `shouldSatisfy` P.approx P.tol{P.abs = 1e-12} 0.3
--- >>> 0.1 + 0.2 `shouldSatisfy` P.approx P.tol{P.rel = Just 1e-6, P.abs = 1e-12} 0.3
--- >>> 0.1 + 0.2 `shouldSatisfy` P.approx P.tol{P.rel = Nothing} 0.3
--- >>> 0.1 + 0.2 `shouldSatisfy` P.approx P.tol{P.rel = Nothing, P.abs = 1e-12} 0.3
+-- >>> (0.1 + 0.2) `shouldSatisfy` P.approx P.tol 0.3
+-- >>> (0.1 + 0.2) `shouldSatisfy` P.approx P.tol{P.rel = Just 1e-6} 0.3
+-- >>> (0.1 + 0.2) `shouldSatisfy` P.approx P.tol{P.abs = 1e-12} 0.3
+-- >>> (0.1 + 0.2) `shouldSatisfy` P.approx P.tol{P.rel = Just 1e-6, P.abs = 1e-12} 0.3
+-- >>> (0.1 + 0.2) `shouldSatisfy` P.approx P.tol{P.rel = Nothing} 0.3
+-- >>> (0.1 + 0.2) `shouldSatisfy` P.approx P.tol{P.rel = Nothing, P.abs = 1e-12} 0.3
 approx :: (Fractional a, Ord a) => Tolerance -> a -> Predicate a
 approx Tolerance{..} =
   mkPredicateOp "≈" "≉" $ \actual expected ->
@@ -313,7 +407,7 @@ tol = Tolerance{rel = Just 1e-6, abs = 1e-12}
 Predicate{..} <<< f =
   -- TODO: render function name in predicateDisp?
   Predicate
-    { predicateFunc = fmap setNested . predicateFunc . f
+    { predicateFunc = fmap showCtx . predicateFunc . f
     , predicateDisp
     , predicateDispNeg
     }
@@ -325,41 +419,64 @@ not :: Predicate a -> Predicate a
 not Predicate{..} =
   Predicate
     { predicateFunc = \actual -> do
-        PredicateFuncResult{..} <- predicateFunc actual
-        pure
-          PredicateFuncResult
-            { predicateSuccess = Prelude.not predicateSuccess
-            , predicateFailMsg = predicatePassMsg
-            , predicatePassMsg = predicateFailMsg
-            , predicateNested = True
-            }
+        result <- showCtx <$> predicateFunc actual
+        pure result{predicateSuccess = Prelude.not $ predicateSuccess result}
     , predicateDisp = predicateDispNeg
     , predicateDispNeg = predicateDisp
     }
 
+(&&) :: Predicate a -> Predicate a -> Predicate a
+p1 && p2 = and [p1, p2]
+
+(||) :: Predicate a -> Predicate a -> Predicate a
+p1 || p2 = or [p1, p2]
+
 and :: [Predicate a] -> Predicate a
 and preds =
   Predicate
-    { predicateFunc = \actual -> do
-        results <- mapM (\p -> predicateFunc p actual) preds
-        let firstFailure = listToMaybe $ filter (Prelude.not . predicateSuccess) results
-        pure
-          PredicateFuncResult
-            { predicateSuccess = isNothing firstFailure
-            , predicateFailMsg =
-                case firstFailure of
-                  Just p -> predicateFailMsg p
-                  -- shouldn't happen
-                  Nothing -> msgNeg
-            , predicatePassMsg = Text.intercalate " and " $ map predicatePassMsg results
-            , predicateNested = True
-            }
-    , predicateDisp = msg
-    , predicateDispNeg = msgNeg
+    { predicateFunc = \actual ->
+        verifyAll (const "All predicates passed") <$> mapM (\p -> predicateFunc p actual) preds
+    , predicateDisp = andify predList
+    , predicateDispNeg = "At least one failure:\n" <> andify predList
     }
   where
-    msg = Text.intercalate " and " $ map predicateDisp preds
-    msgNeg = "not " <> msg
+    andify = Text.intercalate "\nand "
+    predList = map (parens . predicateDisp) preds
+
+or :: [Predicate a] -> Predicate a
+or preds =
+  Predicate
+    { predicateFunc = \actual ->
+        verifyAny (const "No predicates passed") <$> mapM (\p -> predicateFunc p actual) preds
+    , predicateDisp = orify predList
+    , predicateDispNeg = "All failures:\n" <> orify predList
+    }
+  where
+    orify = Text.intercalate "\nor "
+    predList = map (parens . predicateDisp) preds
+
+{----- Containers -----}
+
+any :: (Foldable t) => Predicate a -> Predicate (t a)
+any Predicate{..} =
+  Predicate
+    { predicateFunc = \actual ->
+        verifyAny (const "No values matched") <$> mapM predicateFunc (toList actual)
+    , predicateDisp = "at least one element matching " <> parens predicateDisp
+    , predicateDispNeg = "no elements matching " <> parens predicateDisp
+    }
+
+all :: (Foldable t) => Predicate a -> Predicate (t a)
+all Predicate{..} =
+  Predicate
+    { predicateFunc = \actual ->
+        verifyAll (const "All values matched") <$> mapM predicateFunc (toList actual)
+    , predicateDisp = "all elements matching " <> parens predicateDisp
+    , predicateDispNeg = "some elements not matching " <> parens predicateDisp
+    }
+
+elem :: (Eq a, Foldable t) => a -> Predicate (t a)
+elem = any . eq
 
 {----- Subsequences -----}
 
@@ -379,69 +496,133 @@ instance HasSubsequences Text where
 hasPrefix :: (HasSubsequences a) => a -> Predicate a
 hasPrefix prefix =
   Predicate
-    { predicateFunc = \val ->
+    { predicateFunc = \val -> do
+        let success = prefix `isPrefixOf` val
         pure
           PredicateFuncResult
-            { predicateSuccess = prefix `isPrefixOf` val
-            , predicateFailMsg = render val <> " " <> msgNeg
-            , predicatePassMsg = render val <> " " <> msg
-            , predicateNested = True
+            { predicateSuccess = success
+            , predicateExplain =
+                if success
+                  then render val <> " " <> disp
+                  else render val <> " " <> dispNeg
+            , predicateShowFailCtx = noCtx
             }
-    , predicateDisp = msg
-    , predicateDispNeg = msgNeg
+    , predicateDisp = disp
+    , predicateDispNeg = dispNeg
     }
   where
-    msg = "has prefix " <> render prefix
-    msgNeg = "does not have prefix " <> render prefix
+    disp = "has prefix " <> render prefix
+    dispNeg = "does not have prefix " <> render prefix
 
 hasInfix :: (HasSubsequences a) => a -> Predicate a
 hasInfix elems =
   Predicate
-    { predicateFunc = \val ->
+    { predicateFunc = \val -> do
+        let success = elems `isInfixOf` val
         pure
           PredicateFuncResult
-            { predicateSuccess = elems `isInfixOf` val
-            , predicateFailMsg = render val <> " " <> msgNeg
-            , predicatePassMsg = render val <> " " <> msg
-            , predicateNested = True
+            { predicateSuccess = success
+            , predicateExplain =
+                if success
+                  then render val <> " " <> disp
+                  else render val <> " " <> dispNeg
+            , predicateShowFailCtx = noCtx
             }
-    , predicateDisp = msg
-    , predicateDispNeg = msgNeg
+    , predicateDisp = disp
+    , predicateDispNeg = dispNeg
     }
   where
-    msg = "has infix " <> render elems
-    msgNeg = "does not have infix " <> render elems
+    disp = "has infix " <> render elems
+    dispNeg = "does not have infix " <> render elems
 
 hasSuffix :: (HasSubsequences a) => a -> Predicate a
 hasSuffix suffix =
   Predicate
-    { predicateFunc = \val ->
+    { predicateFunc = \val -> do
+        let success = suffix `isSuffixOf` val
         pure
           PredicateFuncResult
-            { predicateSuccess = suffix `isSuffixOf` val
-            , predicateFailMsg = render val <> " " <> msgNeg
-            , predicatePassMsg = render val <> " " <> msg
-            , predicateNested = True
+            { predicateSuccess = success
+            , predicateExplain =
+                if success
+                  then render val <> " " <> disp
+                  else render val <> " " <> dispNeg
+            , predicateShowFailCtx = noCtx
             }
-    , predicateDisp = msg
-    , predicateDispNeg = msgNeg
+    , predicateDisp = disp
+    , predicateDispNeg = dispNeg
     }
   where
-    msg = "has suffix " <> render suffix
-    msgNeg = "does not have suffix " <> render suffix
+    disp = "has suffix " <> render suffix
+    dispNeg = "does not have suffix " <> render suffix
 
 {----- IO -----}
 
 returns :: Predicate a -> Predicate (IO a)
 returns Predicate{..} =
   Predicate
-    { predicateFunc = \io ->
-        -- don't add 'setNested'; it's technically nested,
-        -- but this predicate is supposed to be transparent
-        io >>= predicateFunc
+    { predicateFunc = \io -> do
+        x <- io
+        PredicateFuncResult{..} <- predicateFunc x
+        pure
+          PredicateFuncResult
+            { predicateSuccess = predicateSuccess
+            , predicateExplain =
+                if predicateSuccess
+                  then predicateExplain
+                  else
+                    let failCtx =
+                          FailCtx
+                            { failCtxExpected = predicateDisp
+                            , failCtxActual = render x
+                            }
+                     in withFailCtx failCtx predicateShowFailCtx predicateExplain
+            , predicateShowFailCtx = HideFailCtx
+            }
     , predicateDisp = predicateDisp
     , predicateDispNeg = predicateDispNeg
     }
+
+throws :: (Exception e) => Predicate e -> Predicate (IO a)
+throws Predicate{..} =
+  Predicate
+    { predicateFunc = \io ->
+        try io >>= \case
+          Left e -> do
+            PredicateFuncResult{..} <- predicateFunc e
+            pure
+              PredicateFuncResult
+                { predicateSuccess = predicateSuccess
+                , predicateExplain =
+                    if predicateSuccess
+                      then predicateExplain
+                      else
+                        let failCtx =
+                              FailCtx
+                                { failCtxExpected = disp
+                                , failCtxActual = Text.pack $ displayException e
+                                }
+                         in withFailCtx failCtx predicateShowFailCtx predicateExplain
+                , predicateShowFailCtx = HideFailCtx
+                }
+          Right x ->
+            pure
+              PredicateFuncResult
+                { predicateSuccess = False
+                , predicateExplain =
+                    renderFailCtx
+                      FailCtx
+                        { failCtxExpected = disp
+                        , failCtxActual = render x
+                        }
+                , predicateShowFailCtx = HideFailCtx
+                }
+    , predicateDisp = disp
+    , predicateDispNeg = dispNeg
+    }
+  where
+    disp = "throws (" <> predicateDisp <> ")"
+    dispNeg = "does not throw (" <> predicateDisp <> ")"
 
 {----- Snapshot -----}
 
@@ -468,7 +649,7 @@ matchesSnapshot =
         pure
           PredicateFuncResult
             { predicateSuccess = result == SnapshotMatches
-            , predicateFailMsg =
+            , predicateExplain =
                 case result of
                   SnapshotMissing -> "Snapshot does not exist. Update snapshot with --update."
                   SnapshotMatches -> "Matches snapshot"
@@ -477,8 +658,7 @@ matchesSnapshot =
                       [ "Result differed from snapshot. Update snapshot with --update."
                       , showLineDiff ("expected", snapshot) ("actual", renderedActual)
                       ]
-            , predicatePassMsg = "matches snapshot"
-            , predicateNested = False
+            , predicateShowFailCtx = HideFailCtx
             }
     , predicateDisp = "matches snapshot"
     , predicateDispNeg = "does not match snapshot"
@@ -498,22 +678,55 @@ mkPredicateOp ::
   -> Predicate a
 mkPredicateOp op negOp f expected =
   Predicate
-    { predicateFunc = \actual ->
+    { predicateFunc = \actual -> do
+        let success = f actual expected
         pure
           PredicateFuncResult
-            { predicateSuccess = f actual expected
-            , predicateFailMsg = explainOp (Just actual) negOp
-            , predicatePassMsg = explainOp (Just actual) op
-            , predicateNested = False
+            { predicateSuccess = success
+            , predicateExplain =
+                if success
+                  then render actual <> " " <> disp
+                  else render actual <> " " <> dispNeg
+            , predicateShowFailCtx = noCtx
             }
-    , predicateDisp = explainOp Nothing op
-    , predicateDispNeg = explainOp Nothing negOp
+    , predicateDisp = disp
+    , predicateDispNeg = dispNeg
     }
   where
-    explainOp mActual op' =
-      case mActual of
-        Just actual -> render actual <> " " <> op' <> " " <> render expected
-        Nothing -> op' <> " " <> render expected
+    disp = op <> " " <> render expected
+    dispNeg = negOp <> " " <> render expected
+
+runPredicates :: HList Predicate xs -> HList Identity xs -> IO [PredicateFuncResult]
+runPredicates preds = HList.toListWithM run . HList.hzip preds
+  where
+    run :: (Predicate :*: Identity) a -> IO PredicateFuncResult
+    run (p :*: Identity x) = predicateFunc p x
+
+verifyAll :: ([Text] -> Text) -> [PredicateFuncResult] -> PredicateFuncResult
+verifyAll mergeMessages results =
+  PredicateFuncResult
+    { predicateSuccess = isNothing firstFailure
+    , predicateExplain =
+        case firstFailure of
+          Just p -> predicateExplain p
+          Nothing -> mergeMessages $ map predicateExplain results
+    , predicateShowFailCtx = showMergedCtxs results
+    }
+  where
+    firstFailure = listToMaybe $ filter (Prelude.not . predicateSuccess) results
+
+verifyAny :: ([Text] -> Text) -> [PredicateFuncResult] -> PredicateFuncResult
+verifyAny mergeMessages results =
+  PredicateFuncResult
+    { predicateSuccess = isJust firstSuccess
+    , predicateExplain =
+        case firstSuccess of
+          Just p -> predicateExplain p
+          Nothing -> mergeMessages $ map predicateExplain results
+    , predicateShowFailCtx = showMergedCtxs results
+    }
+  where
+    firstSuccess = listToMaybe $ filter predicateSuccess results
 
 render :: a -> Text
 render = Text.pack . anythingToString
@@ -524,3 +737,6 @@ parens s =
   if " " `Text.isInfixOf` s
     then "(" <> s <> ")"
     else s
+
+indent :: Text -> Text
+indent = Text.intercalate "\n" . map ("  " <>) . Text.splitOn "\n"

@@ -185,6 +185,7 @@ data HsExpr
   = HsExprCon HsName
   | HsExprVar HsName
   | HsExprApp HsExpr HsExpr
+  | HsExprOp HsExpr HsExpr HsExpr -- lhs op rhs
   | HsExprList [HsExpr]
   | HsExprTuple [HsExpr]
   | HsExprRecordCon HsName [(HsName, HsExpr)]
@@ -210,6 +211,7 @@ toHsExpr = \case
       then HsExprCon (hsRdrName name)
       else HsExprVar (hsRdrName name)
   L _ (GHC.HsApp _ lhs rhs) -> HsExprApp (toHsExpr lhs) (toHsExpr rhs)
+  L _ (GHC.OpApp _ lhs op rhs) -> HsExprOp (toHsExpr lhs) (toHsExpr op) (toHsExpr rhs)
   L _ (GHC.ExplicitList _ lexprs) -> HsExprList $ map toHsExpr lexprs
   L _ (GHC.ExplicitTuple _ args _)
     | Just presentArgs <- mapM getPresentTupArg args ->
@@ -237,6 +239,7 @@ fromHsExpr fromRdrName = go
       HsExprCon name -> genLoc $ GHC.HsVar GHC.noExtField (genLoc $ fromRdrName name)
       HsExprVar name -> genLoc $ GHC.HsVar GHC.noExtField (genLoc $ fromRdrName name)
       HsExprApp l r -> genLoc $ GHC.HsApp GHC.noExtField (parens $ go l) (parens $ go r)
+      HsExprOp l op r -> genLoc $ GHC.OpApp GHC.noAnn (parens $ go l) (parens $ go op) (parens $ go r)
       HsExprList exprs -> genLoc $ GHC.ExplicitList GHC.noAnn $ map go exprs
       HsExprTuple exprs ->
         genLoc $

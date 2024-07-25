@@ -93,26 +93,22 @@ replaceConMatch :: ParsedModule -> ParsedModule
 replaceConMatch = modifyModuleExprs go
   where
     go = \case
-      HsExprApp (HsExprVar name) arg | isCon name ->
-        case arg of
-          _ | (HsExprCon conName, preds) <- collectApps arg -> do
-            let exprNames = zipWith (\_ i -> hsNewName . Text.pack . show $ i) preds [0 :: Int ..]
-            Just . hsApps (HsExprVar $ hsName 'P.conMatches) $
-              [ HsExprLitString $ renderHsName conName
-              , HsExprCon $ hsName 'Nothing
-              , mkDeconstruct (HsPatCon conName $ map HsPatVar exprNames) exprNames
-              , mkPredList preds
-              ]
-          HsExprRecordCon conName fields -> do
-            let (fieldNames, preds) = unzip fields
-                fieldPats = [(field, HsPatVar field) | field <- fieldNames]
-            Just . hsApps (HsExprVar $ hsName 'P.conMatches) $
-              [ HsExprLitString $ renderHsName conName
-              , HsExprApp (HsExprCon $ hsName 'Just) (mkNamesList fieldNames)
-              , mkDeconstruct (HsPatRecord conName fieldPats) fieldNames
-              , mkPredList preds
-              ]
-          _ -> skeletestPluginError "P.con must be applied to a constructor"
+      -- Matches:
+      --   P.con User{name = ...}
+      --   P.con (User "...")
+      HsExprApp (HsExprVar name) arg
+        | isCon name ->
+            convertCon arg
+      -- Matches:
+      --   P.con $ User "..."
+      HsExprOp (HsExprVar name) (HsExprVar dollar) arg
+        | getHsName dollar == "$"
+        , isCon name ->
+            convertCon arg
+      -- Check if P.con is by itself
+      HsExprVar name
+        | isCon name ->
+            skeletestPluginError "P.con must be applied to a constructor"
       -- Check if P.con is being applied more than once
       HsExprApp (HsExprApp (HsExprVar name) _) _
         | isCon name ->
@@ -122,6 +118,31 @@ replaceConMatch = modifyModuleExprs go
     -- TODO: Make this more precise. It seems like the only information we get here is P.con,
     -- but it might be possible to look up what modules were imported as "P".
     isCon n = getHsName n == "con" && getHsNameMod n == Just "P"
+
+    convertCon = \case
+      arg | (HsExprCon conName, preds) <- collectApps arg -> do
+        let exprNames = mkVarNames preds
+        Just . hsApps (HsExprVar $ hsName 'P.conMatches) $
+          [ HsExprLitString $ renderHsName conName
+          , HsExprCon $ hsName 'Nothing
+          , mkDeconstruct (HsPatCon conName $ map HsPatVar exprNames) exprNames
+          , mkPredList preds
+          ]
+      HsExprRecordCon conName fields -> do
+        let (fieldNames, preds) = unzip fields
+            fieldPats = [(field, HsPatVar field) | field <- fieldNames]
+        Just . hsApps (HsExprVar $ hsName 'P.conMatches) $
+          [ HsExprLitString $ renderHsName conName
+          , HsExprApp (HsExprCon $ hsName 'Just) (mkNamesList fieldNames)
+          , mkDeconstruct (HsPatRecord conName fieldPats) fieldNames
+          , mkPredList preds
+          ]
+      _ -> skeletestPluginError "P.con must be applied to a constructor"
+
+    -- Generate variable names like x0, x1, ... for each element in the given list.
+    mkVarNames =
+      let mkVar i = "x" <> (Text.pack . show) i
+       in zipWith (\i _ -> hsNewName (mkVar i)) [0 :: Int ..]
 
     -- Create the deconstruction function:
     --

@@ -36,7 +36,7 @@ module Skeletest.Internal.Predicate (
   (<<<),
   (>>>),
   not,
-  -- FIXME: P.any, P.all, P.elem, P.or
+  -- FIXME: P.any, P.all, P.elem, P.or, P.&&, P.||
   and,
 
   -- * Subsequences
@@ -55,10 +55,12 @@ module Skeletest.Internal.Predicate (
 
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT, throwE)
+import Data.Foldable1 qualified as Foldable1
 import Data.Functor.Const (Const (..))
 import Data.Functor.Identity (Identity (..))
 import Data.Kind (Type)
 import Data.List qualified as List
+import Data.List.NonEmpty qualified as NonEmpty
 import Data.Maybe (isNothing, listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -105,7 +107,7 @@ runPredicate Predicate{..} val = do
       then PredicateSuccess
       else
         PredicateFail $
-          if Prelude.not $ unTentative predicateNested
+          if Prelude.not $ shouldShowFailCtx predicateShowFailCtx
             then predicateFailMsg
             else
               Text.intercalate "\n" $
@@ -125,26 +127,41 @@ data PredicateFuncResult = PredicateFuncResult
   -- ^ The message to show on failure
   , predicatePassMsg :: Text
   -- ^ The message to show on unexpected pass
-  , predicateNested :: Tentative Bool
-  -- ^ Did this result come from a nested predicate?
+  , predicateShowFailCtx :: ShowFailCtx
+  -- ^ See 'ShowFailCtx'.
   }
 
-data Tentative a
-  = Tentative a
-  | Force a
+-- | Should a predicate show the context of the failure?
+--
+-- When failing `P.left (P.eq 1)`, the failure should show just the specific
+-- thing that failed, e.g. `1 ≠ 2`, but we should show the general context
+-- as well, e.g. `Expected: Left (= 1), Got: Left 2`. Primitive predicates
+-- should generally start as NoFailCtx, then higher-order predicates should
+-- upgrade it to ShowFailCtx. Predicates that explicitly want to hide the
+-- context should set HideFailCtx.
+data ShowFailCtx
+  = NoFailCtx
+  | ShowFailCtx
+  | HideFailCtx
+  deriving (Eq, Ord)
 
-setTentative :: a -> Tentative a -> Tentative a
-setTentative a = \case
-  Tentative _ -> Tentative a
-  Force x -> Force x
+shouldShowFailCtx :: ShowFailCtx -> Bool
+shouldShowFailCtx = \case
+  NoFailCtx -> False
+  ShowFailCtx -> True
+  HideFailCtx -> False
 
-unTentative :: Tentative a -> a
-unTentative = \case
-  Tentative a -> a
-  Force a -> a
+noCtx :: ShowFailCtx
+noCtx = NoFailCtx
 
-setNested :: PredicateFuncResult -> PredicateFuncResult
-setNested result = result{predicateNested = setTentative True $ predicateNested result}
+showMergedCtxs :: [PredicateFuncResult] -> ShowFailCtx
+showMergedCtxs = max ShowFailCtx . maybe NoFailCtx Foldable1.maximum . NonEmpty.nonEmpty . map predicateShowFailCtx
+
+showCtx :: PredicateFuncResult -> PredicateFuncResult
+showCtx result = result{predicateShowFailCtx = max ShowFailCtx $ predicateShowFailCtx result}
+
+hideCtx :: PredicateFuncResult -> PredicateFuncResult
+hideCtx result = result{predicateShowFailCtx = HideFailCtx}
 
 {----- General -----}
 
@@ -157,7 +174,7 @@ anything =
             { predicateSuccess = True
             , predicateFailMsg = "anything"
             , predicatePassMsg = "not anything"
-            , predicateNested = Tentative False
+            , predicateShowFailCtx = noCtx
             }
     , predicateDisp = "anything"
     , predicateDispNeg = "not anything"
@@ -178,14 +195,14 @@ just :: Predicate a -> Predicate (Maybe a)
 just Predicate{..} =
   Predicate
     { predicateFunc = \case
-        Just a -> setNested <$> predicateFunc a
+        Just a -> showCtx <$> predicateFunc a
         Nothing ->
           pure
             PredicateFuncResult
               { predicateSuccess = False
               , predicateFailMsg = "Nothing ≠ " <> disp
               , predicatePassMsg = "Nothing = " <> disp
-              , predicateNested = Tentative False
+              , predicateShowFailCtx = noCtx
               }
     , predicateDisp = disp
     , predicateDispNeg = "not " <> disp
@@ -197,14 +214,14 @@ left :: Predicate a -> Predicate (Either a b)
 left Predicate{..} =
   Predicate
     { predicateFunc = \case
-        Left a -> setNested <$> predicateFunc a
+        Left a -> showCtx <$> predicateFunc a
         x ->
           pure
             PredicateFuncResult
               { predicateSuccess = False
               , predicateFailMsg = render x <> " ≠ " <> disp
               , predicatePassMsg = render x <> " = " <> disp
-              , predicateNested = Tentative False
+              , predicateShowFailCtx = noCtx
               }
     , predicateDisp = disp
     , predicateDispNeg = "not " <> disp
@@ -270,7 +287,7 @@ tup preds =
                   -- shouldn't happen
                   Nothing -> msgNeg
             , predicatePassMsg = tupify $ map predicatePassMsg results
-            , predicateNested = Tentative True
+            , predicateShowFailCtx = showMergedCtxs results
             }
     , predicateDisp = msg
     , predicateDispNeg = msgNeg
@@ -310,7 +327,7 @@ conMatches conNameS mFieldNames deconstruct preds =
         case deconstruct actual of
           Just fields -> do
             runExceptT (HList.toListWithM runPred $ HList.hzip fields preds) >>= \case
-              Left result -> pure $ setNested result
+              Left result -> pure $ showCtx result
               Right _ -> pure $ mkResult True actual predsDisp
           Nothing -> pure $ mkResult False actual conName
     , predicateDisp = "matches " <> predsDisp
@@ -329,7 +346,7 @@ conMatches conNameS mFieldNames deconstruct preds =
         { predicateSuccess = success
         , predicateFailMsg = render actual <> " ≠ " <> rhs
         , predicatePassMsg = render actual <> " = " <> rhs
-        , predicateNested = Tentative False
+        , predicateShowFailCtx = noCtx
         }
 
     predsDisp =
@@ -386,7 +403,7 @@ tol = Tolerance{rel = Just 1e-6, abs = 1e-12}
 Predicate{..} <<< f =
   -- TODO: render function name in predicateDisp?
   Predicate
-    { predicateFunc = fmap setNested . predicateFunc . f
+    { predicateFunc = fmap showCtx . predicateFunc . f
     , predicateDisp
     , predicateDispNeg
     }
@@ -398,8 +415,13 @@ not :: Predicate a -> Predicate a
 not Predicate{..} =
   Predicate
     { predicateFunc = \actual -> do
-        result <- predicateFunc actual
-        pure . setNested $ result{predicateSuccess = Prelude.not (predicateSuccess result)}
+        result@PredicateFuncResult{..} <- showCtx <$> predicateFunc actual
+        pure
+          result
+            { predicateSuccess = Prelude.not predicateSuccess
+            , predicateFailMsg = predicatePassMsg
+            , predicatePassMsg = predicateFailMsg
+            }
     , predicateDisp = predicateDispNeg
     , predicateDispNeg = predicateDisp
     }
@@ -419,7 +441,7 @@ and preds =
                   -- shouldn't happen
                   Nothing -> msgNeg
             , predicatePassMsg = Text.intercalate " and " $ map predicatePassMsg results
-            , predicateNested = Tentative True
+            , predicateShowFailCtx = showMergedCtxs results
             }
     , predicateDisp = msg
     , predicateDispNeg = msgNeg
@@ -452,7 +474,7 @@ hasPrefix prefix =
             { predicateSuccess = prefix `isPrefixOf` val
             , predicateFailMsg = render val <> " " <> msgNeg
             , predicatePassMsg = render val <> " " <> msg
-            , predicateNested = Tentative False
+            , predicateShowFailCtx = noCtx
             }
     , predicateDisp = msg
     , predicateDispNeg = msgNeg
@@ -470,7 +492,7 @@ hasInfix elems =
             { predicateSuccess = elems `isInfixOf` val
             , predicateFailMsg = render val <> " " <> msgNeg
             , predicatePassMsg = render val <> " " <> msg
-            , predicateNested = Tentative False
+            , predicateShowFailCtx = noCtx
             }
     , predicateDisp = msg
     , predicateDispNeg = msgNeg
@@ -488,7 +510,7 @@ hasSuffix suffix =
             { predicateSuccess = suffix `isSuffixOf` val
             , predicateFailMsg = render val <> " " <> msgNeg
             , predicatePassMsg = render val <> " " <> msg
-            , predicateNested = Tentative False
+            , predicateShowFailCtx = noCtx
             }
     , predicateDisp = msg
     , predicateDispNeg = msgNeg
@@ -504,9 +526,9 @@ returns Predicate{..} =
   Predicate
     { predicateFunc = \io -> do
         x <- io
-        PredicateFuncResult{..} <- predicateFunc x
+        result@PredicateFuncResult{..} <- hideCtx <$> predicateFunc x
         pure
-          PredicateFuncResult
+          result
             { predicateSuccess = predicateSuccess
             , predicateFailMsg =
                 Text.intercalate "\n" $
@@ -517,7 +539,6 @@ returns Predicate{..} =
                   , indent $ render x
                   ]
             , predicatePassMsg = predicatePassMsg
-            , predicateNested = Force False
             }
     , predicateDisp = predicateDisp
     , predicateDispNeg = predicateDispNeg
@@ -529,9 +550,9 @@ throws Predicate{..} =
     { predicateFunc = \io ->
         try io >>= \case
           Left e -> do
-            PredicateFuncResult{..} <- predicateFunc e
+            result@PredicateFuncResult{..} <- hideCtx <$> predicateFunc e
             pure
-              PredicateFuncResult
+              result
                 { predicateSuccess = predicateSuccess
                 , predicateFailMsg =
                     Text.intercalate "\n" $
@@ -542,7 +563,6 @@ throws Predicate{..} =
                       , indent $ Text.pack $ displayException e
                       ]
                 , predicatePassMsg = predicatePassMsg
-                , predicateNested = Force False
                 }
           Right x ->
             pure
@@ -550,7 +570,7 @@ throws Predicate{..} =
                 { predicateSuccess = False
                 , predicateFailMsg = render x <> " ≠ " <> disp
                 , predicatePassMsg = render x <> " = " <> disp
-                , predicateNested = Force False
+                , predicateShowFailCtx = HideFailCtx
                 }
     , predicateDisp = disp
     , predicateDispNeg = dispNeg
@@ -594,7 +614,7 @@ matchesSnapshot =
                       , showLineDiff ("expected", snapshot) ("actual", renderedActual)
                       ]
             , predicatePassMsg = "matches snapshot"
-            , predicateNested = Tentative False
+            , predicateShowFailCtx = HideFailCtx
             }
     , predicateDisp = "matches snapshot"
     , predicateDispNeg = "does not match snapshot"
@@ -620,7 +640,7 @@ mkPredicateOp op negOp f expected =
             { predicateSuccess = f actual expected
             , predicateFailMsg = explainOp (Just actual) negOp
             , predicatePassMsg = explainOp (Just actual) op
-            , predicateNested = Tentative False
+            , predicateShowFailCtx = noCtx
             }
     , predicateDisp = explainOp Nothing op
     , predicateDispNeg = explainOp Nothing negOp

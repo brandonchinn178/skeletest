@@ -128,6 +128,72 @@ Got:
   1
 ```
 
+## Containers / all / shows helpful failure messages
+
+```
+1 ≯ 10
+
+Expected:
+  all elements matching (> 10)
+
+Got:
+  [1,2]
+```
+
+```
+All values matched
+
+Expected:
+  some elements not matching (> 0)
+
+Got:
+  [1,2,3]
+```
+
+## Containers / any / shows helpful failure messages
+
+```
+No values matched
+
+Expected:
+  at least one element matching (= 2)
+
+Got:
+  []
+```
+
+```
+2 = 2
+
+Expected:
+  no elements matching (= 2)
+
+Got:
+  [1,2,3]
+```
+
+## Containers / elem / shows helpful failure messages
+
+```
+No values matched
+
+Expected:
+  at least one element matching (= 1)
+
+Got:
+  []
+```
+
+```
+1 = 1
+
+Expected:
+  no elements matching (= 1)
+
+Got:
+  [1]
+```
+
 ## Data types / con / fails to compile when applied to multiple arguments
 
 ```

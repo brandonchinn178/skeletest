@@ -45,9 +45,9 @@ module Skeletest.Internal.Predicate (
   or,
 
   -- * Containers
-  -- FIXME: any,
-  -- FIXME: all,
-  -- FIXME: elem,
+  any,
+  all,
+  elem,
 
   -- * Subsequences
   HasSubsequences (..),
@@ -63,6 +63,7 @@ module Skeletest.Internal.Predicate (
   matchesSnapshot,
 ) where
 
+import Data.Foldable (toList)
 import Data.Foldable1 qualified as Foldable1
 import Data.Functor.Const (Const (..))
 import Data.Functor.Identity (Identity (..))
@@ -456,12 +457,26 @@ or preds =
 
 {----- Containers -----}
 
--- any :: Predicate a -> Predicate [a]
+any :: (Foldable t) => Predicate a -> Predicate (t a)
+any Predicate{..} =
+  Predicate
+    { predicateFunc = \actual ->
+        verifyAny (const "No values matched") <$> mapM predicateFunc (toList actual)
+    , predicateDisp = "at least one element matching " <> parens predicateDisp
+    , predicateDispNeg = "no elements matching " <> parens predicateDisp
+    }
 
--- all :: Predicate a -> Predicate [a]
+all :: (Foldable t) => Predicate a -> Predicate (t a)
+all Predicate{..} =
+  Predicate
+    { predicateFunc = \actual ->
+        verifyAll (const "All values matched") <$> mapM predicateFunc (toList actual)
+    , predicateDisp = "all elements matching " <> parens predicateDisp
+    , predicateDispNeg = "some elements not matching " <> parens predicateDisp
+    }
 
--- elem :: (Eq a) => a -> Predicate [a]
--- elem = any . eq
+elem :: (Eq a, Foldable t) => a -> Predicate (t a)
+elem = any . eq
 
 {----- Subsequences -----}
 

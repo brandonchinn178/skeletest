@@ -263,7 +263,7 @@ spec = do
         1 `shouldNotSatisfy` P.not (P.gt 0)
 
     describe "&&" $ do
-      it "checks all predicates are true" $ do
+      it "checks both predicates are true" $ do
         1 `shouldSatisfy` (P.eq 1 P.&& P.gt 0)
         1 `shouldNotSatisfy` (P.eq 1 P.&& P.gt 10)
         1 `shouldNotSatisfy` (P.eq 2 P.&& P.gt 0)
@@ -274,7 +274,7 @@ spec = do
         snapshotFailure (P.not $ P.eq 1 P.&& P.gt 0) 1
 
     describe "||" $ do
-      it "checks all predicates are true" $ do
+      it "checks either predicate is true" $ do
         1 `shouldSatisfy` (P.eq 1 P.|| P.gt 0)
         1 `shouldSatisfy` (P.eq 1 P.|| P.gt 10)
         1 `shouldSatisfy` (P.eq 2 P.|| P.gt 0)
@@ -296,7 +296,7 @@ spec = do
         snapshotFailure (P.not $ P.and [P.eq 1, P.gt 0, P.lt 10]) 1
 
     describe "or" $ do
-      it "checks all predicates are true" $ do
+      it "checks any predicate is true" $ do
         1 `shouldSatisfy` P.or [P.eq 1, P.gt 0]
         1 `shouldSatisfy` P.or [P.eq 1, P.gt 10]
         1 `shouldSatisfy` P.or [P.eq 2, P.gt 0]
@@ -305,6 +305,36 @@ spec = do
       it "shows helpful failure messages" $ do
         snapshotFailure (P.or [P.eq 2, P.gt 1, P.lt 0]) 1
         snapshotFailure (P.not $ P.or [P.eq 2, P.gt 0, P.lt 0]) 1
+
+  describe "Containers" $ do
+    describe "any" $ do
+      it "checks predicate is true for any value" $ do
+        [1, 2, 3] `shouldSatisfy` P.any (P.eq 2)
+        [1, 2, 3] `shouldNotSatisfy` P.any (P.eq 10)
+        [] `shouldNotSatisfy` P.any (P.eq 10)
+
+      it "shows helpful failure messages" $ do
+        snapshotFailure (P.any (P.eq 2)) []
+        snapshotFailure (P.not $ P.any (P.eq 2)) [1, 2, 3]
+
+    describe "all" $ do
+      it "checks predicate is true for all values" $ do
+        [] `shouldSatisfy` P.all (P.gt 0)
+        [1, 2, 3] `shouldSatisfy` P.all (P.gt 0)
+        [1, 2, 3] `shouldNotSatisfy` P.all (P.lt 3)
+
+      it "shows helpful failure messages" $ do
+        snapshotFailure (P.all (P.gt 10)) [1, 2]
+        snapshotFailure (P.not $ P.all (P.gt 0)) [1, 2, 3]
+
+    describe "elem" $ do
+      it "checks element is in the given container" $ do
+        [1, 2, 3] `shouldSatisfy` P.elem 1
+        [1, 2, 3] `shouldNotSatisfy` P.elem 10
+
+      it "shows helpful failure messages" $ do
+        snapshotFailure (P.elem 1) []
+        snapshotFailure (P.not $ P.elem 1) [1]
 
   describe "Subsequences" $ do
     describe "hasPrefix" $ do

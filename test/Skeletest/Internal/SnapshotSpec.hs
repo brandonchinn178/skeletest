@@ -60,4 +60,31 @@ spec = do
     let result = Aeson.decode $ fromString "{\"hello\": [\"world\", 1]}"
     (result :: Maybe Aeson.Value) `shouldSatisfy` P.just P.matchesSnapshot
 
-  -- FIXME: snapshot test failure with multiline diff
+  integration . it "shows helpful failure messages" $ do
+    runner <- getFixture
+    addTestFile runner "ExampleSpec.hs" $
+      [ "module ExampleSpec (spec) where"
+      , ""
+      , "import Skeletest"
+      , "import qualified Skeletest.Predicate as P"
+      , ""
+      , "spec = it \"fails\" $ do"
+      , "  unlines [\"new1\", \"same1\", \"same2\", \"new2\"] `shouldSatisfy` P.matchesSnapshot"
+      ]
+    addTestFile runner "__snapshots__/ExampleSpec.snap.md" $
+      [ "# Example"
+      , ""
+      , "## fails"
+      , ""
+      , "```"
+      , "same1"
+      , "old1"
+      , "same2"
+      , "old2"
+      , "```"
+      ]
+
+    (code, stdout, stderr) <- runTests runner []
+    code `shouldBe` ExitFailure 1
+    stderr `shouldBe` ""
+    stdout `shouldSatisfy` P.matchesSnapshot

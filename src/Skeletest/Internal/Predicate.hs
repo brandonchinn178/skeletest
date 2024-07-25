@@ -17,6 +17,9 @@ module Skeletest.Internal.Predicate (
   -- * Ord
   eq,
   gt,
+  gte,
+  lt,
+  lte,
 
   -- * Data types
   just,
@@ -199,6 +202,15 @@ eq = mkPredicateOp "=" "≠" $ \actual expected -> actual == expected
 
 gt :: (Ord a) => a -> Predicate a
 gt = mkPredicateOp ">" "≯" $ \actual expected -> actual > expected
+
+gte :: (Ord a) => a -> Predicate a
+gte = mkPredicateOp "≥" "≱" $ \actual expected -> actual > expected || actual == expected
+
+lt :: (Ord a) => a -> Predicate a
+lt = mkPredicateOp "<" "≮" $ \actual expected -> actual < expected
+
+lte :: (Ord a) => a -> Predicate a
+lte = mkPredicateOp "≤" "≰" $ \actual expected -> actual < expected || actual == expected
 
 {----- Data types -----}
 

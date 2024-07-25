@@ -41,7 +41,26 @@ spec = do
     describe "gt" $ do
       it "checks inequality" $ do
         1 `shouldSatisfy` P.gt 0
+        1 `shouldNotSatisfy` P.gt 1
         1 `shouldNotSatisfy` P.gt 2
+
+    describe "gte" $ do
+      it "checks inequality" $ do
+        1 `shouldSatisfy` P.gte 0
+        1 `shouldSatisfy` P.gte 1
+        1 `shouldNotSatisfy` P.gte 2
+
+    describe "lt" $ do
+      it "checks inequality" $ do
+        1 `shouldSatisfy` P.lt 2
+        1 `shouldNotSatisfy` P.lt 1
+        1 `shouldNotSatisfy` P.lt 0
+
+    describe "lte" $ do
+      it "checks inequality" $ do
+        1 `shouldSatisfy` P.lte 2
+        1 `shouldSatisfy` P.lte 1
+        1 `shouldNotSatisfy` P.lte 0
 
   describe "Data types" $ do
     describe "just" $ do

@@ -59,3 +59,5 @@ spec = do
   it "renders JSON values" $ do
     let result = Aeson.decode $ fromString "{\"hello\": [\"world\", 1]}"
     (result :: Maybe Aeson.Value) `shouldSatisfy` P.just P.matchesSnapshot
+
+  -- FIXME: snapshot test failure with multiline diff

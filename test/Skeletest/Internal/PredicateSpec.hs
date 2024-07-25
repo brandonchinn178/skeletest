@@ -34,6 +34,10 @@ spec = do
         1 `shouldSatisfy` P.eq 1
         1 `shouldNotSatisfy` P.eq 2
 
+      it "shows helpful failure messages" $ do
+        snapshotFailure (P.eq 1) 2
+        snapshotFailure (P.not $ P.eq 1) 1
+
     describe "gt" $ do
       it "checks inequality" $ do
         1 `shouldSatisfy` P.gt 0
@@ -63,7 +67,7 @@ spec = do
         (1, True, "hello") `shouldSatisfy` P.tup (P.eq 1, P.eq True, P.eq "hello")
         (1, True, "hello", 1.2) `shouldSatisfy` P.tup (P.eq 1, P.eq True, P.eq "hello", P.gt 0)
 
-      it "shows a helpful failure message" $ do
+      it "shows helpful failure messages" $ do
         snapshotFailure (P.tup (P.eq 0, P.eq "")) (1, "")
         snapshotFailure (P.not $ P.tup (P.eq 1, P.eq "")) (1, "")
 

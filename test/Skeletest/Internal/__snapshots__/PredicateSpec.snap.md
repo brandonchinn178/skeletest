@@ -92,7 +92,7 @@ Got:
 --------------------------------------------------------------------------------
 ```
 
-## Data types / tup / shows a helpful failure message
+## Data types / tup / shows helpful failure messages
 
 ```
 1 ≠ 0
@@ -121,11 +121,7 @@ Got:
 ```
 
 ```
-0 ≠ 0
-Expected:
-  not (Left (= 0))
-Got:
-  Left 0
+0 = 0
 ```
 
 ## IO / throws / shows helpful failure messages
@@ -139,13 +135,26 @@ Got:
 ```
 
 ```
-1 ≠ throws (matches HttpException (= 500))
+Expected:
+  throws (matches HttpException (= 500))
+Got:
+  1
 ```
 
 ```
-HttpException 404 ≠ HttpException (= 404)
+HttpException (404 = 404)
+```
+
+## Ord / eq / shows helpful failure messages
+
+```
+2 ≠ 1
+```
+
+```
+1 = 1
 Expected:
-  not (throws (matches HttpException (= 404)))
+  ≠ 1
 Got:
-  HttpException 404
+  1
 ```

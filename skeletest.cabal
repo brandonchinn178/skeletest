@@ -14,6 +14,7 @@ library
     Skeletest.Internal.Error
     Skeletest.Internal.Fixtures
     Skeletest.Internal.GHC
+    Skeletest.Internal.GHC.Compat
     Skeletest.Internal.Markers
     Skeletest.Internal.Plugin
     Skeletest.Internal.Predicate
@@ -31,6 +32,15 @@ library
     Skeletest.Prop.Gen
     Skeletest.Prop.Internal
     Skeletest.Prop.Range
+  if impl(ghc >= 9.6) && impl(ghc < 9.8)
+    other-modules:
+        Skeletest.Internal.GHC.Compat_9_6
+  if impl(ghc >= 9.8) && impl(ghc < 9.10)
+    other-modules:
+        Skeletest.Internal.GHC.Compat_9_8
+  if impl(ghc >= 9.10) && impl(ghc < 9.12)
+    other-modules:
+        Skeletest.Internal.GHC.Compat_9_10
   build-depends:
       base
     , aeson
@@ -40,7 +50,7 @@ library
     , Diff
     , directory
     , filepath
-    , ghc
+    , ghc ^>= 9.6 || ^>= 9.8 || ^>= 9.10
     , megaparsec
     , ordered-containers
     , parser-combinators

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
@@ -9,8 +10,6 @@
 All GHC operations should go through this API, to isolate
 the rest of the logic from GHC internals logic, which can
 include breaking changes between versions.
-
-FIXME: support 9.6 + 9.8
 -}
 module Skeletest.Internal.GHC (
   Plugin,
@@ -68,7 +67,13 @@ import GHC.Types.SourceText qualified as GHC.SourceText
 import Language.Haskell.TH.Syntax qualified as TH
 import System.IO.Unsafe (unsafePerformIO)
 
+#if !MIN_VERSION_base(4, 20, 0)
+import Data.Foldable (foldl')
+#endif
+
 import Skeletest.Internal.Error (skeletestPluginError)
+import Skeletest.Internal.GHC.Compat (genLoc)
+import Skeletest.Internal.GHC.Compat qualified as GHC.Compat
 
 -- Has to be exactly GHC's Plugin type, for GHC to register it correctly.
 type Plugin = GHC.Plugin
@@ -225,7 +230,7 @@ toHsExpr = \case
      in
       HsExprRecordCon (hsRdrName $ unLoc conName) $ map (getField . unLoc) rec_flds
   L _ (GHC.HsLit _ (GHC.HsString _ s)) -> HsExprLitString $ Text.pack $ GHC.unpackFS s
-  L _ (GHC.HsPar _ expr) -> toHsExpr expr
+  L _ par@GHC.HsPar{} | let expr = GHC.Compat.unHsPar par -> toHsExpr expr
   expr -> HsExprOther $ WithShow expr
   where
     getPresentTupArg = \case
@@ -238,14 +243,14 @@ fromHsExpr fromRdrName = go
     go = \case
       HsExprCon name -> genLoc $ GHC.HsVar GHC.noExtField (genLoc $ fromRdrName name)
       HsExprVar name -> genLoc $ GHC.HsVar GHC.noExtField (genLoc $ fromRdrName name)
-      HsExprApp l r -> genLoc $ GHC.HsApp GHC.noExtField (parens $ go l) (parens $ go r)
+      HsExprApp l r -> genLoc $ GHC.Compat.hsApp (parens $ go l) (parens $ go r)
       HsExprOp l op r -> genLoc $ GHC.OpApp GHC.noAnn (parens $ go l) (parens $ go op) (parens $ go r)
       HsExprList exprs -> genLoc $ GHC.ExplicitList GHC.noAnn $ map go exprs
       HsExprTuple exprs ->
         genLoc $
           GHC.ExplicitTuple
             GHC.noAnn
-            (map (GHC.Present GHC.noExtField . go) exprs)
+            (map (GHC.Compat.hsTupPresent . go) exprs)
             GHC.Boxed
       HsExprRecordCon con fields ->
         genLoc $
@@ -265,14 +270,14 @@ fromHsExpr fromRdrName = go
                   ]
               , rec_dotdot = Nothing
               }
-      HsExprLitString s -> genLoc $ GHC.HsLit GHC.noExtField $ GHC.HsString GHC.SourceText.NoSourceText (fsText s)
+      HsExprLitString s -> genLoc $ GHC.Compat.hsLit $ GHC.HsString GHC.SourceText.NoSourceText (fsText s)
       HsExprLam pat expr ->
-        genLoc . GHC.HsLam GHC.noAnn GHC.LamSingle $
+        genLoc . GHC.Compat.hsLamSingle $
           GHC.MG GHC.FromSource . genLoc $
             [ genLoc $
                 GHC.Match
                   { m_ext = GHC.noAnn
-                  , m_ctxt = GHC.LamAlt GHC.LamSingle
+                  , m_ctxt = GHC.Compat.lamAltSingle
                   , m_pats = [fromHsPat fromRdrName pat]
                   , m_grhss =
                       GHC.GRHSs
@@ -302,7 +307,7 @@ fromHsExpr fromRdrName = go
       HsExprOther (WithShow expr) -> expr
 
     parens = \case
-      e@(L _ (GHC.HsApp _ _ _)) -> genLoc $ GHC.HsPar (GHC.NoEpTok, GHC.NoEpTok) e
+      e@(L _ (GHC.HsApp _ _ _)) -> genLoc $ GHC.Compat.hsPar e
       e -> e
 
 {----- HsType -----}
@@ -316,7 +321,7 @@ fromHsType :: (HsName -> GHC.RdrName) -> HsType -> GHC.LHsType GhcPs
 fromHsType fromHsName = go
   where
     go = \case
-      HsTypeCon name -> genLoc $ GHC.HsTyVar [] GHC.NotPromoted (genLoc $ fromHsName name)
+      HsTypeCon name -> genLoc $ GHC.HsTyVar GHC.noAnn GHC.NotPromoted (genLoc $ fromHsName name)
       HsTypeApp ty0 tys ->
         foldl'
           (\acc -> genLoc . GHC.HsAppTy GHC.noExtField acc . go)
@@ -420,11 +425,6 @@ mkSigD name ty =
   genLoc . GHC.SigD GHC.noExtField $
     GHC.TypeSig GHC.noAnn [name] $
       GHC.HsWC GHC.noExtField (genLoc $ GHC.HsSig GHC.noExtField (GHC.HsOuterImplicit GHC.noExtField) ty)
-
-{----- Locations -----}
-
-genLoc :: (GHC.NoAnn ann) => e -> GenLocated (GHC.EpAnn ann) e
-genLoc = L GHC.noAnn
 
 {----- FastString -----}
 

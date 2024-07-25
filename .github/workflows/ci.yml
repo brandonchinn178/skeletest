@@ -11,9 +11,8 @@ jobs:
     strategy:
       matrix:
         ghc_version:
-          # FIXME: reenable
-          # - '9.6'
-          # - '9.8'
+          - '9.6'
+          - '9.8'
           - '9.10'
         # FIXME: reenable
         # include:

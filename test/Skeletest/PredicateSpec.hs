@@ -1,8 +1,10 @@
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
 module Skeletest.PredicateSpec (spec) where
 
 import Data.IORef (newIORef, readIORef, writeIORef)
+import Data.Text qualified as Text
 import Skeletest
 import Skeletest.Predicate (PredicateResult (..), runPredicate)
 import Skeletest.Predicate qualified as P
@@ -171,7 +173,7 @@ spec = do
         (code, stdout, stderr) <- runTests runner []
         code `shouldBe` ExitFailure 1
         stdout `shouldBe` ""
-        stderr `shouldSatisfy` P.matchesSnapshot
+        normalizeConFailure stderr `shouldSatisfy` P.matchesSnapshot
 
       integration . it "fails to compile with non-constructor" $ do
         runner <- getFixture
@@ -381,3 +383,112 @@ spec = do
 
 snapshotFailure :: (HasCallStack) => Predicate a -> a -> IO ()
 snapshotFailure p x = runPredicate p x `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
+
+normalizeConFailure :: String -> String
+#if __GLASGOW_HASKELL__ == 906
+normalizeConFailure = Text.unpack . Text.replace old new . Text.pack
+  where
+    old =
+      Text.pack . unlines $
+        [ "ExampleSpec.hs:9:3: error:"
+        , "    • The constructor ‘User’ should have 2 arguments, but has been given 1"
+        , "    • In a stmt of a 'do' block:"
+        , "        User \"alice\" (Just 1)"
+        , "          `shouldSatisfy`"
+        , "            (((P.conMatches \"User\") Nothing)"
+        , "               \\ actual"
+        , "                 -> case pure actual of"
+        , "                      Just (User x0)"
+        , "                        -> Just"
+        , "                             ((Skeletest.Internal.Utils.HList.HCons (pure x0))"
+        , "                                Skeletest.Internal.Utils.HList.HNil)"
+        , "                      _ -> Nothing)"
+        , "              ((Skeletest.Internal.Utils.HList.HCons (P.eq \"\"))"
+        , "                 Skeletest.Internal.Utils.HList.HNil)"
+        , "      In the second argument of ‘($)’, namely"
+        , "        ‘do User \"alice\" (Just 1)"
+        , "              `shouldSatisfy`"
+        , "                (((P.conMatches \"User\") Nothing)"
+        , "                   \\ actual"
+        , "                     -> case pure actual of"
+        , "                          Just (User x0) -> ..."
+        , "                          _ -> ...)"
+        , "                  ((Skeletest.Internal.Utils.HList.HCons (P.eq \"\"))"
+        , "                     Skeletest.Internal.Utils.HList.HNil)’"
+        , "      In the expression:"
+        , "        it \"should error\""
+        , "          $ do User \"alice\" (Just 1)"
+        , "                 `shouldSatisfy`"
+        , "                   (((P.conMatches \"User\") Nothing)"
+        , "                      \\ actual"
+        , "                        -> case pure actual of"
+        , "                             Just (User x0) -> ..."
+        , "                             _ -> ...)"
+        , "                     ((Skeletest.Internal.Utils.HList.HCons (P.eq \"\"))"
+        , "                        Skeletest.Internal.Utils.HList.HNil)"
+        ]
+    new =
+      Text.pack . unlines $
+        [ "ExampleSpec.hs:9:3: error: [GHC-27346]"
+        , "    • The data constructor ‘User’ should have 2 arguments, but has been given 1"
+        , "    • In the pattern: User x0"
+        , "      In the pattern: Just (User x0)"
+        , "      In a case alternative:"
+        , "          Just (User x0)"
+        , "            -> Just"
+        , "                 ((Skeletest.Internal.Utils.HList.HCons (pure x0))"
+        , "                    Skeletest.Internal.Utils.HList.HNil)"
+        ]
+#elif __GLASGOW_HASKELL__ == 908
+normalizeConFailure = Text.unpack . Text.replace old new . Text.pack
+  where
+    old =
+      Text.pack . unlines $
+        [ "    • In a stmt of a 'do' block:"
+        , "        User \"alice\" (Just 1)"
+        , "          `shouldSatisfy`"
+        , "            (((P.conMatches \"User\") Nothing)"
+        , "               \\ actual"
+        , "                 -> case pure actual of"
+        , "                      Just (User x0)"
+        , "                        -> Just"
+        , "                             ((Skeletest.Internal.Utils.HList.HCons (pure x0))"
+        , "                                Skeletest.Internal.Utils.HList.HNil)"
+        , "                      _ -> Nothing)"
+        , "              ((Skeletest.Internal.Utils.HList.HCons (P.eq \"\"))"
+        , "                 Skeletest.Internal.Utils.HList.HNil)"
+        , "      In the second argument of ‘($)’, namely"
+        , "        ‘do User \"alice\" (Just 1)"
+        , "              `shouldSatisfy`"
+        , "                (((P.conMatches \"User\") Nothing)"
+        , "                   \\ actual"
+        , "                     -> case pure actual of"
+        , "                          Just (User x0) -> ..."
+        , "                          _ -> ...)"
+        , "                  ((Skeletest.Internal.Utils.HList.HCons (P.eq \"\"))"
+        , "                     Skeletest.Internal.Utils.HList.HNil)’"
+        , "      In the expression:"
+        , "        it \"should error\""
+        , "          $ do User \"alice\" (Just 1)"
+        , "                 `shouldSatisfy`"
+        , "                   (((P.conMatches \"User\") Nothing)"
+        , "                      \\ actual"
+        , "                        -> case pure actual of"
+        , "                             Just (User x0) -> ..."
+        , "                             _ -> ...)"
+        , "                     ((Skeletest.Internal.Utils.HList.HCons (P.eq \"\"))"
+        , "                        Skeletest.Internal.Utils.HList.HNil)"
+        ]
+    new =
+      Text.pack . unlines $
+        [ "    • In the pattern: User x0"
+        , "      In the pattern: Just (User x0)"
+        , "      In a case alternative:"
+        , "          Just (User x0)"
+        , "            -> Just"
+        , "                 ((Skeletest.Internal.Utils.HList.HCons (pure x0))"
+        , "                    Skeletest.Internal.Utils.HList.HNil)"
+        ]
+#else
+normalizeConFailure = Text.unpack . Text.pack
+#endif

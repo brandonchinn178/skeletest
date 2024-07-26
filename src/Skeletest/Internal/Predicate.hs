@@ -59,6 +59,12 @@ module Skeletest.Internal.Predicate (
   returns,
   throws,
 
+  -- * Functions
+
+  -- TODO: (encode . decode P.=== pure) `shouldSatisfy` P.isoWith (Gen.int $ Range.between 0 100)
+  --   - (===) :: Eq b => (a -> b) -> (a -> b) -> Fun a b
+  --   - isoWith :: MonadRunProp m => Gen a -> Predicate m (Fun a b)
+
   -- * Snapshot testing
   matchesSnapshot,
 ) where

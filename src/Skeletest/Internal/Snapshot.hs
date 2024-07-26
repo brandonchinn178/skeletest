@@ -228,6 +228,7 @@ data SnapshotFile = SnapshotFile
   }
   deriving (Eq)
 
+-- TODO: sanitize "```" lines in snapshotContent
 data SnapshotValue = SnapshotValue
   { snapshotContent :: Text
   , snapshotLang :: Maybe Text
@@ -237,6 +238,7 @@ data SnapshotValue = SnapshotValue
 getContent :: SnapshotValue -> Text
 getContent SnapshotValue{snapshotContent} = snapshotContent
 
+-- TODO: sanitize slashes in identifier
 type TestIdentifier = [Text]
 
 getSnapshotPath :: FilePath -> FilePath

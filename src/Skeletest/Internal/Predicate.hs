@@ -58,12 +58,13 @@ module Skeletest.Internal.Predicate (
   -- * IO
   returns,
   throws,
+  -- TODO: evals (check if WHNF errors)
+  -- TODO: evalsDeep (check if NF errors)
 
   -- * Functions
-
-  -- TODO: (encode . decode P.=== pure) `shouldSatisfy` P.isoWith (Gen.int $ Range.between 0 100)
-  --   - (===) :: Eq b => (a -> b) -> (a -> b) -> Fun a b
-  --   - isoWith :: MonadRunProp m => Gen a -> Predicate m (Fun a b)
+  Fun,
+  (===),
+  isoWith,
 
   -- * Snapshot testing
   matchesSnapshot,
@@ -101,6 +102,8 @@ import Skeletest.Internal.TestInfo (getTestInfo)
 import Skeletest.Internal.Utils.Diff (showLineDiff)
 import Skeletest.Internal.Utils.HList (HList (..))
 import Skeletest.Internal.Utils.HList qualified as HList
+import Skeletest.Prop.Gen (Gen)
+import Skeletest.Prop.Internal (forAll)
 
 data Predicate a = Predicate
   { predicateFunc :: a -> IO PredicateFuncResult
@@ -631,6 +634,41 @@ throws Predicate{..} =
   where
     disp = "throws (" <> predicateDisp <> ")"
     dispNeg = "does not throw (" <> predicateDisp <> ")"
+
+{----- Functions -----}
+
+data Fun a b = Fun (a -> b) (a -> b)
+
+(===) :: (a -> b) -> (a -> b) -> Fun a b
+(===) = Fun
+
+-- FIXME: run predicate in PropertyM
+-- FIXME: show functions (find/replace P.=== in plugin?)
+isoWith :: (Show a, Eq b) => Gen a -> Predicate (Fun a b)
+isoWith gen =
+  Predicate
+    { predicateFunc = \(Fun f1 f2) -> error "TODO" $ do
+        a <- forAll gen
+        let success = f1 a == f2 a
+        pure
+          PredicateFuncResult
+            { predicateSuccess = success
+            , predicateExplain =
+                -- FIXME: "<fun1> and <fun2> returned same values.\nInput: <a>\nOutput: <b>"
+                -- FIXME: "<fun1> and <fun2> returned different values.\nInput: <a>\n<f1>: <f1 a>\n<f2>: <f2 a>"
+                ""
+                -- if success
+                --   then render val <> " " <> disp
+                --   else render val <> " " <> dispNeg
+            , predicateShowFailCtx = noCtx
+            }
+    , predicateDisp = disp
+    , predicateDispNeg = dispNeg
+    }
+  where
+    -- FIXME: "<fun1> is isomorphic to <fun2>"
+    disp = ""
+    dispNeg = ""
 
 {----- Snapshot -----}
 

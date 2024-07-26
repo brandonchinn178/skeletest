@@ -7,6 +7,8 @@ import Data.Text qualified as Text
 
 import Skeletest
 import Skeletest.Predicate qualified as P
+import Skeletest.Prop.Gen qualified as Gen
+import Skeletest.Prop.Range qualified as Range
 
 spec :: Spec
 spec = do
@@ -48,6 +50,16 @@ spec = do
 
     it "matches snapshots without Show instance" $
       UserNoShow{name = "user1", age = 18} `shouldSatisfy` P.matchesSnapshot
+
+  prop "reverse does not drop elements" $ do
+    input <-
+      forAll $
+        Gen.list (Range.linear 0 10) $
+          Gen.string (Range.linear 0 100) Gen.unicode
+    length (reverse input) `shouldBe` length input
+
+  prop "read . show === id" $
+    (read . show) P.=== id `shouldSatisfy` P.isoWith (Gen.int $ Range.linear 0 100)
 
   describe "fixtures example" $ do
     it "allows using fixtures inside fixtures" $ do

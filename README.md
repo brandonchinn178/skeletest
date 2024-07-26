@@ -30,22 +30,22 @@ spec = do
       myFunc 1 2 `shouldSatisfy` P.list [P.eq "a", P.anything, P.anything]
 
     prop "myFunc 0 x == []" $ do
-      x <- gen $ Gen.int $ Range.between (0, 100)
+      x <- gen $ Gen.int (Range.linear 0 100)
       myFunc 0 x `shouldBe` ""
 
     prop "myFunc x y == myFunc y x" $ do
-      x <- gen $ Gen.int $ Range.between (0, 100)
-      y <- gen $ Gen.int $ Range.between (0, 100)
+      x <- gen $ Gen.int (Range.linear 0 100)
+      y <- gen $ Gen.int (Range.linear 0 100)
       myFunc x y `shouldBe` myFunc y x
 
   -- top-level property that's not grouped under
   -- either myFunc nor otherFunc
   prop "myFunc x . otherFunc === id" $ do
-    input <-
-      gen $
-        Gen.list (Range.between (0, 10)) $
-          Gen.string (Range.between (0, 100) Gen.anyChar
-    (myFunc x . otherFunc) input `shouldBe` id input
+    x <- gen $ Gen.int (Range.linear 0 100)
+    let input = 
+          Gen.list (Range.linear 0 10) $
+            Gen.string (Range.linear 0 100) Gen.unicode
+    (myFunc x . otherFunc) P.=== id `shouldSatisfy` P.isoWith input
 
   describe "ioFunc" $ do
     it "returns the correct string" $ do

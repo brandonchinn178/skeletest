@@ -307,7 +307,9 @@ fromHsExpr fromRdrName = go
       HsExprOther (WithShow expr) -> expr
 
     parens = \case
-      e@(L _ (GHC.HsApp _ _ _)) -> genLoc $ GHC.Compat.hsPar e
+      e@(L _ GHC.HsApp{}) -> genLoc $ GHC.Compat.hsPar e
+      e@(L _ GHC.SectionL{}) -> genLoc $ GHC.Compat.hsPar e
+      e@(L _ GHC.SectionR{}) -> genLoc $ GHC.Compat.hsPar e
       e -> e
 
 {----- HsType -----}

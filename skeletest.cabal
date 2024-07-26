@@ -21,6 +21,7 @@ library
     Skeletest.Internal.Preprocessor
     Skeletest.Internal.Snapshot
     Skeletest.Internal.Spec
+    Skeletest.Internal.Testable
     Skeletest.Internal.TestInfo
     Skeletest.Internal.TestTargets
     Skeletest.Internal.Utils.Diff
@@ -51,11 +52,13 @@ library
     , directory
     , filepath
     , ghc ^>= 9.6 || ^>= 9.8 || ^>= 9.10
+    , hedgehog
     , megaparsec
     , ordered-containers >= 0.2.4
     , parser-combinators
     , pretty
     , recover-rtti
+    , safe-exceptions
     , template-haskell
     , text
     , transformers

@@ -54,7 +54,7 @@ import UnliftIO.Exception (
   trySyncOrAsync,
  )
 
-import Skeletest.Assertions (TestFailure (..))
+import Skeletest.Assertions (TestFailure (..), Testable, runTestable)
 import Skeletest.Internal.Error (SkeletestError)
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.Markers (
@@ -67,7 +67,7 @@ import Skeletest.Internal.TestInfo (TestInfo (TestInfo), withTestInfo)
 import Skeletest.Internal.TestInfo qualified as TestInfo
 import Skeletest.Internal.TestTargets (TestTarget, TestTargets, matchesTest)
 import Skeletest.Internal.TestTargets qualified as TestTargets
-import Skeletest.Prop.Internal (Property, runProperty)
+import Skeletest.Prop.Internal (Property)
 
 type Spec = Spec' ()
 
@@ -342,23 +342,14 @@ describe name = runIdentity . withSpecTrees (pure . (: []) . mkGroup)
         , groupTrees = trees
         }
 
-class Testable a where
-  runTest :: a -> IO ()
-
-instance Testable (IO ()) where
-  runTest = id
-
-instance Testable Property where
-  runTest = runProperty
-
-test :: (Testable a) => String -> a -> Spec
+test :: (Testable m) => String -> m () -> Spec
 test name t = Spec $ tell [mkTest]
   where
     mkTest =
       SpecTest
         { testName = Text.pack name
         , testMarkers = []
-        , testAction = runTest t
+        , testAction = runTestable t
         }
 
 it :: String -> IO () -> Spec

@@ -26,6 +26,20 @@ module Skeletest (
   HasCallStack,
   Predicate,
 
+  -- * Properties
+  Property,
+  PropertyM,
+  forAll,
+
+  -- ** Settings
+  setDiscardLimit,
+  setShrinkLimit,
+  setShrinkRetries,
+  setConfidence,
+  setVerifiedTermination,
+  setTestLimit,
+  setSkipTo,
+
   -- * Fixtures
   Fixture (..),
   FixtureScope (..),
@@ -51,3 +65,4 @@ import Skeletest.Internal.CLI
 import Skeletest.Internal.Fixtures
 import Skeletest.Internal.Spec
 import Skeletest.Predicate
+import Skeletest.Prop.Internal

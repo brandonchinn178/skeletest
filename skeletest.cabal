@@ -14,6 +14,7 @@ library
     Skeletest.Internal.Error
     Skeletest.Internal.Fixtures
     Skeletest.Internal.GHC
+    Skeletest.Internal.GHC.Compat
     Skeletest.Internal.Markers
     Skeletest.Internal.Plugin
     Skeletest.Internal.Predicate
@@ -31,25 +32,34 @@ library
     Skeletest.Prop.Gen
     Skeletest.Prop.Internal
     Skeletest.Prop.Range
+  if impl(ghc >= 9.6) && impl(ghc < 9.8)
+    other-modules:
+        Skeletest.Internal.GHC.Compat_9_6
+  if impl(ghc >= 9.8) && impl(ghc < 9.10)
+    other-modules:
+        Skeletest.Internal.GHC.Compat_9_8
+  if impl(ghc >= 9.10) && impl(ghc < 9.12)
+    other-modules:
+        Skeletest.Internal.GHC.Compat_9_10
   build-depends:
       base
     , aeson
     , aeson-pretty
-    , ansi-terminal
+    , ansi-terminal >= 0.4.0
     , containers
-    , Diff
+    , Diff >= 0.5
     , directory
     , filepath
-    , ghc
+    , ghc ^>= 9.6 || ^>= 9.8 || ^>= 9.10
     , megaparsec
-    , ordered-containers
+    , ordered-containers >= 0.2.4
     , parser-combinators
     , pretty
     , recover-rtti
     , template-haskell
     , text
     , transformers
-    , unliftio
+    , unliftio >= 0.2.17
   default-language: GHC2021
   ghc-options: -Wall -Wcompat
 
@@ -73,11 +83,11 @@ test-suite skeletest-tests
     Skeletest.AssertionsSpec
     Skeletest.Internal.CLISpec
     Skeletest.Internal.FixturesSpec
-    Skeletest.Internal.PredicateSpec
     Skeletest.Internal.SnapshotSpec
     Skeletest.Internal.SpecSpec
     Skeletest.Internal.TestTargetsSpec
     Skeletest.MainSpec
+    Skeletest.PredicateSpec
     Skeletest.TestUtils.Integration
   build-depends:
       base

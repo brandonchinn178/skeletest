@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
-module Skeletest.Internal.PredicateSpec (spec) where
+module Skeletest.PredicateSpec (spec) where
 
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Skeletest

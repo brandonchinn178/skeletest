@@ -17,13 +17,13 @@ module Skeletest.Assertions (
 ) where
 
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.IORef (IORef, modifyIORef, newIORef, readIORef)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import GHC.Stack (HasCallStack)
 import GHC.Stack qualified as GHC
 import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.Exception (bracket_, throwIO)
+import UnliftIO.IORef (IORef, modifyIORef, newIORef, readIORef)
 
 import Skeletest.Internal.Predicate (
   Predicate,
@@ -47,15 +47,14 @@ shouldNotBe :: (HasCallStack, Testable m, Eq a) => a -> a -> m ()
 actual `shouldNotBe` expected = GHC.withFrozenCallStack $ actual `shouldNotSatisfy` P.eq expected
 
 -- TODO: work in both IO and Property
-shouldSatisfy :: (HasCallStack, Testable m) => a -> Predicate a -> m ()
+shouldSatisfy :: (HasCallStack, Testable m) => a -> Predicate m a -> m ()
 actual `shouldSatisfy` p =
   GHC.withFrozenCallStack $
-    liftIO $
-      runPredicate p actual >>= \case
-        PredicateSuccess -> pure ()
-        PredicateFail msg -> failTest' msg
+    runPredicate p actual >>= \case
+      PredicateSuccess -> pure ()
+      PredicateFail msg -> failTest' msg
 
-shouldNotSatisfy :: (HasCallStack, Testable m) => a -> Predicate a -> m ()
+shouldNotSatisfy :: (HasCallStack, Testable m) => a -> Predicate m a -> m ()
 actual `shouldNotSatisfy` p = GHC.withFrozenCallStack $ actual `shouldSatisfy` P.not p
 
 contextIO :: String -> IO a -> IO a
@@ -64,10 +63,10 @@ contextIO msg =
     (modifyIORef failContextRef (Text.pack msg :))
     (modifyIORef failContextRef (drop 1))
 
-failTest :: (HasCallStack, Testable m) => String -> m a
-failTest = GHC.withFrozenCallStack $ liftIO . failTest' . Text.pack
+failTest :: (HasCallStack, Testable m, MonadIO m) => String -> m a
+failTest = GHC.withFrozenCallStack $ failTest' . Text.pack
 
-failTest' :: (HasCallStack) => Text -> IO a
+failTest' :: (HasCallStack, MonadIO m) => Text -> m a
 failTest' msg = do
   testInfo <- getTestInfo
   ctx <- readIORef failContextRef

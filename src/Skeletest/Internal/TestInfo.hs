@@ -7,13 +7,15 @@ module Skeletest.Internal.TestInfo (
   lookupTestInfo,
 ) where
 
-import Control.Concurrent (ThreadId, myThreadId)
-import Data.IORef (IORef, modifyIORef, newIORef, readIORef)
+import Control.Monad.IO.Class (MonadIO)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Text (Text)
 import System.IO.Unsafe (unsafePerformIO)
+import UnliftIO (MonadUnliftIO)
+import UnliftIO.Concurrent (ThreadId, myThreadId)
 import UnliftIO.Exception (bracket_)
+import UnliftIO.IORef (IORef, modifyIORef, newIORef, readIORef)
 
 import Skeletest.Internal.Error (invariantViolation)
 import Skeletest.Internal.Markers (SomeMarker)
@@ -34,7 +36,7 @@ testInfoMapRef :: IORef TestInfoMap
 testInfoMapRef = unsafePerformIO $ newIORef Map.empty
 {-# NOINLINE testInfoMapRef #-}
 
-withTestInfo :: TestInfo -> IO a -> IO a
+withTestInfo :: (MonadUnliftIO m) => TestInfo -> m a -> m a
 withTestInfo info m = do
   tid <- myThreadId
   bracket_ (set tid) (unset tid) m
@@ -42,12 +44,12 @@ withTestInfo info m = do
     set tid = modifyIORef testInfoMapRef $ Map.insert tid info
     unset tid = modifyIORef testInfoMapRef $ Map.delete tid
 
-lookupTestInfo :: IO (Maybe TestInfo)
+lookupTestInfo :: (MonadIO m) => m (Maybe TestInfo)
 lookupTestInfo = do
   tid <- myThreadId
   Map.lookup tid <$> readIORef testInfoMapRef
 
-getTestInfo :: IO TestInfo
+getTestInfo :: (MonadIO m) => m TestInfo
 getTestInfo =
   lookupTestInfo >>= \case
     Just info -> pure info

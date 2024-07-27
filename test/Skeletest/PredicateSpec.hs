@@ -381,7 +381,7 @@ spec = do
         snapshotFailure (P.throws (exc 500)) (pure 1)
         snapshotFailure (P.not $ P.throws (exc 404)) throw404
 
-snapshotFailure :: (HasCallStack) => Predicate a -> a -> IO ()
+snapshotFailure :: (HasCallStack) => Predicate IO a -> a -> IO ()
 snapshotFailure p x = runPredicate p x `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
 
 normalizeConFailure :: String -> String

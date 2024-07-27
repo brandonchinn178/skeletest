@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -70,6 +71,7 @@ module Skeletest.Internal.Predicate (
   matchesSnapshot,
 ) where
 
+import Control.Monad.IO.Class (MonadIO)
 import Data.Foldable (toList)
 import Data.Foldable1 qualified as Foldable1
 import Data.Functor.Const (Const (..))
@@ -78,11 +80,13 @@ import Data.Kind (Type)
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Maybe (isJust, isNothing, listToMaybe)
+import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Typeable (Typeable)
 import Debug.RecoverRTTI (anythingToString)
 import GHC.Generics ((:*:) (..))
+import UnliftIO (MonadUnliftIO)
 import UnliftIO.Exception (Exception, displayException, try)
 import Prelude hiding (abs, all, and, any, elem, not, or, (&&), (||))
 import Prelude qualified
@@ -103,10 +107,10 @@ import Skeletest.Internal.Utils.Diff (showLineDiff)
 import Skeletest.Internal.Utils.HList (HList (..))
 import Skeletest.Internal.Utils.HList qualified as HList
 import Skeletest.Prop.Gen (Gen)
-import Skeletest.Prop.Internal (forAll)
+import Skeletest.Prop.Internal (PropertyM, forAll)
 
-data Predicate a = Predicate
-  { predicateFunc :: a -> IO PredicateFuncResult
+data Predicate m a = Predicate
+  { predicateFunc :: a -> m PredicateFuncResult
   , predicateDisp :: Text
   -- ^ The rendered representation of the predicate
   , predicateDispNeg :: Text
@@ -117,7 +121,7 @@ data PredicateResult
   = PredicateSuccess
   | PredicateFail Text
 
-runPredicate :: Predicate a -> a -> IO PredicateResult
+runPredicate :: (Monad m) => Predicate m a -> a -> m PredicateResult
 runPredicate Predicate{..} val = do
   PredicateFuncResult{..} <- predicateFunc val
   pure $
@@ -131,7 +135,7 @@ runPredicate Predicate{..} val = do
                 }
          in PredicateFail . withFailCtx failCtx predicateShowFailCtx $ predicateExplain
 
-renderPredicate :: Predicate a -> Text
+renderPredicate :: Predicate m a -> Text
 renderPredicate = predicateDisp
 
 data PredicateFuncResult = PredicateFuncResult
@@ -198,7 +202,7 @@ showCtx result = result{predicateShowFailCtx = max ShowFailCtx $ predicateShowFa
 
 {----- General -----}
 
-anything :: Predicate a
+anything :: (Monad m) => Predicate m a
 anything =
   Predicate
     { predicateFunc = \_ ->
@@ -215,24 +219,24 @@ anything =
 {----- Ord -----}
 
 -- TODO: if rendered vals are too long, show a diff
-eq :: (Eq a) => a -> Predicate a
+eq :: (Eq a, Monad m) => a -> Predicate m a
 eq = mkPredicateOp "=" "≠" $ \actual expected -> actual == expected
 
-gt :: (Ord a) => a -> Predicate a
+gt :: (Ord a, Monad m) => a -> Predicate m a
 gt = mkPredicateOp ">" "≯" $ \actual expected -> actual > expected
 
-gte :: (Ord a) => a -> Predicate a
+gte :: (Ord a, Monad m) => a -> Predicate m a
 gte = mkPredicateOp "≥" "≱" $ \actual expected -> actual > expected Prelude.|| actual == expected
 
-lt :: (Ord a) => a -> Predicate a
+lt :: (Ord a, Monad m) => a -> Predicate m a
 lt = mkPredicateOp "<" "≮" $ \actual expected -> actual < expected
 
-lte :: (Ord a) => a -> Predicate a
+lte :: (Ord a, Monad m) => a -> Predicate m a
 lte = mkPredicateOp "≤" "≰" $ \actual expected -> actual < expected Prelude.|| actual == expected
 
 {----- Data types -----}
 
-just :: Predicate a -> Predicate (Maybe a)
+just :: (Monad m) => Predicate m a -> Predicate m (Maybe a)
 just p = conMatches "Just" fieldNames toFields preds
   where
     fieldNames = Nothing
@@ -241,7 +245,7 @@ just p = conMatches "Just" fieldNames toFields preds
       _ -> Nothing
     preds = HCons p HNil
 
-nothing :: Predicate (Maybe a)
+nothing :: (Monad m) => Predicate m (Maybe a)
 nothing = conMatches "Nothing" fieldNames toFields preds
   where
     fieldNames = Nothing
@@ -250,7 +254,7 @@ nothing = conMatches "Nothing" fieldNames toFields preds
       _ -> Nothing
     preds = HNil
 
-left :: Predicate a -> Predicate (Either a b)
+left :: (Monad m) => Predicate m a -> Predicate m (Either a b)
 left p = conMatches "Left" fieldNames toFields preds
   where
     fieldNames = Nothing
@@ -259,7 +263,7 @@ left p = conMatches "Left" fieldNames toFields preds
       _ -> Nothing
     preds = HCons p HNil
 
-right :: Predicate b -> Predicate (Either a b)
+right :: (Monad m) => Predicate m b -> Predicate m (Either a b)
 right p = conMatches "Right" fieldNames toFields preds
   where
     fieldNames = Nothing
@@ -287,36 +291,37 @@ instance IsTuple (a, b, c, d, e, f) where
   type TupleArgs (a, b, c, d, e, f) = '[a, b, c, d, e, f]
   toHList (a, b, c, d, e, f) = HCons (pure a) . HCons (pure b) . HCons (pure c) . HCons (pure d) . HCons (pure e) . HCons (pure f) $ HNil
 
-class (IsTuple (UnPredTuple a)) => IsPredTuple a where
-  type UnPredTuple a
-  toHListPred :: a -> HList Predicate (TupleArgs (UnPredTuple a))
-instance IsPredTuple (Predicate a, Predicate b) where
-  type UnPredTuple (Predicate a, Predicate b) = (a, b)
-  toHListPred (a, b) = HCons a . HCons b $ HNil
-instance IsPredTuple (Predicate a, Predicate b, Predicate c) where
-  type UnPredTuple (Predicate a, Predicate b, Predicate c) = (a, b, c)
-  toHListPred (a, b, c) = HCons a . HCons b . HCons c $ HNil
-instance IsPredTuple (Predicate a, Predicate b, Predicate c, Predicate d) where
-  type UnPredTuple (Predicate a, Predicate b, Predicate c, Predicate d) = (a, b, c, d)
-  toHListPred (a, b, c, d) = HCons a . HCons b . HCons c . HCons d $ HNil
-instance IsPredTuple (Predicate a, Predicate b, Predicate c, Predicate d, Predicate e) where
-  type UnPredTuple (Predicate a, Predicate b, Predicate c, Predicate d, Predicate e) = (a, b, c, d, e)
-  toHListPred (a, b, c, d, e) = HCons a . HCons b . HCons c . HCons d . HCons e $ HNil
-instance IsPredTuple (Predicate a, Predicate b, Predicate c, Predicate d, Predicate e, Predicate f) where
-  type UnPredTuple (Predicate a, Predicate b, Predicate c, Predicate d, Predicate e, Predicate f) = (a, b, c, d, e, f)
-  toHListPred (a, b, c, d, e, f) = HCons a . HCons b . HCons c . HCons d . HCons e . HCons f $ HNil
+class (IsTuple a) => IsPredTuple m a where
+  type ToPredTuple m a
+  toHListPred :: proxy a -> ToPredTuple m a -> HList (Predicate m) (TupleArgs a)
+instance IsPredTuple m (a, b) where
+  type ToPredTuple m (a, b) = (Predicate m a, Predicate m b)
+  toHListPred _ (a, b) = HCons a . HCons b $ HNil
+instance IsPredTuple m (a, b, c) where
+  type ToPredTuple m (a, b, c) = (Predicate m a, Predicate m b, Predicate m c)
+  toHListPred _ (a, b, c) = HCons a . HCons b . HCons c $ HNil
+instance IsPredTuple m (a, b, c, d) where
+  type ToPredTuple m (a, b, c, d) = (Predicate m a, Predicate m b, Predicate m c, Predicate m d)
+  toHListPred _ (a, b, c, d) = HCons a . HCons b . HCons c . HCons d $ HNil
+instance IsPredTuple m (a, b, c, d, e) where
+  type ToPredTuple m (a, b, c, d, e) = (Predicate m a, Predicate m b, Predicate m c, Predicate m d, Predicate m e)
+  toHListPred _ (a, b, c, d, e) = HCons a . HCons b . HCons c . HCons d . HCons e $ HNil
+instance IsPredTuple m (a, b, c, d, e, f) where
+  type ToPredTuple m (a, b, c, d, e, f) = (Predicate m a, Predicate m b, Predicate m c, Predicate m d, Predicate m e, Predicate m f)
+  toHListPred _ (a, b, c, d, e, f) = HCons a . HCons b . HCons c . HCons d . HCons e . HCons f $ HNil
 
-tup :: (IsPredTuple a) => a -> Predicate (UnPredTuple a)
-tup preds =
+tup :: forall a m. (IsPredTuple m a, Monad m) => ToPredTuple m a -> Predicate m a
+tup predTup =
   Predicate
     { predicateFunc = \actual ->
-        verifyAll tupify <$> runPredicates (toHListPred preds) (toHList actual)
+        verifyAll tupify <$> runPredicates preds (toHList actual)
     , predicateDisp = disp
     , predicateDispNeg = dispNeg
     }
   where
+    preds = toHListPred (Proxy @a) predTup
     tupify vals = "(" <> Text.intercalate ", " vals <> ")"
-    disp = tupify $ HList.toListWith predicateDisp (toHListPred preds)
+    disp = tupify $ HList.toListWith predicateDisp preds
     dispNeg = "not " <> disp
 
 -- | A predicate for checking that a value matches the given constructor.
@@ -329,7 +334,7 @@ tup preds =
 --
 -- Record fields that are omitted are not checked at all; i.e.
 -- @P.con Foo{}@ and @P.con Foo{a = P.anything}@ are equivalent.
-con :: a -> Predicate a
+con :: a -> Predicate m a
 con =
   -- A placeholder that will be replaced with conMatches in the plugin.
   invariantViolation "P.con was not replaced"
@@ -338,11 +343,12 @@ con =
 -- Assumes that the arguments correctly match the constructor being tested,
 -- so it should not be written directly, only generated from `con`.
 conMatches ::
+  (Monad m) =>
   String
   -> Maybe (HList (Const String) fields)
   -> (a -> Maybe (HList Identity fields))
-  -> HList Predicate fields
-  -> Predicate a
+  -> HList (Predicate m) fields
+  -> Predicate m a
 conMatches conNameS mFieldNames deconstruct preds =
   Predicate
     { predicateFunc = \actual ->
@@ -386,7 +392,7 @@ conMatches conNameS mFieldNames deconstruct preds =
 -- >>> (0.1 + 0.2) `shouldSatisfy` P.approx P.tol{P.rel = Just 1e-6, P.abs = 1e-12} 0.3
 -- >>> (0.1 + 0.2) `shouldSatisfy` P.approx P.tol{P.rel = Nothing} 0.3
 -- >>> (0.1 + 0.2) `shouldSatisfy` P.approx P.tol{P.rel = Nothing, P.abs = 1e-12} 0.3
-approx :: (Fractional a, Ord a) => Tolerance -> a -> Predicate a
+approx :: (Fractional a, Ord a, Monad m) => Tolerance -> a -> Predicate m a
 approx Tolerance{..} =
   mkPredicateOp "≈" "≉" $ \actual expected ->
     Prelude.abs (actual - expected) <= getTolerance expected
@@ -414,7 +420,7 @@ tol = Tolerance{rel = Just 1e-6, abs = 1e-12}
 
 infixr 1 <<<, >>>
 
-(<<<) :: Predicate a -> (b -> a) -> Predicate b
+(<<<) :: (Monad m) => Predicate m a -> (b -> a) -> Predicate m b
 Predicate{..} <<< f =
   -- TODO: render function name in predicateDisp?
   Predicate
@@ -423,10 +429,10 @@ Predicate{..} <<< f =
     , predicateDispNeg
     }
 
-(>>>) :: (b -> a) -> Predicate a -> Predicate b
+(>>>) :: (Monad m) => (b -> a) -> Predicate m a -> Predicate m b
 (>>>) = flip (<<<)
 
-not :: Predicate a -> Predicate a
+not :: (Monad m) => Predicate m a -> Predicate m a
 not Predicate{..} =
   Predicate
     { predicateFunc = \actual -> do
@@ -436,13 +442,13 @@ not Predicate{..} =
     , predicateDispNeg = predicateDisp
     }
 
-(&&) :: Predicate a -> Predicate a -> Predicate a
+(&&) :: (Monad m) => Predicate m a -> Predicate m a -> Predicate m a
 p1 && p2 = and [p1, p2]
 
-(||) :: Predicate a -> Predicate a -> Predicate a
+(||) :: (Monad m) => Predicate m a -> Predicate m a -> Predicate m a
 p1 || p2 = or [p1, p2]
 
-and :: [Predicate a] -> Predicate a
+and :: (Monad m) => [Predicate m a] -> Predicate m a
 and preds =
   Predicate
     { predicateFunc = \actual ->
@@ -454,7 +460,7 @@ and preds =
     andify = Text.intercalate "\nand "
     predList = map (parens . predicateDisp) preds
 
-or :: [Predicate a] -> Predicate a
+or :: (Monad m) => [Predicate m a] -> Predicate m a
 or preds =
   Predicate
     { predicateFunc = \actual ->
@@ -468,7 +474,7 @@ or preds =
 
 {----- Containers -----}
 
-any :: (Foldable t) => Predicate a -> Predicate (t a)
+any :: (Foldable t, Monad m) => Predicate m a -> Predicate m (t a)
 any Predicate{..} =
   Predicate
     { predicateFunc = \actual ->
@@ -477,7 +483,7 @@ any Predicate{..} =
     , predicateDispNeg = "no elements matching " <> parens predicateDisp
     }
 
-all :: (Foldable t) => Predicate a -> Predicate (t a)
+all :: (Foldable t, Monad m) => Predicate m a -> Predicate m (t a)
 all Predicate{..} =
   Predicate
     { predicateFunc = \actual ->
@@ -486,7 +492,7 @@ all Predicate{..} =
     , predicateDispNeg = "some elements not matching " <> parens predicateDisp
     }
 
-elem :: (Eq a, Foldable t) => a -> Predicate (t a)
+elem :: (Eq a, Foldable t, Monad m) => a -> Predicate m (t a)
 elem = any . eq
 
 {----- Subsequences -----}
@@ -504,7 +510,7 @@ instance HasSubsequences Text where
   isInfixOf = Text.isInfixOf
   isSuffixOf = Text.isSuffixOf
 
-hasPrefix :: (HasSubsequences a) => a -> Predicate a
+hasPrefix :: (HasSubsequences a, Monad m) => a -> Predicate m a
 hasPrefix prefix =
   Predicate
     { predicateFunc = \val -> do
@@ -525,7 +531,7 @@ hasPrefix prefix =
     disp = "has prefix " <> render prefix
     dispNeg = "does not have prefix " <> render prefix
 
-hasInfix :: (HasSubsequences a) => a -> Predicate a
+hasInfix :: (HasSubsequences a, Monad m) => a -> Predicate m a
 hasInfix elems =
   Predicate
     { predicateFunc = \val -> do
@@ -546,7 +552,7 @@ hasInfix elems =
     disp = "has infix " <> render elems
     dispNeg = "does not have infix " <> render elems
 
-hasSuffix :: (HasSubsequences a) => a -> Predicate a
+hasSuffix :: (HasSubsequences a, Monad m) => a -> Predicate m a
 hasSuffix suffix =
   Predicate
     { predicateFunc = \val -> do
@@ -569,7 +575,7 @@ hasSuffix suffix =
 
 {----- IO -----}
 
-returns :: Predicate a -> Predicate (IO a)
+returns :: (MonadIO m) => Predicate m a -> Predicate m (m a)
 returns Predicate{..} =
   Predicate
     { predicateFunc = \io -> do
@@ -594,7 +600,7 @@ returns Predicate{..} =
     , predicateDispNeg = predicateDispNeg
     }
 
-throws :: (Exception e) => Predicate e -> Predicate (IO a)
+throws :: (Exception e, MonadUnliftIO m) => Predicate m e -> Predicate m (m a)
 throws Predicate{..} =
   Predicate
     { predicateFunc = \io ->
@@ -642,12 +648,11 @@ data Fun a b = Fun (a -> b) (a -> b)
 (===) :: (a -> b) -> (a -> b) -> Fun a b
 (===) = Fun
 
--- FIXME: run predicate in PropertyM
 -- FIXME: show functions (find/replace P.=== in plugin?)
-isoWith :: (Show a, Eq b) => Gen a -> Predicate (Fun a b)
+isoWith :: (Show a, Eq b) => Gen a -> Predicate PropertyM (Fun a b)
 isoWith gen =
   Predicate
-    { predicateFunc = \(Fun f1 f2) -> error "TODO" $ do
+    { predicateFunc = \(Fun f1 f2) -> do
         a <- forAll gen
         let success = f1 a == f2 a
         pure
@@ -672,7 +677,7 @@ isoWith gen =
 
 {----- Snapshot -----}
 
-matchesSnapshot :: (Typeable a) => Predicate a
+matchesSnapshot :: (Typeable a, MonadIO m) => Predicate m a
 matchesSnapshot =
   Predicate
     { predicateFunc = \actual -> do
@@ -713,6 +718,7 @@ matchesSnapshot =
 {----- Utilities -----}
 
 mkPredicateOp ::
+  (Monad m) =>
   Text
   -- ^ operator
   -> Text
@@ -721,7 +727,7 @@ mkPredicateOp ::
   -- ^ actual -> expected -> success
   -> a
   -- ^ expected
-  -> Predicate a
+  -> Predicate m a
 mkPredicateOp op negOp f expected =
   Predicate
     { predicateFunc = \actual -> do
@@ -742,10 +748,10 @@ mkPredicateOp op negOp f expected =
     disp = op <> " " <> render expected
     dispNeg = negOp <> " " <> render expected
 
-runPredicates :: HList Predicate xs -> HList Identity xs -> IO [PredicateFuncResult]
+runPredicates :: (Monad m) => HList (Predicate m) xs -> HList Identity xs -> m [PredicateFuncResult]
 runPredicates preds = HList.toListWithM run . HList.hzip preds
   where
-    run :: (Predicate :*: Identity) a -> IO PredicateFuncResult
+    run :: (Predicate m :*: Identity) a -> m PredicateFuncResult
     run (p :*: Identity x) = predicateFunc p x
 
 verifyAll :: ([Text] -> Text) -> [PredicateFuncResult] -> PredicateFuncResult

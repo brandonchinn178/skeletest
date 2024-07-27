@@ -96,5 +96,5 @@ spec = do
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
-containsFlag :: (Typeable a, Eq a) => a -> Predicate CLIFlagStore
+containsFlag :: (Typeable a, Eq a) => a -> Predicate IO CLIFlagStore
 containsFlag f = (Map.lookup (typeOf f) >=> fromDynamic) P.>>> P.just (P.eq f)

@@ -25,6 +25,7 @@ module Skeletest.Internal.Snapshot (
   SnapshotUpdateFlag (..),
 ) where
 
+import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Encode.Pretty qualified as Aeson
@@ -78,7 +79,7 @@ instance Fixture SnapshotTestFixture where
     -- TODO: if --update, clean up extraneous snapshots when test
     pure . noCleanup $ SnapshotTestFixture{..}
 
-getAndIncSnapshotIndex :: IO Int
+getAndIncSnapshotIndex :: (MonadIO m) => m Int
 getAndIncSnapshotIndex = do
   SnapshotTestFixture{snapshotIndexRef} <- getFixture
   atomicModifyIORef' snapshotIndexRef $ \i -> (i + 1, i)
@@ -136,7 +137,7 @@ data SnapshotContext = SnapshotContext
   , snapshotIndex :: Int
   }
 
-updateSnapshot :: (Typeable a) => SnapshotContext -> a -> IO ()
+updateSnapshot :: (Typeable a, MonadIO m) => SnapshotContext -> a -> m ()
 updateSnapshot snapshotContext testResult = do
   SnapshotFileFixture{snapshotFileRef} <- getFixture
   modifyIORef' snapshotFileRef (Just . setSnapshot . fromMaybe emptySnapshotFile)
@@ -183,7 +184,7 @@ data SnapshotResult
   deriving (Show, Eq)
 
 -- TODO: use a per-file fixture to cache snapshot files and write it all back in cleanup?
-checkSnapshot :: (Typeable a) => SnapshotContext -> a -> IO SnapshotResult
+checkSnapshot :: (Typeable a, MonadIO m) => SnapshotContext -> a -> m SnapshotResult
 checkSnapshot snapshotContext testResult =
   fmap (either id absurd) . runExceptT $ do
     SnapshotFileFixture{snapshotFileRef} <- getFixture
@@ -380,7 +381,7 @@ snapshotRenderersRef = unsafePerformIO $ newIORef []
 setSnapshotRenderers :: [SnapshotRenderer] -> IO ()
 setSnapshotRenderers = writeIORef snapshotRenderersRef
 
-getSnapshotRenderers :: IO [SnapshotRenderer]
+getSnapshotRenderers :: (MonadIO m) => m [SnapshotRenderer]
 getSnapshotRenderers = readIORef snapshotRenderersRef
 
 renderWithShow :: forall a. (Typeable a, Show a) => SnapshotRenderer

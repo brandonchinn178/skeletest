@@ -409,6 +409,8 @@ tol = Tolerance{rel = Just 1e-6, abs = 1e-12}
 
 {----- Combinators -----}
 
+infixr 1 <<<, >>>
+
 (<<<) :: Predicate a -> (b -> a) -> Predicate b
 Predicate{..} <<< f =
   -- TODO: render function name in predicateDisp?

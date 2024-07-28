@@ -63,7 +63,8 @@ module Skeletest.Internal.Predicate (
   -- TODO: evalsDeep (check if NF errors)
 
   -- * Functions
-  Fun,
+  Fun (..),
+  IsoChecker (..),
   (===),
   isoWith,
 
@@ -643,37 +644,46 @@ throws Predicate{..} =
 
 {----- Functions -----}
 
-data Fun a b = Fun (a -> b) (a -> b)
+data Fun a b = Fun String (a -> b)
+data IsoChecker a b = IsoChecker (Fun a b) (Fun a b)
 
-(===) :: (a -> b) -> (a -> b) -> Fun a b
-(===) = Fun
+-- | Use in conjunction with 'isoWith' to verify if two functions are isomorphic.
+(===) :: (a -> b) -> (a -> b) -> IsoChecker a b
+f === g = IsoChecker (Fun "lhs" f) (Fun "rhs" g)
 
--- FIXME: show functions (find/replace P.=== in plugin?)
-isoWith :: (Show a, Eq b) => Gen a -> Predicate PropertyM (Fun a b)
+infix 1 ===
+
+isoWith :: (Show a, Eq b) => Gen a -> Predicate PropertyM (IsoChecker a b)
 isoWith gen =
   Predicate
-    { predicateFunc = \(Fun f1 f2) -> do
+    { predicateFunc = \(IsoChecker (Fun f1DispS f1) (Fun f2DispS f2)) -> do
         a <- forAll gen
-        let success = f1 a == f2 a
+        let
+          f1Disp = parens $ Text.pack f1DispS
+          f2Disp = parens $ Text.pack f2DispS
+          b1 = f1 a
+          b2 = f2 a
+          aDisp = parens $ render a
+          b1Disp = parens $ render b1
+          b2Disp = parens $ render b2
         pure
           PredicateFuncResult
-            { predicateSuccess = success
+            { predicateSuccess = b1 == b2
             , predicateExplain =
-                -- FIXME: "<fun1> and <fun2> returned same values.\nInput: <a>\nOutput: <b>"
-                -- FIXME: "<fun1> and <fun2> returned different values.\nInput: <a>\n<f1>: <f1 a>\n<f2>: <f2 a>"
-                ""
-                -- if success
-                --   then render val <> " " <> disp
-                --   else render val <> " " <> dispNeg
-            , predicateShowFailCtx = noCtx
+                Text.intercalate "\n" $
+                  [ b1Disp <> " " <> (if b1 == b2 then "=" else "≠") <> " " <> b2Disp
+                  , "where"
+                  , indent $ b1Disp <> " = " <> f1Disp <> " " <> aDisp
+                  , indent $ b2Disp <> " = " <> f2Disp <> " " <> aDisp
+                  ]
+            , predicateShowFailCtx = HideFailCtx
             }
     , predicateDisp = disp
     , predicateDispNeg = dispNeg
     }
   where
-    -- FIXME: "<fun1> is isomorphic to <fun2>"
-    disp = ""
-    dispNeg = ""
+    disp = "isomorphic"
+    dispNeg = "not isomorphic"
 
 {----- Snapshot -----}
 

@@ -58,7 +58,8 @@ spec = do
           Gen.string (Range.linear 0 100) Gen.unicode
     length (reverse input) `shouldBe` length input
 
-  prop "read . show === id" $
+  -- FIXME: make it work without 'do'
+  prop "read . show === id" $ do
     (read . show) P.=== id `shouldSatisfy` P.isoWith (Gen.int $ Range.linear 0 100)
 
   describe "fixtures example" $ do

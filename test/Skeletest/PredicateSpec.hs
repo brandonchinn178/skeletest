@@ -381,6 +381,15 @@ spec = do
         snapshotFailure (P.throws (exc 500)) (pure 1)
         snapshotFailure (P.not $ P.throws (exc 404)) throw404
 
+  describe "Functions" $ do
+    describe "isoWith" $ do
+      -- FIXME
+      prop "checks two functions" $ do
+        pure ()
+
+      it "shows helpful failure messages" $ do
+        pure ()
+
 snapshotFailure :: (HasCallStack) => Predicate IO a -> a -> IO ()
 snapshotFailure p x = runPredicate p x `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
 

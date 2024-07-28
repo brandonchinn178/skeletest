@@ -14,6 +14,7 @@ import Skeletest.Internal.TestInfo (TestInfo)
 class (MonadIO m) => Testable m where
   runTestable :: m () -> IO ()
   context :: String -> m a -> m a
+  throwFailure :: TestFailure -> m a
 
 data TestFailure = TestFailure
   { testInfo :: TestInfo

@@ -58,7 +58,6 @@ library
     , parser-combinators
     , pretty
     , recover-rtti
-    , safe-exceptions
     , template-haskell
     , text
     , transformers

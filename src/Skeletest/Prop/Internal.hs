@@ -19,10 +19,10 @@ module Skeletest.Prop.Internal (
   setSkipTo,
 ) where
 
-import Control.Exception.Safe qualified as Safe
 import Control.Monad (ap)
 import Control.Monad.IO.Class (MonadIO (..))
-import Data.IORef (newIORef, readIORef, writeIORef)
+import Control.Monad.Trans.Class qualified as Trans
+import Control.Monad.Trans.Reader qualified as Trans
 import Data.String (fromString)
 import Data.Text qualified as Text
 import GHC.Stack qualified as GHC
@@ -33,6 +33,7 @@ import Hedgehog.Internal.Runner qualified as Hedgehog
 import Hedgehog.Internal.Seed qualified as Hedgehog.Seed
 import Hedgehog.Internal.Source qualified as Hedgehog
 import UnliftIO.Exception (throwIO)
+import UnliftIO.IORef (IORef, newIORef, readIORef, writeIORef)
 
 import Skeletest.Internal.TestInfo (getTestInfo)
 import Skeletest.Internal.Testable (TestFailure (..), Testable (..))
@@ -45,7 +46,9 @@ type Property = PropertyM ()
 
 data PropertyM a
   = PropertyPure [PropertyConfig] a
-  | PropertyIO [PropertyConfig] (Hedgehog.PropertyT IO a)
+  | PropertyIO [PropertyConfig] (Trans.ReaderT FailureRef (Hedgehog.PropertyT IO) a)
+
+type FailureRef = IORef (Maybe TestFailure)
 
 instance Functor PropertyM where
   fmap f = \case
@@ -71,12 +74,16 @@ instance MonadIO PropertyM where
 instance Testable PropertyM where
   runTestable = runProperty
   context msg m = PropertyIO [] (Hedgehog.annotate msg) >> m
+  throwFailure e = PropertyIO [] $ do
+    failureRef <- Trans.ask
+    writeIORef failureRef (Just e)
+    Trans.lift Hedgehog.failure
 
 propConfig :: PropertyConfig -> Property
 propConfig cfg = PropertyPure [cfg] ()
 
 propM :: Hedgehog.PropertyT IO a -> PropertyM a
-propM = PropertyIO []
+propM = PropertyIO [] . Trans.lift
 
 data PropertyConfig
   = DiscardLimit Int
@@ -131,7 +138,7 @@ runProperty = \case
         (resolveConfig cfg)
         0
         seed
-        (handleTestFailure failureRef m)
+        (Trans.runReaderT m failureRef)
         reportProgress
 
     let Hedgehog.TestCount testCount = Hedgehog.reportTests report
@@ -177,9 +184,6 @@ runProperty = \case
                     testFailContext failure <> reverse (map Text.pack msg)
                 }
   where
-    handleTestFailure failureRef = Safe.handle $ \e -> do
-      liftIO $ writeIORef failureRef (Just e)
-      Hedgehog.failure
     reportProgress _ = pure () -- TODO: show progress?
     renderSeed Hedgehog.Report{reportSeed = Hedgehog.Seed value gamma} = show value <> ":" <> show gamma
 

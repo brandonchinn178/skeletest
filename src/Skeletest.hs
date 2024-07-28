@@ -29,6 +29,7 @@ module Skeletest (
   -- * Properties
   Property,
   PropertyM,
+  Gen,
   forAll,
 
   -- ** Settings
@@ -65,4 +66,5 @@ import Skeletest.Internal.CLI
 import Skeletest.Internal.Fixtures
 import Skeletest.Internal.Spec
 import Skeletest.Predicate
+import Skeletest.Prop.Gen (Gen)
 import Skeletest.Prop.Internal

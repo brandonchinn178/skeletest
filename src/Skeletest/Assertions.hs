@@ -16,7 +16,6 @@ module Skeletest.Assertions (
   runTestable,
 ) where
 
-import Control.Monad.IO.Class (MonadIO (..))
 import Data.Text (Text)
 import Data.Text qualified as Text
 import GHC.Stack (HasCallStack)
@@ -37,6 +36,7 @@ import Skeletest.Internal.Testable (FailContext, TestFailure (..), Testable (..)
 instance Testable IO where
   runTestable = id
   context = contextIO
+  throwFailure = throwIO
 
 infix 1 `shouldBe`, `shouldNotBe`, `shouldSatisfy`, `shouldNotSatisfy`
 
@@ -63,14 +63,14 @@ contextIO msg =
     (modifyIORef failContextRef (Text.pack msg :))
     (modifyIORef failContextRef (drop 1))
 
-failTest :: (HasCallStack, Testable m, MonadIO m) => String -> m a
+failTest :: (HasCallStack, Testable m) => String -> m a
 failTest = GHC.withFrozenCallStack $ failTest' . Text.pack
 
-failTest' :: (HasCallStack, MonadIO m) => Text -> m a
+failTest' :: (HasCallStack, Testable m) => Text -> m a
 failTest' msg = do
   testInfo <- getTestInfo
   ctx <- readIORef failContextRef
-  throwIO
+  throwFailure
     TestFailure
       { testInfo
       , testFailMessage = msg

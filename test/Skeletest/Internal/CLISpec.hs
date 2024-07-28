@@ -1,12 +1,31 @@
 module Skeletest.Internal.CLISpec (spec) where
 
+import Control.Monad ((>=>))
+import Data.Dynamic (fromDynamic)
+import Data.Map qualified as Map
+import Data.Typeable (Typeable, typeOf)
 import Skeletest
 import Skeletest.Predicate qualified as P
 
+import Skeletest.Internal.CLI (
+  CLIFlagStore,
+  CLIParseResult (..),
+  flag,
+  parseCliArgs,
+ )
 import Skeletest.TestUtils.Integration
 
--- TODO: test parsing `--long asdf`
--- TODO: test parsing `--long=asdf`
+newtype FooFlag = FooFlag String
+  deriving (Eq)
+instance IsFlag FooFlag where
+  flagName = "foo"
+  flagHelp = "test"
+  flagSpec =
+    OptionalFlag
+      { flagDefault = FooFlag ""
+      , flagParse = Right . FooFlag
+      }
+
 -- TODO: test parsing `-x asdf`
 -- TODO: test forwarding args with `--`
 -- TODO: test --help
@@ -15,6 +34,19 @@ import Skeletest.TestUtils.Integration
 -- TODO: test default flag defaults to value if not set
 spec :: Spec
 spec = do
+  describe "parseCliArgs" $ do
+    it "parses long flag" $ do
+      parseCliArgs [flag @FooFlag] ["--foo", "1"]
+        `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (FooFlag "1")}
+
+    it "parses long flag with equal sign" $ do
+      parseCliArgs [flag @FooFlag] ["--foo=1"]
+        `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (FooFlag "1")}
+
+    it "parses long flag containing equal sign" $ do
+      parseCliArgs [flag @FooFlag] ["--foo=1=2"]
+        `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (FooFlag "1=2")}
+
   describe "getFlag" $ do
     integration . it "reads registered flag" $ do
       runner <- getFixture
@@ -63,3 +95,6 @@ spec = do
       code `shouldBe` ExitFailure 1
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
+
+containsFlag :: (Typeable a, Eq a) => a -> Predicate CLIFlagStore
+containsFlag f = (Map.lookup (typeOf f) >=> fromDynamic) P.>>> P.just (P.eq f)

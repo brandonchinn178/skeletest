@@ -87,6 +87,7 @@ import Data.Text qualified as Text
 import Data.Typeable (Typeable)
 import Debug.RecoverRTTI (anythingToString)
 import GHC.Generics ((:*:) (..))
+import GHC.Stack qualified as GHC
 import UnliftIO (MonadUnliftIO)
 import UnliftIO.Exception (Exception, displayException, try)
 import Prelude hiding (abs, all, and, any, elem, not, or, (&&), (||))
@@ -653,11 +654,11 @@ f === g = IsoChecker (Fun "lhs" f) (Fun "rhs" g)
 
 infix 1 ===
 
-isoWith :: (Show a, Eq b) => Gen a -> Predicate PropertyM (IsoChecker a b)
+isoWith :: (GHC.HasCallStack, Show a, Eq b) => Gen a -> Predicate PropertyM (IsoChecker a b)
 isoWith gen =
   Predicate
     { predicateFunc = \(IsoChecker (Fun f1DispS f1) (Fun f2DispS f2)) -> do
-        a <- forAll gen
+        a <- GHC.withFrozenCallStack $ forAll gen
         let
           f1Disp = parens $ Text.pack f1DispS
           f2Disp = parens $ Text.pack f2DispS

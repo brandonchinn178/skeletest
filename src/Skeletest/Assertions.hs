@@ -46,7 +46,6 @@ actual `shouldBe` expected = GHC.withFrozenCallStack $ actual `shouldSatisfy` P.
 shouldNotBe :: (HasCallStack, Testable m, Eq a) => a -> a -> m ()
 actual `shouldNotBe` expected = GHC.withFrozenCallStack $ actual `shouldNotSatisfy` P.eq expected
 
--- TODO: work in both IO and Property
 shouldSatisfy :: (HasCallStack, Testable m) => a -> Predicate m a -> m ()
 actual `shouldSatisfy` p =
   GHC.withFrozenCallStack $

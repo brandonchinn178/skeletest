@@ -14,6 +14,8 @@ Example
 Failed after 1 tests.
 Rerun with --seed=0:0 to reproduce.
 
+./ExampleSpec.hs:10:47 ==> 0
+
 0 ≠ 1
 where
   0 = (read . show) 0
@@ -28,6 +30,8 @@ where
 
 Failed after 1 tests.
 Rerun with --seed=0:0 to reproduce.
+
+./ExampleSpec.hs:12:47 ==> 0
 
 0 = 0
 where

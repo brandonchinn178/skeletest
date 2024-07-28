@@ -23,6 +23,12 @@ spec = do
   prop "decodeSnapshotFile . encodeSnapshotFile === pure" $ do
     (decodeSnapshotFile . encodeSnapshotFile) P.=== pure `shouldSatisfy` P.isoWith genSnapshotFile
 
+  prop "normalizeSnapshotFile is idempotent" $ do
+    file <- forAll genSnapshotFileRaw
+    n <- forAll $ Gen.int (Range.linear 1 10)
+    let normalizeSnapshotFile' = foldr (.) id $ replicate n normalizeSnapshotFile
+    normalizeSnapshotFile' file `shouldBe` normalizeSnapshotFile file
+
   integration . it "detects corrupted snapshot files" $ do
     runner <- getFixture
     addTestFile runner "ExampleSpec.hs" $
@@ -103,15 +109,17 @@ spec = do
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
 
-genSnapshotFile :: Gen SnapshotFile
-genSnapshotFile = do
-  moduleName <- Gen.text (Range.linear 0 100) Gen.unicode
+genSnapshotFileRaw :: Gen SnapshotFile
+genSnapshotFileRaw = do
+  moduleName <- Gen.text (Range.linear 0 100) genHsModuleChar
   snapshots <- Gen.map rangeNumTests genSnapshot
-  pure $ normalizeSnapshotFile SnapshotFile{..}
+  pure SnapshotFile{..}
   where
     rangeNumTests = Range.linear 0 10
     rangeSnapshotsPerTest = Range.linear 0 5
     rangeSnapshotSize = Range.linear 0 1000
+
+    genHsModuleChar = Gen.choice [Gen.alphaNum, pure '\'']
 
     genSnapshot = do
       ident <- Gen.list (Range.linear 1 10) (Gen.text (Range.linear 1 100) Gen.unicode)
@@ -122,3 +130,6 @@ genSnapshotFile = do
       snapshotContent <- Gen.text rangeSnapshotSize Gen.unicode
       snapshotLang <- Gen.maybe $ Gen.text (Range.linear 1 5) Gen.unicode
       pure SnapshotValue{..}
+
+genSnapshotFile :: Gen SnapshotFile
+genSnapshotFile = normalizeSnapshotFile <$> genSnapshotFileRaw

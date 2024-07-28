@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -21,6 +22,7 @@ module Skeletest.Prop.Internal (
 
   -- * CLI flags
   PropSeedFlag,
+  PropLimitFlag,
 ) where
 
 import Control.Monad (ap)
@@ -28,6 +30,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class qualified as Trans
 import Control.Monad.Trans.Reader qualified as Trans
 import Data.List qualified as List
+import Data.Maybe (catMaybes)
 import Data.String (fromString)
 import Data.Text qualified as Text
 import GHC.Stack qualified as GHC
@@ -37,9 +40,13 @@ import Hedgehog.Internal.Report qualified as Hedgehog hiding (defaultConfig)
 import Hedgehog.Internal.Runner qualified as Hedgehog
 import Hedgehog.Internal.Seed qualified as Hedgehog.Seed
 import Hedgehog.Internal.Source qualified as Hedgehog
-import Text.Read (readMaybe)
+import Text.Read (readEither, readMaybe)
 import UnliftIO.Exception (throwIO)
 import UnliftIO.IORef (IORef, newIORef, readIORef, writeIORef)
+
+#if !MIN_VERSION_base(4, 20, 0)
+import Data.Foldable (foldl')
+#endif
 
 import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..), getFlag)
 import Skeletest.Internal.TestInfo (getTestInfo)
@@ -139,13 +146,10 @@ runProperty = \case
   PropertyPure cfg () -> runProperty $ PropertyIO cfg (pure ())
   PropertyIO cfg m -> do
     failureRef <- newIORef Nothing
-    seed <-
-      getFlag >>= \case
-        PropSeedFlag (Just seed) -> pure seed
-        _ -> Hedgehog.Seed.random
+    (seed, extraConfig) <- loadPropFlags
     report <-
       Hedgehog.checkReport
-        (resolveConfig cfg)
+        (resolveConfig $ cfg <> extraConfig)
         0
         seed
         (Trans.runReaderT m failureRef)
@@ -230,6 +234,18 @@ runProperty = \case
                     }
              in [("<unknown>", loc)]
 
+loadPropFlags :: IO (Hedgehog.Seed, [PropertyConfig])
+loadPropFlags = do
+  PropSeedFlag mSeed <- getFlag
+  seed <- maybe Hedgehog.Seed.random pure mSeed
+
+  PropLimitFlag mLimit <- getFlag
+
+  let extraConfig =
+        [ SetTestLimit <$> mLimit
+        ]
+  pure (seed, catMaybes extraConfig)
+
 {----- Test -----}
 
 forAll :: (GHC.HasCallStack, Show a) => Hedgehog.Gen a -> PropertyM a
@@ -280,3 +296,15 @@ instance IsFlag PropSeedFlag where
         val <- readMaybe valS
         gamma <- readMaybe gammaS
         pure . PropSeedFlag . Just $ Hedgehog.Seed val gamma
+
+newtype PropLimitFlag = PropLimitFlag (Maybe Int)
+
+instance IsFlag PropLimitFlag where
+  flagName = "prop-test-limit"
+  flagMetaVar = "N"
+  flagHelp = "The number of tests to run per property test"
+  flagSpec =
+    OptionalFlag
+      { flagDefault = PropLimitFlag Nothing
+      , flagParse = fmap (PropLimitFlag . Just) . readEither
+      }

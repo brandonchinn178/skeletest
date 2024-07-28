@@ -36,6 +36,7 @@ import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Encode.Pretty qualified as Aeson
+import Data.Char (isAlpha, isPrint)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -287,7 +288,7 @@ decodeSnapshotFile = parseFile . Text.lines
         | "" <- Text.strip line -> parseSections snapshotFile mTest rest
         -- found a test section
         | Just sectionName <- Text.stripPrefix "## " line -> do
-            let testIdentifier = map Text.strip $ Text.splitOn "/" sectionName
+            let testIdentifier = map Text.strip $ Text.splitOn " / " sectionName
             let snapshotFile' = snapshotFile{snapshots = Map.insert testIdentifier [] snapshots}
             parseSections snapshotFile' (Just testIdentifier) rest
         -- found the beginning of a snapshot
@@ -331,8 +332,19 @@ encodeSnapshotFile SnapshotFile{..} =
 normalizeSnapshotFile :: SnapshotFile -> SnapshotFile
 normalizeSnapshotFile file@SnapshotFile{snapshots} =
   file
-    { snapshots = map normalizeSnapshotVal <$> snapshots
+    { snapshots = Map.fromList . map normalize . Map.toList $ snapshots
     }
+  where
+    normalize (testIdentifier, vals) =
+      ( map (sanitizeNonPrint . sanitizeSlashes . Text.strip) testIdentifier
+      , map normalizeSnapshotVal vals
+      )
+
+    sanitizeSlashes = Text.replace " /" " \\/"
+
+    sanitizeNonPrint = Text.concatMap $ \case
+      c | (not . isPrint) c -> Text.drop 1 . Text.dropEnd 1 . Text.pack . show $ c
+      c -> Text.singleton c
 
 {----- Renderers -----}
 
@@ -380,12 +392,16 @@ renderVal renderers a =
        in toValue <$> Typeable.cast a
 
 normalizeSnapshotVal :: SnapshotValue -> SnapshotValue
-normalizeSnapshotVal SnapshotValue{snapshotContent, ..} =
+normalizeSnapshotVal SnapshotValue{..} =
   SnapshotValue
     { snapshotContent = normalizeTrailingNewlines snapshotContent
-    , ..
+    , snapshotLang = collapse $ Text.filter isAlpha <$> snapshotLang
     }
   where
+    collapse = \case
+      Just "" -> Nothing
+      m -> m
+
     -- Ensure there's exactly one trailing newline.
     normalizeTrailingNewlines s = Text.dropWhileEnd (== '\n') s <> "\n"
 

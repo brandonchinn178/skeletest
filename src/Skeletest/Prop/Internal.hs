@@ -17,6 +17,9 @@ module Skeletest.Prop.Internal (
   setVerifiedTermination,
   setTestLimit,
   setSkipTo,
+
+  -- * CLI flags
+  PropSeedFlag,
 ) where
 
 import Control.Monad (ap)
@@ -32,9 +35,11 @@ import Hedgehog.Internal.Report qualified as Hedgehog hiding (defaultConfig)
 import Hedgehog.Internal.Runner qualified as Hedgehog
 import Hedgehog.Internal.Seed qualified as Hedgehog.Seed
 import Hedgehog.Internal.Source qualified as Hedgehog
+import Text.Read (readMaybe)
 import UnliftIO.Exception (throwIO)
 import UnliftIO.IORef (IORef, newIORef, readIORef, writeIORef)
 
+import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..), getFlag)
 import Skeletest.Internal.TestInfo (getTestInfo)
 import Skeletest.Internal.Testable (TestFailure (..), Testable (..))
 
@@ -132,7 +137,10 @@ runProperty = \case
   PropertyPure cfg () -> runProperty $ PropertyIO cfg (pure ())
   PropertyIO cfg m -> do
     failureRef <- newIORef Nothing
-    seed <- Hedgehog.Seed.random -- FIXME: read from --seed
+    seed <-
+      getFlag >>= \case
+        PropSeedFlag (Just seed) -> pure seed
+        _ -> Hedgehog.Seed.random
     report <-
       Hedgehog.checkReport
         (resolveConfig cfg)
@@ -175,7 +183,7 @@ runProperty = \case
             -- FIXME: add failureAnnotations + failureFootnotes?
             let msg =
                   [ "Failed after " <> show testCount <> " tests."
-                  , "Rerun with --seed=" <> renderSeed report <> " to reproduce." -- FIXME: implement --seed
+                  , "Rerun with --seed=" <> renderSeed report <> " to reproduce."
                   ]
             throwIO
               failure
@@ -194,6 +202,7 @@ forAll = propM . Hedgehog.forAll
 
 {----- Configuring properties -----}
 
+-- FIXME: test with integration test
 setDiscardLimit :: Int -> Property
 setDiscardLimit = propConfig . DiscardLimit
 
@@ -214,3 +223,23 @@ setTestLimit = propConfig . SetTestLimit
 
 setSkipTo :: String -> Property
 setSkipTo = propConfig . SkipTo
+
+{----- CLI flags -----}
+
+newtype PropSeedFlag = PropSeedFlag (Maybe Hedgehog.Seed)
+
+instance IsFlag PropSeedFlag where
+  flagName = "seed"
+  flagMetaVar = "SEED"
+  flagHelp = "The seed to use for property tests"
+  flagSpec =
+    OptionalFlag
+      { flagDefault = PropSeedFlag Nothing
+      , flagParse = parse
+      }
+    where
+      parse s = maybe (Left $ "Invalid seed: " <> s) Right $ do
+        (valS, ':' : gammaS) <- pure $ break (== ':') s
+        val <- readMaybe valS
+        gamma <- readMaybe gammaS
+        pure . PropSeedFlag . Just $ Hedgehog.Seed val gamma

@@ -25,6 +25,7 @@ module Skeletest (
   failTest,
   HasCallStack,
   Predicate,
+  Testable,
 
   -- * Properties
   Property,

@@ -41,6 +41,7 @@ import Skeletest.Internal.Spec (
   runSpecs,
  )
 import Skeletest.Plugin (Plugin (..))
+import Skeletest.Prop.Internal (PropSeedFlag)
 
 runSkeletest :: [Plugin] -> [(FilePath, String, Spec)] -> IO ()
 runSkeletest = runSkeletest' . mconcat
@@ -56,6 +57,7 @@ runSkeletest' Plugin{..} testModules = do
   where
     builtinFlags =
       [ flag @SnapshotUpdateFlag
+      , flag @PropSeedFlag
       ]
 
     mkSpec (specPath, name, specSpec) =

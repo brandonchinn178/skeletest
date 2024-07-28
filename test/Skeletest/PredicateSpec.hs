@@ -8,6 +8,8 @@ import Data.Text qualified as Text
 import Skeletest
 import Skeletest.Predicate (PredicateResult (..), runPredicate)
 import Skeletest.Predicate qualified as P
+import Skeletest.Prop.Gen qualified as Gen
+import Skeletest.Prop.Range qualified as Range
 import UnliftIO.Exception (Exception, throwIO)
 
 import Skeletest.TestUtils.Integration
@@ -383,12 +385,31 @@ spec = do
 
   describe "Functions" $ do
     describe "isoWith" $ do
-      -- FIXME
       prop "checks two functions" $ do
-        pure ()
+        (read . show) P.=== id `shouldSatisfy` P.isoWith (Gen.int $ Range.exponential 0 10000000)
+        (read . show) P.=== (+ 1) `shouldNotSatisfy` P.isoWith (Gen.int $ Range.exponential 0 10000000)
 
-      it "shows helpful failure messages" $ do
-        pure ()
+      integration . it "shows a helpful failure message" $ do
+        runner <- getFixture
+        addTestFile runner "ExampleSpec.hs" $
+          [ "module ExampleSpec (spec) where"
+          , ""
+          , "import Skeletest"
+          , "import qualified Skeletest.Predicate as P"
+          , "import qualified Skeletest.Prop.Gen as Gen"
+          , "import qualified Skeletest.Prop.Range as Range"
+          , ""
+          , "spec = do"
+          , "  prop \"is isomorphic\" $ do"
+          , "    (read . show) P.=== (+ 1) `shouldSatisfy` P.isoWith (Gen.int $ Range.linear 0 10)"
+          , "  prop \"is not isomorphic\" $ do"
+          , "    (read . show) P.=== id `shouldNotSatisfy` P.isoWith (Gen.int $ Range.linear 0 10)"
+          ]
+
+        (code, stdout, stderr) <- runTests runner ["--seed=0:0"]
+        code `shouldBe` ExitFailure 1
+        stderr `shouldBe` ""
+        stdout `shouldSatisfy` P.matchesSnapshot
 
 snapshotFailure :: (HasCallStack) => Predicate IO a -> a -> IO ()
 snapshotFailure p x = runPredicate p x `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)

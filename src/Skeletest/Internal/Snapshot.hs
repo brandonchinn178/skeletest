@@ -20,14 +20,23 @@ module Skeletest.Internal.Snapshot (
   plainRenderer,
   renderWithShow,
 
+  -- ** SnapshotFile
+  SnapshotFile (..),
+  SnapshotValue (..),
+  decodeSnapshotFile,
+  encodeSnapshotFile,
+  normalizeSnapshotFile,
+
   -- * Infrastructure
   getAndIncSnapshotIndex,
   SnapshotUpdateFlag (..),
 ) where
 
+import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Encode.Pretty qualified as Aeson
+import Data.Char (isAlpha, isPrint)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -78,7 +87,7 @@ instance Fixture SnapshotTestFixture where
     -- TODO: if --update, clean up extraneous snapshots when test
     pure . noCleanup $ SnapshotTestFixture{..}
 
-getAndIncSnapshotIndex :: IO Int
+getAndIncSnapshotIndex :: (MonadIO m) => m Int
 getAndIncSnapshotIndex = do
   SnapshotTestFixture{snapshotIndexRef} <- getFixture
   atomicModifyIORef' snapshotIndexRef $ \i -> (i + 1, i)
@@ -113,7 +122,7 @@ instance Fixture SnapshotFileFixture where
       readIORef snapshotFileRef >>= \case
         Just snapshotFile | snapshotChanged snapshotFile -> do
           createDirectoryIfMissing True (takeDirectory snapshotPath)
-          Text.writeFile snapshotPath $ encodeSnapshotFile snapshotFile
+          Text.writeFile snapshotPath $ encodeSnapshotFile $ normalizeSnapshotFile snapshotFile
         _ -> pure ()
 
 -- TODO: statically analyze if P.matchesSnapshot appears anywhere in a test file
@@ -136,7 +145,7 @@ data SnapshotContext = SnapshotContext
   , snapshotIndex :: Int
   }
 
-updateSnapshot :: (Typeable a) => SnapshotContext -> a -> IO ()
+updateSnapshot :: (Typeable a, MonadIO m) => SnapshotContext -> a -> m ()
 updateSnapshot snapshotContext testResult = do
   SnapshotFileFixture{snapshotFileRef} <- getFixture
   modifyIORef' snapshotFileRef (Just . setSnapshot . fromMaybe emptySnapshotFile)
@@ -183,7 +192,7 @@ data SnapshotResult
   deriving (Show, Eq)
 
 -- TODO: use a per-file fixture to cache snapshot files and write it all back in cleanup?
-checkSnapshot :: (Typeable a) => SnapshotContext -> a -> IO SnapshotResult
+checkSnapshot :: (Typeable a, MonadIO m) => SnapshotContext -> a -> m SnapshotResult
 checkSnapshot snapshotContext testResult =
   fmap (either id absurd) . runExceptT $ do
     SnapshotFileFixture{snapshotFileRef} <- getFixture
@@ -226,14 +235,14 @@ data SnapshotFile = SnapshotFile
   -- ^ full test identifier => snapshots
   -- e.g. ["group1", "group2", "returns val1 and val2"] => ["val1", "val2"]
   }
-  deriving (Eq)
+  deriving (Show, Eq)
 
 -- TODO: sanitize "```" lines in snapshotContent
 data SnapshotValue = SnapshotValue
   { snapshotContent :: Text
   , snapshotLang :: Maybe Text
   }
-  deriving (Eq)
+  deriving (Show, Eq)
 
 getContent :: SnapshotValue -> Text
 getContent SnapshotValue{snapshotContent} = snapshotContent
@@ -279,7 +288,7 @@ decodeSnapshotFile = parseFile . Text.lines
         | "" <- Text.strip line -> parseSections snapshotFile mTest rest
         -- found a test section
         | Just sectionName <- Text.stripPrefix "## " line -> do
-            let testIdentifier = map Text.strip $ Text.splitOn "/" sectionName
+            let testIdentifier = map Text.strip $ Text.splitOn " / " sectionName
             let snapshotFile' = snapshotFile{snapshots = Map.insert testIdentifier [] snapshots}
             parseSections snapshotFile' (Just testIdentifier) rest
         -- found the beginning of a snapshot
@@ -303,7 +312,6 @@ decodeSnapshotFile = parseFile . Text.lines
         | "```" <- Text.strip line -> pure (Text.unlines snapshot, rest)
         | otherwise -> parseSnapshot (snapshot <> [line]) rest
 
--- FIXME: property test
 encodeSnapshotFile :: SnapshotFile -> Text
 encodeSnapshotFile SnapshotFile{..} =
   Text.intercalate "\n" $
@@ -317,9 +325,26 @@ encodeSnapshotFile SnapshotFile{..} =
     codeBlock SnapshotValue{..} =
       Text.concat
         [ "```" <> fromMaybe "" snapshotLang <> "\n"
-        , normalizeTrailingNewlines snapshotContent
+        , snapshotContent
         , "```\n"
         ]
+
+normalizeSnapshotFile :: SnapshotFile -> SnapshotFile
+normalizeSnapshotFile file@SnapshotFile{snapshots} =
+  file
+    { snapshots = Map.fromList . map normalize . Map.toList $ snapshots
+    }
+  where
+    normalize (testIdentifier, vals) =
+      ( map (sanitizeNonPrint . sanitizeSlashes . Text.strip) testIdentifier
+      , map normalizeSnapshotVal vals
+      )
+
+    sanitizeSlashes = Text.replace " /" " \\/"
+
+    sanitizeNonPrint = Text.concatMap $ \case
+      c | (not . isPrint) c -> Text.drop 1 . Text.dropEnd 1 . Text.pack . show $ c
+      c -> Text.singleton c
 
 {----- Renderers -----}
 
@@ -353,7 +378,7 @@ defaultSnapshotRenderers =
 
 renderVal :: (Typeable a) => [SnapshotRenderer] -> a -> SnapshotValue
 renderVal renderers a =
-  normalize $
+  normalizeSnapshotVal $
     case mapMaybe tryRender renderers of
       [] ->
         SnapshotValue
@@ -366,12 +391,19 @@ renderVal renderers a =
       let toValue v = SnapshotValue{snapshotContent = render v, snapshotLang}
        in toValue <$> Typeable.cast a
 
-    normalize SnapshotValue{snapshotContent, ..} =
-      SnapshotValue{snapshotContent = normalizeTrailingNewlines snapshotContent, ..}
+normalizeSnapshotVal :: SnapshotValue -> SnapshotValue
+normalizeSnapshotVal SnapshotValue{..} =
+  SnapshotValue
+    { snapshotContent = normalizeTrailingNewlines snapshotContent
+    , snapshotLang = collapse $ Text.filter isAlpha <$> snapshotLang
+    }
+  where
+    collapse = \case
+      Just "" -> Nothing
+      m -> m
 
--- | Ensure there's exactly one trailing newline.
-normalizeTrailingNewlines :: Text -> Text
-normalizeTrailingNewlines s = Text.dropWhileEnd (== '\n') s <> "\n"
+    -- Ensure there's exactly one trailing newline.
+    normalizeTrailingNewlines s = Text.dropWhileEnd (== '\n') s <> "\n"
 
 snapshotRenderersRef :: IORef [SnapshotRenderer]
 snapshotRenderersRef = unsafePerformIO $ newIORef []
@@ -380,7 +412,7 @@ snapshotRenderersRef = unsafePerformIO $ newIORef []
 setSnapshotRenderers :: [SnapshotRenderer] -> IO ()
 setSnapshotRenderers = writeIORef snapshotRenderersRef
 
-getSnapshotRenderers :: IO [SnapshotRenderer]
+getSnapshotRenderers :: (MonadIO m) => m [SnapshotRenderer]
 getSnapshotRenderers = readIORef snapshotRenderersRef
 
 renderWithShow :: forall a. (Typeable a, Show a) => SnapshotRenderer

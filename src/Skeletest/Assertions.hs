@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Skeletest.Assertions (
   shouldBe,
@@ -9,15 +10,19 @@ module Skeletest.Assertions (
   context,
   failTest,
   TestFailure (..),
+
+  -- * Testable
+  Testable,
+  runTestable,
 ) where
 
-import Data.IORef (IORef, modifyIORef, newIORef, readIORef)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import GHC.Stack (CallStack, HasCallStack)
+import GHC.Stack (HasCallStack)
 import GHC.Stack qualified as GHC
 import System.IO.Unsafe (unsafePerformIO)
-import UnliftIO.Exception (Exception (..), bracket_, throwIO)
+import UnliftIO.Exception (bracket_, throwIO)
+import UnliftIO.IORef (IORef, modifyIORef, newIORef, readIORef)
 
 import Skeletest.Internal.Predicate (
   Predicate,
@@ -25,59 +30,52 @@ import Skeletest.Internal.Predicate (
   runPredicate,
  )
 import Skeletest.Internal.Predicate qualified as P
-import Skeletest.Internal.TestInfo (TestInfo, getTestInfo)
+import Skeletest.Internal.TestInfo (getTestInfo)
+import Skeletest.Internal.Testable (FailContext, TestFailure (..), Testable (..))
+
+instance Testable IO where
+  runTestable = id
+  context = contextIO
+  throwFailure = throwIO
 
 infix 1 `shouldBe`, `shouldNotBe`, `shouldSatisfy`, `shouldNotSatisfy`
 
-shouldBe :: (HasCallStack, Eq a) => a -> a -> IO ()
+shouldBe :: (HasCallStack, Testable m, Eq a) => a -> a -> m ()
 actual `shouldBe` expected = GHC.withFrozenCallStack $ actual `shouldSatisfy` P.eq expected
 
-shouldNotBe :: (HasCallStack, Eq a) => a -> a -> IO ()
+shouldNotBe :: (HasCallStack, Testable m, Eq a) => a -> a -> m ()
 actual `shouldNotBe` expected = GHC.withFrozenCallStack $ actual `shouldNotSatisfy` P.eq expected
 
-shouldSatisfy :: (HasCallStack) => a -> Predicate a -> IO ()
+shouldSatisfy :: (HasCallStack, Testable m) => a -> Predicate m a -> m ()
 actual `shouldSatisfy` p =
   GHC.withFrozenCallStack $
     runPredicate p actual >>= \case
       PredicateSuccess -> pure ()
       PredicateFail msg -> failTest' msg
 
-shouldNotSatisfy :: (HasCallStack) => a -> Predicate a -> IO ()
+shouldNotSatisfy :: (HasCallStack, Testable m) => a -> Predicate m a -> m ()
 actual `shouldNotSatisfy` p = GHC.withFrozenCallStack $ actual `shouldSatisfy` P.not p
 
-context :: String -> IO a -> IO a
-context msg =
+contextIO :: String -> IO a -> IO a
+contextIO msg =
   bracket_
     (modifyIORef failContextRef (Text.pack msg :))
     (modifyIORef failContextRef (drop 1))
 
-failTest :: (HasCallStack) => String -> IO a
+failTest :: (HasCallStack, Testable m) => String -> m a
 failTest = GHC.withFrozenCallStack $ failTest' . Text.pack
 
-failTest' :: (HasCallStack) => Text -> IO a
+failTest' :: (HasCallStack, Testable m) => Text -> m a
 failTest' msg = do
   testInfo <- getTestInfo
   ctx <- readIORef failContextRef
-  throwIO
+  throwFailure
     TestFailure
       { testInfo
       , testFailMessage = msg
       , testFailContext = ctx
       , callStack = GHC.callStack
       }
-
-data TestFailure = TestFailure
-  { testInfo :: TestInfo
-  , testFailMessage :: Text
-  , testFailContext :: FailContext
-  , callStack :: CallStack
-  }
-  deriving (Show)
-
-instance Exception TestFailure
-
--- | Context for failures, in order of most recently added -> least recently added
-type FailContext = [Text]
 
 failContextRef :: IORef FailContext
 failContextRef = unsafePerformIO $ newIORef []

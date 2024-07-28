@@ -64,7 +64,7 @@ transformMainModule modl = addModuleFun mainFun modl
         }
 
 transformTestModule :: ParsedModule -> ParsedModule
-transformTestModule = replaceConMatch
+transformTestModule = replaceConMatch . replaceIsoChecker
 
 -- | Replace all uses of P.con with P.conMatches. See P.con.
 --
@@ -175,3 +175,19 @@ replaceConMatch = modifyModuleExprs go
     mkNamesList = mkHList $ \name -> HsExprApp (HsExprCon $ hsName 'Const) (HsExprLitString $ renderHsName name)
     mkValsList = mkHList $ \val -> HsExprApp (HsExprVar $ hsName 'pure) (HsExprVar val)
     mkPredList = mkHList id
+
+-- | Replace all uses of P.=== with inlined IsoChecker value, with
+-- function name filled in.
+--
+-- (encode . decode) P.=== id
+-- ====>
+-- IsoChecker (Fun "encode . decode" (encode . decode)) (Fun "id" id)
+replaceIsoChecker :: ParsedModule -> ParsedModule
+replaceIsoChecker parsedModule = modifyModuleExprs go parsedModule
+  where
+    go = \case
+      HsExprOp l (HsExprVar eqeqeq) r | getHsName eqeqeq == "===" -> Just $ inlineIsoChecker l r
+      _ -> Nothing
+
+    inlineIsoChecker l r = hsApps (HsExprCon $ hsName 'P.IsoChecker) [mkFun l, mkFun r]
+    mkFun f = hsApps (HsExprCon $ hsName 'P.Fun) [HsExprLitString $ renderHsExpr parsedModule f, f]

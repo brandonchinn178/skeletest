@@ -31,6 +31,7 @@ module Skeletest.Internal.GHC (
   HsExpr (..),
   hsApps,
   collectApps,
+  renderHsExpr,
 
   -- ** Types
   HsType (..),
@@ -238,11 +239,11 @@ toHsExpr = \case
       _ -> Nothing
 
 fromHsExpr :: (HsName -> GHC.RdrName) -> HsExpr -> GHC.LHsExpr GhcPs
-fromHsExpr fromRdrName = go
+fromHsExpr toRdrName = go
   where
     go = \case
-      HsExprCon name -> genLoc $ GHC.HsVar GHC.noExtField (genLoc $ fromRdrName name)
-      HsExprVar name -> genLoc $ GHC.HsVar GHC.noExtField (genLoc $ fromRdrName name)
+      HsExprCon name -> genLoc $ GHC.HsVar GHC.noExtField (genLoc $ toRdrName name)
+      HsExprVar name -> genLoc $ GHC.HsVar GHC.noExtField (genLoc $ toRdrName name)
       HsExprApp l r -> genLoc $ GHC.Compat.hsApp (parens $ go l) (parens $ go r)
       HsExprOp l op r -> genLoc $ GHC.OpApp GHC.noAnn (parens $ go l) (parens $ go op) (parens $ go r)
       HsExprList exprs -> genLoc $ GHC.ExplicitList GHC.noAnn $ map go exprs
@@ -256,13 +257,13 @@ fromHsExpr fromRdrName = go
         genLoc $
           GHC.RecordCon
             GHC.noAnn
-            (genLoc $ fromRdrName con)
+            (genLoc $ toRdrName con)
             GHC.HsRecFields
               { rec_flds =
                   [ genLoc $
                       GHC.HsFieldBind
                         { hfbAnn = GHC.noAnn
-                        , hfbLHS = genLoc $ GHC.FieldOcc GHC.noExtField (genLoc $ fromRdrName field)
+                        , hfbLHS = genLoc $ GHC.FieldOcc GHC.noExtField (genLoc $ toRdrName field)
                         , hfbRHS = go expr
                         , hfbPun = False
                         }
@@ -278,7 +279,7 @@ fromHsExpr fromRdrName = go
                 GHC.Match
                   { m_ext = GHC.noAnn
                   , m_ctxt = GHC.Compat.lamAltSingle
-                  , m_pats = [fromHsPat fromRdrName pat]
+                  , m_pats = [fromHsPat toRdrName pat]
                   , m_grhss =
                       GHC.GRHSs
                         { grhssExt = GHC.emptyComments
@@ -294,7 +295,7 @@ fromHsExpr fromRdrName = go
                 GHC.Match
                   { m_ext = GHC.noAnn
                   , m_ctxt = GHC.CaseAlt
-                  , m_pats = [fromHsPat fromRdrName pat]
+                  , m_pats = [fromHsPat toRdrName pat]
                   , m_grhss =
                       GHC.GRHSs
                         { grhssExt = GHC.emptyComments
@@ -307,8 +308,15 @@ fromHsExpr fromRdrName = go
       HsExprOther (WithShow expr) -> expr
 
     parens = \case
-      e@(L _ (GHC.HsApp _ _ _)) -> genLoc $ GHC.Compat.hsPar e
+      e@(L _ GHC.HsApp{}) -> genLoc $ GHC.Compat.hsPar e
+      e@(L _ GHC.SectionL{}) -> genLoc $ GHC.Compat.hsPar e
+      e@(L _ GHC.SectionR{}) -> genLoc $ GHC.Compat.hsPar e
       e -> e
+
+renderHsExpr :: ParsedModule -> HsExpr -> Text
+renderHsExpr parsedModule = Text.pack . show . WithShow . fromHsExpr fromHsName
+  where
+    ParsedModule{fromHsName} = parsedModule
 
 {----- HsType -----}
 

@@ -179,43 +179,61 @@ runProperty = \case
                 { testInfo
                 , testFailMessage = Text.pack failureMessage
                 , testFailContext = []
-                , callStack =
-                    GHC.fromCallSiteList $
-                      case failureLocation of
-                        Nothing -> []
-                        Just Hedgehog.Span{..} ->
-                          let loc =
-                                GHC.SrcLoc
-                                  { srcLocPackage = ""
-                                  , srcLocModule = ""
-                                  , srcLocFile = spanFile
-                                  , srcLocStartLine = Hedgehog.unLineNo spanStartLine
-                                  , srcLocStartCol = Hedgehog.unColumnNo spanStartColumn
-                                  , srcLocEndLine = Hedgehog.unLineNo spanEndLine
-                                  , srcLocEndCol = Hedgehog.unColumnNo spanEndColumn
-                                  }
-                           in [("<unknown>", loc)]
+                , callStack = toCallStack failureLocation
                 }
           Just failure -> do
-            -- FIXME: add failureAnnotations + failureFootnotes?
-            let msg =
-                  [ "Failed after " <> show testCount <> " tests."
-                  , "Rerun with --seed=" <> renderSeed report <> " to reproduce."
+            let
+              info =
+                map Text.pack . concat $
+                  [
+                    [ "Failed after " <> show testCount <> " tests."
+                    , "Rerun with --seed=" <> renderSeed report <> " to reproduce."
+                    , ""
+                    ]
+                  , [ let loc =
+                            case failedSpan of
+                              Just Hedgehog.Span{..} ->
+                                List.intercalate ":" $
+                                  [ spanFile
+                                  , show . Hedgehog.unLineNo $ spanStartLine
+                                  , show . Hedgehog.unColumnNo $ spanStartColumn
+                                  ]
+                              Nothing -> "<unknown loc>"
+                       in loc <> " ==> " <> failedValue
+                    | Hedgehog.FailedAnnotation{..} <- failureAnnotations
+                    ]
                   ]
+
             throwIO
               failure
                 { testFailContext =
                     -- N.B. testFailContext is reversed!
-                    testFailContext failure <> reverse (map Text.pack msg)
+                    testFailContext failure <> reverse info
                 }
   where
     reportProgress _ = pure () -- TODO: show progress?
     renderSeed Hedgehog.Report{reportSeed = Hedgehog.Seed value gamma} = show value <> ":" <> show gamma
+    toCallStack mSpan =
+      GHC.fromCallSiteList $
+        case mSpan of
+          Nothing -> []
+          Just Hedgehog.Span{..} ->
+            let loc =
+                  GHC.SrcLoc
+                    { srcLocPackage = ""
+                    , srcLocModule = ""
+                    , srcLocFile = spanFile
+                    , srcLocStartLine = Hedgehog.unLineNo spanStartLine
+                    , srcLocStartCol = Hedgehog.unColumnNo spanStartColumn
+                    , srcLocEndLine = Hedgehog.unLineNo spanEndLine
+                    , srcLocEndCol = Hedgehog.unColumnNo spanEndColumn
+                    }
+             in [("<unknown>", loc)]
 
 {----- Test -----}
 
-forAll :: (Show a) => Hedgehog.Gen a -> PropertyM a
-forAll = propM . Hedgehog.forAll
+forAll :: (GHC.HasCallStack, Show a) => Hedgehog.Gen a -> PropertyM a
+forAll gen = GHC.withFrozenCallStack $ propM (Hedgehog.forAll gen)
 
 discard :: PropertyM a
 discard = propM Hedgehog.discard

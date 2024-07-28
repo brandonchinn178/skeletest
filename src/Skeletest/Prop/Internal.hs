@@ -6,8 +6,9 @@ module Skeletest.Prop.Internal (
   PropertyM,
   runProperty,
 
-  -- * Gen
+  -- * Test
   forAll,
+  discard,
 
   -- * Configuring properties
   setDiscardLimit,
@@ -26,6 +27,7 @@ import Control.Monad (ap)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class qualified as Trans
 import Control.Monad.Trans.Reader qualified as Trans
+import Data.List qualified as List
 import Data.String (fromString)
 import Data.Text qualified as Text
 import GHC.Stack qualified as GHC
@@ -149,10 +151,25 @@ runProperty = \case
         (Trans.runReaderT m failureRef)
         reportProgress
 
-    let Hedgehog.TestCount testCount = Hedgehog.reportTests report
+    let
+      Hedgehog.TestCount testCount = Hedgehog.reportTests report
+      Hedgehog.DiscardCount discards = Hedgehog.reportDiscards report
+
     case Hedgehog.reportStatus report of
       Hedgehog.OK -> pure () -- TODO: show (# tests ran, # discards, coverage)
-      Hedgehog.GaveUp -> error "gave up" -- FIXME: throw TestFailure
+      Hedgehog.GaveUp -> do
+        testInfo <- getTestInfo
+        throwIO
+          TestFailure
+            { testInfo
+            , testFailMessage =
+                Text.pack . List.intercalate "\n" $
+                  [ "Gave up after " <> show discards <> " discards."
+                  , "Passed " <> show testCount <> " tests."
+                  ]
+            , testFailContext = []
+            , callStack = GHC.fromCallSiteList []
+            }
       Hedgehog.Failed Hedgehog.FailureReport{..} ->
         readIORef failureRef >>= \case
           Nothing -> do
@@ -195,14 +212,16 @@ runProperty = \case
     reportProgress _ = pure () -- TODO: show progress?
     renderSeed Hedgehog.Report{reportSeed = Hedgehog.Seed value gamma} = show value <> ":" <> show gamma
 
-{----- Gen -----}
+{----- Test -----}
 
 forAll :: (Show a) => Hedgehog.Gen a -> PropertyM a
 forAll = propM . Hedgehog.forAll
 
+discard :: PropertyM a
+discard = propM Hedgehog.discard
+
 {----- Configuring properties -----}
 
--- FIXME: test with integration test
 setDiscardLimit :: Int -> Property
 setDiscardLimit = propConfig . DiscardLimit
 

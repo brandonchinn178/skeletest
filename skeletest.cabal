@@ -90,6 +90,7 @@ test-suite skeletest-tests
     Skeletest.Internal.TestTargetsSpec
     Skeletest.MainSpec
     Skeletest.PredicateSpec
+    Skeletest.PropSpec
     Skeletest.TestUtils.Integration
   build-depends:
       base

@@ -32,6 +32,7 @@ module Skeletest (
   PropertyM,
   Gen,
   forAll,
+  discard,
 
   -- ** Settings
   setDiscardLimit,

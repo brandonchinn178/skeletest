@@ -13,6 +13,8 @@ module Skeletest.Internal.CLI (
 
   -- * Internal
   parseCliArgs,
+  CLIParseResult (..),
+  CLIFlagStore,
 ) where
 
 import Control.Monad (when)
@@ -287,7 +289,12 @@ parseCliArgsWith longFlags shortFlags = Trans.runExcept . flip Trans.execStateT 
               _ -> argError $ "Invalid flag: -" <> chars
         | otherwise -> addArgs [curr] >> parseArgs rest
 
-    parseLongFlag = parseFlag renderLongFlag longFlags
+    parseLongFlag name args =
+      let (name', args') =
+            case Text.breakOn "=" name of
+              (_, "") -> (name, args)
+              (n, post) -> (n, (drop 1 . Text.unpack) post : args)
+       in parseFlag renderLongFlag longFlags name' args'
     parseShortFlag = parseFlag renderShortFlag shortFlags
 
     parseFlag :: (Ord name) => (name -> Text) -> Map name Flag -> name -> [String] -> ArgParserM ()

@@ -92,6 +92,7 @@ test-suite skeletest-tests
   build-depends:
       base
     , aeson
+    , containers
     , directory
     , filepath
     , skeletest

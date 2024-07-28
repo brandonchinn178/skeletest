@@ -20,6 +20,13 @@ module Skeletest.Internal.Snapshot (
   plainRenderer,
   renderWithShow,
 
+  -- ** SnapshotFile
+  SnapshotFile (..),
+  SnapshotValue (..),
+  decodeSnapshotFile,
+  encodeSnapshotFile,
+  normalizeSnapshotFile,
+
   -- * Infrastructure
   getAndIncSnapshotIndex,
   SnapshotUpdateFlag (..),
@@ -114,7 +121,7 @@ instance Fixture SnapshotFileFixture where
       readIORef snapshotFileRef >>= \case
         Just snapshotFile | snapshotChanged snapshotFile -> do
           createDirectoryIfMissing True (takeDirectory snapshotPath)
-          Text.writeFile snapshotPath $ encodeSnapshotFile snapshotFile
+          Text.writeFile snapshotPath $ encodeSnapshotFile $ normalizeSnapshotFile snapshotFile
         _ -> pure ()
 
 -- TODO: statically analyze if P.matchesSnapshot appears anywhere in a test file
@@ -227,14 +234,14 @@ data SnapshotFile = SnapshotFile
   -- ^ full test identifier => snapshots
   -- e.g. ["group1", "group2", "returns val1 and val2"] => ["val1", "val2"]
   }
-  deriving (Eq)
+  deriving (Show, Eq)
 
 -- TODO: sanitize "```" lines in snapshotContent
 data SnapshotValue = SnapshotValue
   { snapshotContent :: Text
   , snapshotLang :: Maybe Text
   }
-  deriving (Eq)
+  deriving (Show, Eq)
 
 getContent :: SnapshotValue -> Text
 getContent SnapshotValue{snapshotContent} = snapshotContent
@@ -304,7 +311,6 @@ decodeSnapshotFile = parseFile . Text.lines
         | "```" <- Text.strip line -> pure (Text.unlines snapshot, rest)
         | otherwise -> parseSnapshot (snapshot <> [line]) rest
 
--- FIXME: property test
 encodeSnapshotFile :: SnapshotFile -> Text
 encodeSnapshotFile SnapshotFile{..} =
   Text.intercalate "\n" $
@@ -318,9 +324,15 @@ encodeSnapshotFile SnapshotFile{..} =
     codeBlock SnapshotValue{..} =
       Text.concat
         [ "```" <> fromMaybe "" snapshotLang <> "\n"
-        , normalizeTrailingNewlines snapshotContent
+        , snapshotContent
         , "```\n"
         ]
+
+normalizeSnapshotFile :: SnapshotFile -> SnapshotFile
+normalizeSnapshotFile file@SnapshotFile{snapshots} =
+  file
+    { snapshots = map normalizeSnapshotVal <$> snapshots
+    }
 
 {----- Renderers -----}
 
@@ -354,7 +366,7 @@ defaultSnapshotRenderers =
 
 renderVal :: (Typeable a) => [SnapshotRenderer] -> a -> SnapshotValue
 renderVal renderers a =
-  normalize $
+  normalizeSnapshotVal $
     case mapMaybe tryRender renderers of
       [] ->
         SnapshotValue
@@ -367,12 +379,15 @@ renderVal renderers a =
       let toValue v = SnapshotValue{snapshotContent = render v, snapshotLang}
        in toValue <$> Typeable.cast a
 
-    normalize SnapshotValue{snapshotContent, ..} =
-      SnapshotValue{snapshotContent = normalizeTrailingNewlines snapshotContent, ..}
-
--- | Ensure there's exactly one trailing newline.
-normalizeTrailingNewlines :: Text -> Text
-normalizeTrailingNewlines s = Text.dropWhileEnd (== '\n') s <> "\n"
+normalizeSnapshotVal :: SnapshotValue -> SnapshotValue
+normalizeSnapshotVal SnapshotValue{snapshotContent, ..} =
+  SnapshotValue
+    { snapshotContent = normalizeTrailingNewlines snapshotContent
+    , ..
+    }
+  where
+    -- Ensure there's exactly one trailing newline.
+    normalizeTrailingNewlines s = Text.dropWhileEnd (== '\n') s <> "\n"
 
 snapshotRenderersRef :: IORef [SnapshotRenderer]
 snapshotRenderersRef = unsafePerformIO $ newIORef []

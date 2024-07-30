@@ -652,7 +652,7 @@ data IsoChecker a b = IsoChecker (Fun a b) (Fun a b)
 (===) :: (a -> b) -> (a -> b) -> IsoChecker a b
 f === g = IsoChecker (Fun "lhs" f) (Fun "rhs" g)
 
-infix 1 ===
+infix 2 ===
 
 isoWith :: (GHC.HasCallStack, Show a, Eq b) => Gen a -> Predicate PropertyM (IsoChecker a b)
 isoWith gen =

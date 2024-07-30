@@ -7,6 +7,7 @@ import Skeletest.Predicate qualified as P
 
 import Skeletest.Internal.TestTargets
 
+-- FIXME: support space in test name
 spec :: Spec
 spec = do
   describe "matchesTest" $ do

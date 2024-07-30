@@ -1,4 +1,6 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
@@ -14,23 +16,26 @@ include breaking changes between versions.
 module Skeletest.Internal.GHC (
   Plugin,
   PluginDef (..),
+  Ctx (..),
+  GhcRn,
   mkPlugin,
 
   -- * ParsedModule
-  ParsedModule,
-  getModuleVals,
-  modifyModuleExprs,
+  ParsedModule (..),
   FunDef (..),
-  addModuleFun,
-
-  -- ** Module values
-  ModuleVal (..),
-  moduleValName,
 
   -- ** Expressions
-  HsExpr (..),
-  hsApps,
-  collectApps,
+  HsExpr,
+  HsExprData (..),
+  hsExprCon,
+  hsExprVar,
+  hsExprApps,
+  hsExprList,
+  hsExprRecordCon,
+  hsExprLitString,
+  hsExprLam,
+  hsExprCase,
+  getExpr,
   renderHsExpr,
 
   -- ** Types
@@ -42,26 +47,33 @@ module Skeletest.Internal.GHC (
   -- ** Names
   HsName,
   hsName,
-  hsNewName,
+  hsVarName,
   getHsName,
-  getHsNameMod,
-  renderHsName,
 ) where
 
+import Control.Monad.Trans.Class qualified as Trans
+import Control.Monad.Trans.State (StateT, evalStateT)
+import Control.Monad.Trans.State qualified as State
 import Data.Data (Data)
 import Data.Data qualified as Data
-import Data.Function ((&))
+import Data.Map (Map)
+import Data.Map qualified as Map
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Typeable qualified as Typeable
 import GHC (
   GenLocated (..),
+  GhcPass (..),
   GhcPs,
+  GhcRn,
+  IsPass,
   unLoc,
  )
 import GHC qualified as GHC
 import GHC.Driver.Main qualified as GHC
 import GHC.Plugins qualified as GHC hiding (getHscEnv)
+import GHC.Tc.Utils.Monad qualified as GHC
 import GHC.Types.Name qualified as GHC.Name
 import GHC.Types.Name.Cache qualified as GHC (NameCache)
 import GHC.Types.SourceText qualified as GHC.SourceText
@@ -72,7 +84,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import Data.Foldable (foldl')
 #endif
 
-import Skeletest.Internal.Error (skeletestPluginError)
+import Skeletest.Internal.Error (invariantViolation, skeletestPluginError)
 import Skeletest.Internal.GHC.Compat (genLoc)
 import Skeletest.Internal.GHC.Compat qualified as GHC.Compat
 
@@ -82,357 +94,477 @@ type Plugin = GHC.Plugin
 -- | Our pure definition of PluginDef, agnostic of GHC version.
 data PluginDef = PluginDef
   { isPure :: Bool
-  , afterParse ::
-      Text -- Module name
-      -> ParsedModule -- Parsed module
-      -> ParsedModule -- Post-processed module
+  , modifyParsed :: ModuleName -> ParsedModule -> ParsedModule
+  , onRename :: Ctx -> ModuleName -> HsExpr GhcRn -> HsExpr GhcRn
   }
+
+data Ctx = Ctx
+  { matchesName :: HsName GhcRn -> HsName GhcRn -> Bool
+  }
+
+type ModuleName = Text
 
 mkPlugin :: PluginDef -> Plugin
 mkPlugin PluginDef{..} =
   GHC.defaultPlugin
     { GHC.pluginRecompile = if isPure then GHC.purePlugin else GHC.impurePlugin
     , GHC.parsedResultAction = \_ modInfo result -> do
-        env <- GHC.getHscEnv
         let
-          GHC.Module{moduleName} = GHC.ms_mod modInfo
-          moduleNameT = Text.pack $ GHC.moduleNameString moduleName
-          mkParsedModule modl =
-            ParsedModule
-              { ghcModule = modl
-              , fromHsName = unsafePerformIO . hsNameToRdrName (GHC.hsc_NC env)
-              }
+          moduleName = getModuleName $ GHC.ms_mod modInfo
+          parsedModule = initParsedModule . GHC.hpm_module . GHC.parsedResultModule $ result
+          ParsedModule{moduleFuncs} = modifyParsed moduleName parsedModule
+        newDecls <-
+          runCompilePs . fmap concat . sequence $
+            [ compileFunDef funName funDef
+            | (funName, Just funDef) <- moduleFuncs
+            ]
         pure
-          $ (ghcModule . afterParse moduleNameT . mkParsedModule)
-            & modifyHpmModule
-            & modifyParsedResultModule
+          . (modifyParsedResultModule . modifyHpmModule . fmap . modifyModDecls) (newDecls <>)
           $ result
+    , GHC.renamedResultAction = \_ gblEnv group -> do
+        nameCache <- GHC.hsc_NC . GHC.env_top <$> GHC.getEnv
+        let
+          moduleName = getModuleName $ GHC.tcg_mod gblEnv
+          ctx =
+            Ctx
+              { matchesName = matchesNameImpl nameCache
+              }
+        group' <- runCompileRn $ modifyModuleExprs (onRename ctx moduleName) group
+        pure (gblEnv, group')
     }
   where
+    getModuleName GHC.Module{moduleName} = Text.pack $ GHC.moduleNameString moduleName
+
     modifyParsedResultModule f x = x{GHC.parsedResultModule = f $ GHC.parsedResultModule x}
     modifyHpmModule f x = x{GHC.hpm_module = f $ GHC.hpm_module x}
+    modifyModDecls f x = x{GHC.hsmodDecls = f $ GHC.hsmodDecls x}
 
 {----- ParsedModule -----}
 
 data ParsedModule = ParsedModule
-  { ghcModule :: GHC.Located (GHC.HsModule GhcPs)
-  , fromHsName :: HsName -> GHC.RdrName
+  { moduleFuncs :: [(HsName GhcPs, Maybe FunDef)]
   }
-
--- | Get the list of values defined in the module.
-getModuleVals :: ParsedModule -> [ModuleVal]
-getModuleVals = concatMap (fromHsBind . unLoc) . GHC.hsmodDecls . unLoc . ghcModule
-  where
-    fromHsBind = \case
-      GHC.ValD _ bind -> toModuleVals bind
-      _ -> []
-
-modifyModuleExprs :: (HsExpr -> Maybe HsExpr) -> ParsedModule -> ParsedModule
-modifyModuleExprs f parsedModule = parsedModule{ghcModule = go <$> ghcModule parsedModule}
-  where
-    ParsedModule{fromHsName} = parsedModule
-
-    go :: (Data a) => a -> a
-    go = Data.gmapT $ \(x :: a) ->
-      go $
-        case Typeable.eqT @(GHC.LHsExpr GhcPs) @a of
-          Just Typeable.Refl | Just expr <- f $ toHsExpr x -> fromHsExpr fromHsName expr
-          _ -> x
 
 data FunDef = FunDef
-  { funName :: Text
-  , funType :: HsType
-  , funPats :: [HsPat]
-  , funBody :: HsExpr
+  { funType :: HsType GhcPs
+  , funPats :: [HsPat GhcPs]
+  , funBody :: HsExpr GhcPs
   }
 
-addModuleFun :: FunDef -> ParsedModule -> ParsedModule
-addModuleFun FunDef{..} parsedModule = parsedModule{ghcModule = update <$> ghcModule parsedModule}
+initParsedModule :: GHC.Located (GHC.HsModule GhcPs) -> ParsedModule
+initParsedModule (L _ GHC.HsModule{hsmodDecls}) =
+  ParsedModule
+    { moduleFuncs =
+        [ (funName, Nothing)
+        | Just funName <- map (getValName . unLoc) hsmodDecls
+        ]
+    }
   where
-    ParsedModule{fromHsName} = parsedModule
+    getValName = \case
+      GHC.ValD _ GHC.FunBind{fun_id} -> Just . hsGhcName . unLoc $ fun_id
+      _ -> Nothing
 
-    update modl = modl{GHC.hsmodDecls = decls <> GHC.hsmodDecls modl}
-    name = genLoc $ GHC.mkUnqual GHC.Name.varName $ fsText funName
-    decls =
-      [ mkSigD name (fromHsType fromHsName funType)
-      , genLoc . GHC.ValD GHC.noExtField $
-          GHC.FunBind GHC.noExtField name . GHC.MG GHC.FromSource . genLoc $
-            [ genLoc $
-                GHC.Match
-                  GHC.noAnn
-                  (GHC.FunRhs name GHC.Prefix GHC.NoSrcStrict)
-                  (map (fromHsPat fromHsName) funPats)
-                  ( GHC.GRHSs
-                      GHC.emptyComments
-                      [genLoc $ GHC.GRHS GHC.noAnn [] (fromHsExpr fromHsName funBody)]
-                      (GHC.EmptyLocalBinds GHC.noExtField)
-                  )
-            ]
-      ]
+{----- modifyModuleExprs -----}
 
-{----- ModuleVal -----}
+modifyModuleExprs ::
+  forall m.
+  (MonadCompile m GhcRn) =>
+  (HsExpr GhcRn -> HsExpr GhcRn)
+  -> GHC.HsGroup GhcRn
+  -> m (GHC.HsGroup GhcRn)
+modifyModuleExprs f = go
+  where
+    go :: (Data a) => a -> m a
+    go = Data.gmapM $ \x -> updateExpr x >>= go
 
-data ModuleVal
-  = ModuleValFun HsName
-  deriving (Show, Eq)
-
-moduleValName :: ModuleVal -> HsName
-moduleValName = \case
-  ModuleValFun name -> name
-
-toModuleVals :: GHC.HsBind GhcPs -> [ModuleVal]
-toModuleVals = \case
-  GHC.FunBind{fun_id} -> [ModuleValFun $ hsRdrName $ unLoc fun_id]
-  _ -> []
+    updateExpr :: (Data a) => a -> m a
+    updateExpr (x :: a) =
+      case Typeable.eqT @(GHC.LHsExpr GhcRn) @a of
+        Just Typeable.Refl -> compileHsExpr . f . parseHsExpr $ x
+        Nothing -> pure x
 
 {----- HsExpr -----}
 
-data HsExpr
-  = HsExprCon HsName
-  | HsExprVar HsName
-  | HsExprApp HsExpr HsExpr
-  | HsExprOp HsExpr HsExpr HsExpr -- lhs op rhs
-  | HsExprList [HsExpr]
-  | HsExprTuple [HsExpr]
-  | HsExprRecordCon HsName [(HsName, HsExpr)]
-  | HsExprLitString Text
-  | HsExprLam HsPat HsExpr
-  | HsExprCase HsExpr [(HsPat, HsExpr)]
-  | HsExprOther (WithShow (GHC.LHsExpr GhcPs))
+-- | A Haskell expression that is either:
+--     1. A parsed expression from the compiler
+--          * ghcExpr is Just
+--          * hsExpr is not HsExprOther if the expression is something
+--            we care about parsing, otherwise HsExprOther
+--     3. A new expression we're creating
+--          * ghcExpr is Nothing
+--          * hsExpr is not HsExprOther
+--
+-- Invariants:
+--   * If ghcExpr is Just, hsExpr must not have been modified
+--   * if ghcExpr is Nothing, hsExpr is not HsExprOther
+data HsExpr p = HsExprUnsafe
+  { ghcExpr :: Maybe (GhcLHsExpr p)
+  , hsExpr :: HsExprData p
+  }
   deriving (Show)
 
-hsApps :: HsExpr -> [HsExpr] -> HsExpr
-hsApps = foldl' HsExprApp
+data HsExprData p
+  = HsExprCon (HsName p)
+  | HsExprVar (HsName p)
+  | HsExprApps (HsExpr p) [HsExpr p]
+  | HsExprOp (HsExpr p) (HsExpr p) (HsExpr p) -- lhs op rhs
+  | HsExprList [HsExpr p]
+  | HsExprRecordCon (HsName p) [(HsName p, HsExpr p)]
+  | HsExprLitString Text
+  | HsExprLam [HsPat p] (HsExpr p)
+  | HsExprCase (HsExpr p) [(HsPat p, HsExpr p)]
+  | HsExprOther
+  deriving (Show)
 
--- | Collect an application of the form `((f a) b) c` and return `f [a, b, c]`.
-collectApps :: HsExpr -> (HsExpr, [HsExpr])
-collectApps = \case
-  HsExprApp l r -> let (f, xs) = collectApps l in (f, xs <> [r])
-  e -> (e, [])
+getExpr :: HsExpr p -> HsExprData p
+getExpr HsExprUnsafe{hsExpr} = hsExpr
 
-toHsExpr :: GHC.LHsExpr GhcPs -> HsExpr
-toHsExpr = \case
-  L _ (GHC.HsVar _ (L _ name)) ->
-    if GHC.occNameSpace (GHC.rdrNameOcc name) == GHC.Name.dataName
-      then HsExprCon (hsRdrName name)
-      else HsExprVar (hsRdrName name)
-  L _ (GHC.HsApp _ lhs rhs) -> HsExprApp (toHsExpr lhs) (toHsExpr rhs)
-  L _ (GHC.OpApp _ lhs op rhs) -> HsExprOp (toHsExpr lhs) (toHsExpr op) (toHsExpr rhs)
-  L _ (GHC.ExplicitList _ lexprs) -> HsExprList $ map toHsExpr lexprs
-  L _ (GHC.ExplicitTuple _ args _)
-    | Just presentArgs <- mapM getPresentTupArg args ->
-        HsExprTuple $ map toHsExpr presentArgs
-  L _ (GHC.RecordCon _ conName GHC.HsRecFields{rec_flds}) ->
-    let
-      getField GHC.HsFieldBind{hfbLHS = field, hfbRHS = expr} =
-        ( hsRdrName . unLoc . GHC.foLabel . unLoc $ field
-        , toHsExpr expr
-        )
-     in
-      HsExprRecordCon (hsRdrName $ unLoc conName) $ map (getField . unLoc) rec_flds
-  L _ (GHC.HsLit _ (GHC.HsString _ s)) -> HsExprLitString $ Text.pack $ GHC.unpackFS s
-  L _ par@GHC.HsPar{} | let expr = GHC.Compat.unHsPar par -> toHsExpr expr
-  expr -> HsExprOther $ WithShow expr
+renderHsExpr :: HsExpr GhcRn -> Text
+renderHsExpr = \case
+  HsExprUnsafe{ghcExpr = Just e} -> Text.pack $ show e
+  HsExprUnsafe{hsExpr = e} -> Text.pack $ show e
+
+newHsExpr :: HsExprData p -> HsExpr p
+newHsExpr e =
+  HsExprUnsafe
+    { ghcExpr = Nothing
+    , hsExpr = e
+    }
+
+hsExprCon :: HsName p -> HsExpr p
+hsExprCon = newHsExpr . HsExprCon
+
+hsExprVar :: HsName p -> HsExpr p
+hsExprVar = newHsExpr . HsExprVar
+
+hsExprApps :: HsExpr p -> [HsExpr p] -> HsExpr p
+hsExprApps f xs = newHsExpr $ HsExprApps f xs
+
+hsExprList :: [HsExpr p] -> HsExpr p
+hsExprList = newHsExpr . HsExprList
+
+hsExprRecordCon :: HsName p -> [(HsName p, HsExpr p)] -> HsExpr p
+hsExprRecordCon conName fields = newHsExpr $ HsExprRecordCon conName fields
+
+hsExprLitString :: Text -> HsExpr p
+hsExprLitString = newHsExpr . HsExprLitString
+
+hsExprLam :: [HsPat p] -> HsExpr p -> HsExpr p
+hsExprLam args body = newHsExpr $ HsExprLam args body
+
+hsExprCase :: HsExpr p -> [(HsPat p, HsExpr p)] -> HsExpr p
+hsExprCase e branches = newHsExpr $ HsExprCase e branches
+
+parseHsExpr :: GHC.LHsExpr GhcRn -> HsExpr GhcRn
+parseHsExpr = goExpr
   where
-    getPresentTupArg = \case
-      GHC.Present _ lexpr -> Just lexpr
-      _ -> Nothing
+    goExpr e =
+      HsExprUnsafe
+        { ghcExpr = Just $ GhcLHsExprRn e
+        , hsExpr = goData e
+        }
 
-fromHsExpr :: (HsName -> GHC.RdrName) -> HsExpr -> GHC.LHsExpr GhcPs
-fromHsExpr toRdrName = go
+    goData = \case
+      L _ (GHC.HsVar _ (L _ name)) ->
+        if (GHC.occNameSpace . GHC.occName) name == GHC.Name.dataName
+          then HsExprCon (hsGhcName name)
+          else HsExprVar (hsGhcName name)
+      e@(L _ GHC.HsApp{}) ->
+        let (f, xs) = collectApps e
+         in HsExprApps (goExpr f) (map goExpr xs)
+      L _ (GHC.OpApp _ lhs op rhs) ->
+        HsExprOp (goExpr lhs) (goExpr op) (goExpr rhs)
+      L _ (GHC.RecordCon _ conName GHC.HsRecFields{rec_flds}) ->
+        HsExprRecordCon (hsGhcName $ unLoc conName) $ map (getRecField . unLoc) rec_flds
+      L _ par@GHC.HsPar{} -> goData $ GHC.Compat.unHsPar par
+      _ -> HsExprOther
+
+    getRecField GHC.HsFieldBind{hfbLHS = field, hfbRHS = expr} =
+      (hsGhcName . GHC.foExt . unLoc $ field, goExpr expr)
+
+    -- Collect an application of the form `((f a) b) c` and return `f [a, b, c]`
+    collectApps = \case
+      L _ (GHC.HsApp _ l r) -> let (f, xs) = collectApps l in (f, xs <> [r])
+      e -> (e, [])
+
+{----- HsType -----}
+
+data HsType p
+  = HsTypeCon (HsName p)
+  | HsTypeApps (HsType p) [HsType p]
+  | HsTypeTuple [HsType p]
+
+{----- HsPat -----}
+
+data HsPat p
+  = HsPatCon (HsName p) [HsPat p]
+  | HsPatVar (HsName p)
+  | HsPatRecord (HsName p) [(HsName p, HsPat p)]
+  | HsPatWild
+  deriving (Show)
+
+{----- HsName -----}
+
+data HsName p
+  = HsName TH.Name
+  | HsVarName Text
+  | HsGhcName (GhcIdP p)
+  deriving (Show, Eq)
+
+hsName :: TH.Name -> HsName p
+hsName = HsName
+
+hsVarName :: Text -> HsName p
+hsVarName = HsVarName
+
+hsGhcName :: forall p. (IsPass p) => GHC.IdP (GhcPass p) -> HsName (GhcPass p)
+hsGhcName = HsGhcName . onPsOrRn @p GhcIdPs GhcIdRn
+
+fromTHName :: GHC.NameCache -> TH.Name -> GHC.Name
+fromTHName nameCache name =
+  case unsafePerformIO $ GHC.thNameToGhcNameIO nameCache name of
+    Just n -> n
+    Nothing -> skeletestPluginError $ "Could not get Name for `" <> show name <> "`"
+
+matchesNameImpl :: GHC.NameCache -> HsName GhcRn -> HsName GhcRn -> Bool
+matchesNameImpl nameCache n1 n2 = fromMaybe False $ (==) <$> go n1 <*> go n2
   where
     go = \case
-      HsExprCon name -> genLoc $ GHC.HsVar GHC.noExtField (genLoc $ toRdrName name)
-      HsExprVar name -> genLoc $ GHC.HsVar GHC.noExtField (genLoc $ toRdrName name)
-      HsExprApp l r -> genLoc $ GHC.Compat.hsApp (parens $ go l) (parens $ go r)
-      HsExprOp l op r -> genLoc $ GHC.OpApp GHC.noAnn (parens $ go l) (parens $ go op) (parens $ go r)
-      HsExprList exprs -> genLoc $ GHC.ExplicitList GHC.noAnn $ map go exprs
-      HsExprTuple exprs ->
-        genLoc $
-          GHC.ExplicitTuple
-            GHC.noAnn
-            (map (GHC.Compat.hsTupPresent . go) exprs)
-            GHC.Boxed
-      HsExprRecordCon con fields ->
-        genLoc $
+      HsName name -> Just $ fromTHName nameCache name
+      HsVarName _ -> Nothing -- new names will never match
+      HsGhcName name -> Just $ unGhcIdP name
+
+getHsName :: HsName p -> Text
+getHsName = \case
+  HsName name -> Text.pack . TH.nameBase $ name
+  HsVarName name -> name
+  HsGhcName (GhcIdPs name) -> Text.pack . GHC.occNameString . GHC.rdrNameOcc $ name
+  HsGhcName (GhcIdRn name) -> Text.pack . GHC.occNameString . GHC.nameOccName $ name
+
+{----- Compilation -----}
+
+class (Monad m) => MonadHasNameCache m where
+  getNameCache :: m GHC.NameCache
+class (Monad m) => MonadCompileName m p where
+  mkIdP :: Text -> m (GHC.IdP p)
+
+type MonadCompile m p = (MonadHasNameCache m, MonadCompileName m p)
+
+newtype CompilePs a = CompilePs (GHC.Hsc a)
+  deriving (Functor, Applicative, Monad)
+
+runCompilePs :: CompilePs a -> GHC.Hsc a
+runCompilePs (CompilePs m) = m
+
+instance MonadHasNameCache CompilePs where
+  getNameCache = GHC.hsc_NC <$> CompilePs GHC.getHscEnv
+instance MonadCompileName CompilePs GhcPs where
+  mkIdP = pure . GHC.mkUnqual GHC.Name.varName . fsText
+
+newtype CompileRn a = CompileRn (StateT (Map Text GHC.Name) GHC.TcM a)
+  deriving (Functor, Applicative, Monad)
+
+runCompileRn :: CompileRn a -> GHC.TcM a
+runCompileRn (CompileRn m) = evalStateT m Map.empty
+
+instance MonadHasNameCache CompileRn where
+  getNameCache = GHC.hsc_NC . GHC.env_top <$> (CompileRn . Trans.lift) GHC.getEnv
+instance MonadCompileName CompileRn GhcRn where
+  mkIdP name = do
+    nameMap <- CompileRn State.get
+    case Map.lookup name nameMap of
+      Just name' -> pure name'
+      Nothing -> do
+        uniq <- (CompileRn . Trans.lift) GHC.getUniqueM
+        let name' = GHC.mkSystemVarName uniq (fsText name)
+        CompileRn $ State.put (Map.insert name name' nameMap)
+        pure name'
+
+compileHsName ::
+  forall p m.
+  (GHC.IsPass p, MonadCompile m (GhcPass p)) =>
+  HsName (GhcPass p)
+  -> m (GHC.IdP (GhcPass p))
+compileHsName = \case
+  HsName name -> do
+    nameCache <- getNameCache
+    pure . onPsOrRn @p GHC.getRdrName id $ fromTHName nameCache name
+  HsVarName name -> mkIdP @_ @(GhcPass p) name
+  HsGhcName name -> pure $ unGhcIdP name
+
+compileFunDef :: (MonadCompile m GhcPs) => HsName GhcPs -> FunDef -> m [GHC.LHsDecl GhcPs]
+compileFunDef funName FunDef{..} = do
+  name <- compileHsName funName
+  ty <- compileHsType funType
+  pats <- mapM compileHsPat funPats
+  body <- compileHsExpr funBody
+  pure
+    [ mkSigD name ty
+    , genLoc . GHC.ValD GHC.noExtField $
+        GHC.FunBind GHC.noExtField (genLoc name) . GHC.MG GHC.FromSource . genLoc $
+          [ genLoc $
+              GHC.Match
+                GHC.noAnn
+                (GHC.FunRhs (genLoc name) GHC.Prefix GHC.NoSrcStrict)
+                pats
+                ( GHC.GRHSs
+                    GHC.emptyComments
+                    [genLoc $ GHC.GRHS GHC.noAnn [] body]
+                    (GHC.EmptyLocalBinds GHC.noExtField)
+                )
+          ]
+    ]
+  where
+    mkSigD name ty =
+      genLoc
+        . GHC.SigD GHC.noExtField
+        . GHC.TypeSig GHC.noAnn [genLoc name]
+        . GHC.HsWC GHC.noExtField
+        . genLoc
+        $ GHC.HsSig GHC.noExtField (GHC.HsOuterImplicit GHC.noExtField) ty
+
+compileHsType :: (MonadCompile m GhcPs) => HsType GhcPs -> m (GHC.LHsType GhcPs)
+compileHsType = go
+  where
+    go = \case
+      HsTypeCon name -> do
+        genLoc . GHC.HsTyVar GHC.noAnn GHC.NotPromoted . genLoc <$> compileHsName name
+      HsTypeApps ty0 tys -> do
+        ty0' <- go ty0
+        tys' <- mapM go tys
+        pure $ foldl' (\l r -> genLoc $ GHC.HsAppTy GHC.noExtField l r) ty0' tys'
+      HsTypeTuple tys -> do
+        tys' <- mapM go tys
+        pure . genLoc $ GHC.HsTupleTy GHC.noAnn GHC.HsBoxedOrConstraintTuple tys'
+
+compileHsPat ::
+  forall p m.
+  (IsPass p, MonadCompile m (GhcPass p)) =>
+  HsPat (GhcPass p)
+  -> m (GHC.LPat (GhcPass p))
+compileHsPat = go
+  where
+    go = \case
+      HsPatCon conName args -> do
+        conName' <- fromConName conName
+        con <- GHC.PrefixCon [] <$> mapM go args
+        pure . genLoc $
+          GHC.ConPat
+            (onPsOrRn @p GHC.noAnn GHC.noExtField)
+            conName'
+            con
+      HsPatVar name -> do
+        name' <- onPsOrRn @p genLoc genLoc <$> compileHsName name
+        pure . genLoc $ GHC.VarPat GHC.noExtField name'
+      HsPatRecord conName fields -> do
+        conName' <- fromConName conName
+        con <- GHC.RecCon <$> compileRecFields go fields
+        pure . genLoc $
+          GHC.ConPat
+            (onPsOrRn @p GHC.noAnn GHC.noExtField)
+            conName'
+            con
+      HsPatWild -> do
+        pure . genLoc $ GHC.WildPat $ onPsOrRn @p GHC.noExtField GHC.noExtField
+
+    fromConName = fmap (onPsOrRn @p genLoc genLoc) . compileHsName
+
+compileHsExpr ::
+  forall p m.
+  (IsPass p, MonadCompile m (GhcPass p)) =>
+  HsExpr (GhcPass p)
+  -> m (GHC.LHsExpr (GhcPass p))
+compileHsExpr = goExpr
+  where
+    goExpr :: HsExpr (GhcPass p) -> m (GHC.LHsExpr (GhcPass p))
+    goExpr = \case
+      HsExprUnsafe{ghcExpr = Just e} -> pure $ unGhcLHsExpr e
+      HsExprUnsafe{hsExpr = e} -> goData e
+
+    goData :: HsExprData (GhcPass p) -> m (GHC.LHsExpr (GhcPass p))
+    goData = \case
+      HsExprCon name -> do
+        genLoc . GHC.HsVar GHC.noExtField . genLocIdP @p <$> compileHsName name
+      HsExprVar name -> do
+        genLoc . GHC.HsVar GHC.noExtField . genLocIdP @p <$> compileHsName name
+      HsExprApps f xs -> do
+        f' <- goExpr f
+        xs' <- mapM goExpr xs
+        pure $ foldl' (\l r -> genLoc $ GHC.Compat.hsApp l r) (parens f') (map parens xs')
+      HsExprOp _ _ _ ->
+        invariantViolation "Compiling HsExprOp not yet supported"
+      HsExprList exprs -> do
+        exprs' <- mapM goExpr exprs
+        pure . genLoc $
+          GHC.ExplicitList
+            (onPsOrRn @p GHC.noAnn GHC.noExtField)
+            exprs'
+      HsExprRecordCon con fields -> do
+        con' <- genLocConLikeP @p <$> compileHsName con
+        fields' <- compileRecFields goExpr fields
+        pure . genLoc $
           GHC.RecordCon
-            GHC.noAnn
-            (genLoc $ toRdrName con)
-            GHC.HsRecFields
-              { rec_flds =
-                  [ genLoc $
-                      GHC.HsFieldBind
-                        { hfbAnn = GHC.noAnn
-                        , hfbLHS = genLoc $ GHC.FieldOcc GHC.noExtField (genLoc $ toRdrName field)
-                        , hfbRHS = go expr
-                        , hfbPun = False
-                        }
-                  | (field, expr) <- fields
-                  ]
-              , rec_dotdot = Nothing
-              }
-      HsExprLitString s -> genLoc $ GHC.Compat.hsLit $ GHC.HsString GHC.SourceText.NoSourceText (fsText s)
-      HsExprLam pat expr ->
-        genLoc . GHC.Compat.hsLamSingle $
-          GHC.MG GHC.FromSource . genLoc $
+            (onPsOrRn @p GHC.noAnn GHC.noExtField)
+            con'
+            fields'
+      HsExprLitString s -> do
+        pure . genLoc . GHC.Compat.hsLit $
+          GHC.HsString GHC.SourceText.NoSourceText (fsText s)
+      HsExprLam pats expr -> do
+        pats' <- mapM compileHsPat pats
+        expr' <- goExpr expr
+        pure . genLoc . GHC.Compat.hsLamSingle $
+          GHC.MG origin . genLoc $
             [ genLoc $
                 GHC.Match
                   { m_ext = GHC.noAnn
                   , m_ctxt = GHC.Compat.lamAltSingle
-                  , m_pats = [fromHsPat toRdrName pat]
+                  , m_pats = pats'
                   , m_grhss =
                       GHC.GRHSs
                         { grhssExt = GHC.emptyComments
-                        , grhssGRHSs = [genLoc $ GHC.GRHS GHC.noAnn [] $ go expr]
+                        , grhssGRHSs = [genLoc $ GHC.GRHS GHC.noAnn [] expr']
                         , grhssLocalBinds = GHC.EmptyLocalBinds GHC.noExtField
                         }
                   }
             ]
-      HsExprCase expr matches ->
-        genLoc . GHC.HsCase GHC.noAnn (go expr) $
-          GHC.MG GHC.FromSource . genLoc $
-            [ genLoc $
-                GHC.Match
-                  { m_ext = GHC.noAnn
-                  , m_ctxt = GHC.CaseAlt
-                  , m_pats = [fromHsPat toRdrName pat]
-                  , m_grhss =
-                      GHC.GRHSs
-                        { grhssExt = GHC.emptyComments
-                        , grhssGRHSs = [genLoc $ GHC.GRHS GHC.noAnn [] $ go body]
-                        , grhssLocalBinds = GHC.EmptyLocalBinds GHC.noExtField
-                        }
-                  }
+      HsExprCase expr matches -> do
+        expr' <- goExpr expr
+        matches' <-
+          sequence
+            [ do
+                pat' <- compileHsPat pat
+                body' <- goExpr body
+                pure . genLoc $
+                  GHC.Match
+                    { m_ext = GHC.noAnn
+                    , m_ctxt = GHC.CaseAlt
+                    , m_pats = [pat']
+                    , m_grhss =
+                        GHC.GRHSs
+                          { grhssExt = GHC.emptyComments
+                          , grhssGRHSs = [genLoc $ GHC.GRHS GHC.noAnn [] body']
+                          , grhssLocalBinds = GHC.EmptyLocalBinds GHC.noExtField
+                          }
+                    }
             | (pat, body) <- matches
             ]
-      HsExprOther (WithShow expr) -> expr
+        pure
+          . genLoc
+          . GHC.HsCase (onPsOrRn @p GHC.noAnn GHC.CaseAlt) expr'
+          $ GHC.MG origin (genLoc matches')
+      HsExprOther ->
+        invariantViolation "Compiling HsExprOther not supported"
 
+    origin = onPsOrRn @p GHC.FromSource GHC.FromSource
+
+    parens :: (IsPass p) => GHC.LHsExpr (GhcPass p) -> GHC.LHsExpr (GhcPass p)
     parens = \case
+      e@(L _ GHC.HsPar{}) -> e
       e@(L _ GHC.HsApp{}) -> genLoc $ GHC.Compat.hsPar e
       e@(L _ GHC.SectionL{}) -> genLoc $ GHC.Compat.hsPar e
       e@(L _ GHC.SectionR{}) -> genLoc $ GHC.Compat.hsPar e
       e -> e
-
-renderHsExpr :: ParsedModule -> HsExpr -> Text
-renderHsExpr parsedModule = Text.pack . show . WithShow . fromHsExpr fromHsName
-  where
-    ParsedModule{fromHsName} = parsedModule
-
-{----- HsType -----}
-
-data HsType
-  = HsTypeCon HsName
-  | HsTypeApp HsType [HsType]
-  | HsTypeTuple [HsType]
-
-fromHsType :: (HsName -> GHC.RdrName) -> HsType -> GHC.LHsType GhcPs
-fromHsType fromHsName = go
-  where
-    go = \case
-      HsTypeCon name -> genLoc $ GHC.HsTyVar GHC.noAnn GHC.NotPromoted (genLoc $ fromHsName name)
-      HsTypeApp ty0 tys ->
-        foldl'
-          (\acc -> genLoc . GHC.HsAppTy GHC.noExtField acc . go)
-          (go ty0)
-          tys
-      HsTypeTuple tys -> genLoc $ GHC.HsTupleTy GHC.noAnn GHC.HsBoxedOrConstraintTuple $ map go tys
-
-{----- HsPat -----}
-
-data HsPat
-  = HsPatCon HsName [HsPat]
-  | HsPatVar HsName
-  | HsPatRecord HsName [(HsName, HsPat)]
-  | HsPatWild
-  deriving (Show)
-
-fromHsPat :: (HsName -> GHC.RdrName) -> HsPat -> GHC.LPat GhcPs
-fromHsPat fromHsName = go
-  where
-    go = \case
-      HsPatCon conName args ->
-        genLoc $
-          GHC.ConPat
-            GHC.noAnn
-            (genLoc $ fromHsName conName)
-            (GHC.PrefixCon [] $ map go args)
-      HsPatVar name -> genLoc $ GHC.VarPat GHC.noExtField (genLoc $ fromHsName name)
-      HsPatRecord conName fields ->
-        genLoc $
-          GHC.ConPat
-            GHC.noAnn
-            (genLoc $ fromHsName conName)
-            ( GHC.RecCon
-                GHC.HsRecFields
-                  { rec_flds =
-                      [ genLoc $
-                          GHC.HsFieldBind
-                            { hfbAnn = GHC.noAnn
-                            , hfbLHS = genLoc $ GHC.FieldOcc GHC.noExtField (genLoc $ fromHsName field)
-                            , hfbRHS = go pat
-                            , hfbPun = False
-                            }
-                      | (field, pat) <- fields
-                      ]
-                  , rec_dotdot = Nothing
-                  }
-            )
-      HsPatWild -> genLoc $ GHC.WildPat GHC.noExtField
-
-{----- HsName -----}
-
-data HsName
-  = HsName TH.Name
-  | HsNewName Text
-  | HsRdrName (WithShow GHC.RdrName)
-  deriving (Show, Eq)
-
-hsName :: TH.Name -> HsName
-hsName = HsName
-
-hsNewName :: Text -> HsName
-hsNewName = HsNewName
-
-hsRdrName :: GHC.RdrName -> HsName
-hsRdrName = HsRdrName . WithShow
-
-hsNameToRdrName :: GHC.NameCache -> HsName -> IO GHC.RdrName
-hsNameToRdrName nc = \case
-  HsName name ->
-    GHC.thNameToGhcNameIO nc name >>= \case
-      Just n -> pure $ GHC.getRdrName n
-      Nothing -> skeletestPluginError $ "Could not get Name for `" <> show name <> "`"
-  HsNewName name -> pure $ GHC.mkUnqual GHC.Name.varName (fsText name)
-  HsRdrName (WithShow name) -> pure name
-
-getHsName :: HsName -> Text
-getHsName = \case
-  HsName name -> Text.pack . TH.nameBase $ name
-  HsNewName name -> name
-  HsRdrName (WithShow name) -> Text.pack . GHC.occNameString . GHC.rdrNameOcc $ name
-
-getHsNameMod :: HsName -> Maybe Text
-getHsNameMod = \case
-  HsName name -> Text.pack <$> TH.nameModule name
-  HsNewName _ -> Nothing
-  HsRdrName (WithShow name) ->
-    case name of
-      GHC.Qual modl _ -> Just . Text.pack . GHC.moduleNameString $ modl
-      _ -> Nothing
-
-renderHsName :: HsName -> Text
-renderHsName = \case
-  HsName name -> Text.pack . show $ name
-  HsNewName name -> name
-  HsRdrName name -> Text.pack . show $ name
-
-{----- GHC.HsDecl -----}
-
-mkSigD :: GHC.LIdP GhcPs -> GHC.LHsType GhcPs -> GHC.LHsDecl GhcPs
-mkSigD name ty =
-  genLoc . GHC.SigD GHC.noExtField $
-    GHC.TypeSig GHC.noAnn [name] $
-      GHC.HsWC GHC.noExtField (genLoc $ GHC.HsSig GHC.noExtField (GHC.HsOuterImplicit GHC.noExtField) ty)
 
 {----- FastString -----}
 
@@ -441,8 +573,103 @@ fsText = GHC.fsLit . Text.unpack
 
 {----- Utilities -----}
 
-newtype WithShow a = WithShow a
-  deriving (Eq)
+data GhcIdP p where
+  GhcIdPs :: GHC.RdrName -> GhcIdP GhcPs
+  GhcIdRn :: GHC.Name -> GhcIdP GhcRn
 
-instance (GHC.Outputable a) => Show (WithShow a) where
-  show (WithShow a) = GHC.showSDocUnsafe $ GHC.ppr a
+instance Show (GhcIdP p) where
+  show = \case
+    GhcIdPs name -> renderOutputable name
+    GhcIdRn name -> renderOutputable name
+
+instance Eq (GhcIdP p) where
+  GhcIdPs n1 == GhcIdPs n2 = n1 == n2
+  GhcIdRn n1 == GhcIdRn n2 = n1 == n2
+
+unGhcIdP :: GhcIdP p -> GHC.IdP p
+unGhcIdP = \case
+  GhcIdPs n -> n
+  GhcIdRn n -> n
+
+data GhcLHsExpr p where
+  GhcLHsExprPs :: GHC.LHsExpr GhcPs -> GhcLHsExpr GhcPs
+  GhcLHsExprRn :: GHC.LHsExpr GhcRn -> GhcLHsExpr GhcRn
+
+instance Show (GhcLHsExpr p) where
+  show = \case
+    GhcLHsExprPs e -> renderOutputable e
+    GhcLHsExprRn e -> renderOutputable e
+
+unGhcLHsExpr :: GhcLHsExpr p -> GHC.LHsExpr p
+unGhcLHsExpr = \case
+  GhcLHsExprPs e -> e
+  GhcLHsExprRn e -> e
+
+newtype GhcFixity = GhcFixity GHC.Fixity
+
+instance Show GhcFixity where
+  show (GhcFixity fixity) = renderOutputable fixity
+
+renderOutputable :: (GHC.Outputable a) => a -> String
+renderOutputable = GHC.showSDocUnsafe . GHC.ppr
+
+onPsOrRn :: forall p a. (IsPass p) => ((p ~ 'GHC.Parsed) => a) -> ((p ~ 'GHC.Renamed) => a) -> a
+onPsOrRn ps rn =
+  case GHC.ghcPass @p of
+    GhcPs -> ps
+    GhcRn -> rn
+    GhcTc -> invariantViolation "onPsOrRn found GhcTc"
+
+compileRecFields ::
+  forall p m arg x.
+  (IsPass p, MonadCompile m (GhcPass p)) =>
+  (x -> m arg)
+  -> [(HsName (GhcPass p), x)]
+  -> m (GHC.HsRecFields (GhcPass p) arg)
+compileRecFields f fields = do
+  fields' <-
+    sequence
+      [ do
+          field' <- compileFieldOcc field
+          x' <- f x
+          pure . genLoc $
+            GHC.HsFieldBind
+              { hfbAnn = GHC.noAnn
+              , hfbLHS = genLoc field'
+              , hfbRHS = x'
+              , hfbPun = False
+              }
+      | (field, x) <- fields
+      ]
+  pure
+    GHC.HsRecFields
+      { rec_flds = fields'
+      , rec_dotdot = Nothing
+      }
+  where
+    compileFieldOcc field = do
+      name <- compileHsName field
+      pure $
+        onPsOrRn @p
+          GHC.FieldOcc
+            { foExt = GHC.noExtField
+            , foLabel = genLoc name
+            }
+          GHC.FieldOcc
+            { foExt = name
+            , foLabel = genLoc $ GHC.getRdrName name
+            }
+
+genLocConLikeP ::
+  forall p.
+  (IsPass p) =>
+  GHC.IdP (GhcPass p)
+  -> GHC.XRec (GhcPass p) (GHC.ConLikeP (GhcPass p))
+genLocConLikeP idp = onPsOrRn @p (genLoc idp) (genLoc idp)
+
+genLocIdP ::
+  forall p.
+  (IsPass p) =>
+  GHC.IdP (GhcPass p)
+  -> GHC.LIdP (GhcPass p)
+genLocIdP idp = onPsOrRn @p (genLoc idp) (genLoc idp)

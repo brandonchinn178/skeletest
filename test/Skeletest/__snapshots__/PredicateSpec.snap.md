@@ -226,13 +226,13 @@ P.con must be applied to a constructor
 ```
 ExampleSpec.hs:9:3: error: [GHC-27346]
     • The data constructor ‘User’ should have 2 arguments, but has been given 1
-    • In the pattern: User x0
-      In the pattern: Just (User x0)
+    • In the pattern: User x0_a2nR
+      In the pattern: Just (User x0_a2nR)
       In a case alternative:
-          Just (User x0)
+          Just (User x0_a2nR)
             -> Just
-                 ((Skeletest.Internal.Utils.HList.HCons (pure x0))
-                    Skeletest.Internal.Utils.HList.HNil)
+                 (Skeletest.Internal.Utils.HList.HCons
+                    (pure x0_a2nR) Skeletest.Internal.Utils.HList.HNil)
   |
 9 |   User "alice" (Just 1) `shouldSatisfy` P.con (User (P.eq ""))
   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -241,10 +241,10 @@ ExampleSpec.hs:9:3: error: [GHC-27346]
 ## Data types / con / fails to compile with unknown record field
 
 ```
-ExampleSpec.hs:9:3: error: [GHC-76037] Not in scope: ‘foo’
+ExampleSpec.hs:9:43: error: [GHC-76037] Not in scope: ‘foo’
   |
 9 |   User "alice" `shouldSatisfy` P.con User{foo = P.eq ""}
-  |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |                                           ^^^
 ```
 
 ## Data types / con / shows a helpful failure message

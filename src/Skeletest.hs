@@ -40,7 +40,6 @@ module Skeletest (
   setConfidence,
   setVerifiedTermination,
   setTestLimit,
-  setSkipTo,
 
   -- * Fixtures
   Fixture (..),

@@ -18,7 +18,6 @@ module Skeletest.Prop.Internal (
   setConfidence,
   setVerifiedTermination,
   setTestLimit,
-  setSkipTo,
 
   -- * CLI flags
   PropSeedFlag,
@@ -31,7 +30,6 @@ import Control.Monad.Trans.Class qualified as Trans
 import Control.Monad.Trans.Reader qualified as Trans
 import Data.List qualified as List
 import Data.Maybe (catMaybes)
-import Data.String (fromString)
 import Data.Text qualified as Text
 import GHC.Stack qualified as GHC
 import Hedgehog qualified
@@ -106,11 +104,19 @@ data PropertyConfig
   | SetConfidence Int
   | SetVerifiedTermination
   | SetTestLimit Int
-  | SkipTo String
 
 resolveConfig :: [PropertyConfig] -> Hedgehog.PropertyConfig
-resolveConfig = foldl' go Hedgehog.defaultConfig
+resolveConfig = foldl' go defaultConfig
   where
+    defaultConfig =
+      Hedgehog.PropertyConfig
+        { propertyDiscardLimit = 100
+        , propertyShrinkLimit = 1000
+        , propertyShrinkRetries = 0
+        , propertyTerminationCriteria = Hedgehog.NoConfidenceTermination 100
+        , propertySkip = Nothing
+        }
+
     go cfg = \case
       DiscardLimit x -> cfg{Hedgehog.propertyDiscardLimit = Hedgehog.DiscardLimit x}
       ShrinkLimit x -> cfg{Hedgehog.propertyShrinkLimit = Hedgehog.ShrinkLimit x}
@@ -139,7 +145,6 @@ resolveConfig = foldl' go Hedgehog.defaultConfig
                 Hedgehog.NoConfidenceTermination _ -> Hedgehog.NoConfidenceTermination (Hedgehog.TestLimit x)
                 Hedgehog.EarlyTermination c _ -> Hedgehog.EarlyTermination c (Hedgehog.TestLimit x)
           }
-      SkipTo s -> cfg{Hedgehog.propertySkip = Just (fromString s)}
 
 runProperty :: Property -> IO ()
 runProperty = \case
@@ -273,9 +278,6 @@ setVerifiedTermination = propConfig SetVerifiedTermination
 
 setTestLimit :: Int -> Property
 setTestLimit = propConfig . SetTestLimit
-
-setSkipTo :: String -> Property
-setSkipTo = propConfig . SkipTo
 
 {----- CLI flags -----}
 

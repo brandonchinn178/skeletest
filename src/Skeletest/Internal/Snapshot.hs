@@ -351,6 +351,9 @@ plainRenderer render =
     , snapshotLang = Nothing
     }
 
+renderWithShow :: forall a. (Typeable a, Show a) => SnapshotRenderer
+renderWithShow = plainRenderer (Text.pack . show @a)
+
 defaultSnapshotRenderers :: [SnapshotRenderer]
 defaultSnapshotRenderers =
   [ plainRenderer @String Text.pack
@@ -402,6 +405,3 @@ setSnapshotRenderers = writeIORef snapshotRenderersRef
 
 getSnapshotRenderers :: (MonadIO m) => m [SnapshotRenderer]
 getSnapshotRenderers = readIORef snapshotRenderersRef
-
-renderWithShow :: forall a. (Typeable a, Show a) => SnapshotRenderer
-renderWithShow = plainRenderer (Text.pack . show @a)

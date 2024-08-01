@@ -8,11 +8,11 @@ module Skeletest (
   -- ** Modifiers
   xfail,
   skip,
+  markManual,
 
   -- ** Markers
   IsMarker (..),
   withMarkers,
-  withManualMarkers,
   withMarker,
 
   -- * Assertions

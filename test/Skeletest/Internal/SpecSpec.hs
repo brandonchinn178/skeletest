@@ -58,6 +58,57 @@ spec = do
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
+  describe "markManual" $ do
+    integration . it "skips manual tests by default" $ do
+      runner <- getFixture
+      addTestFile runner "ExampleSpec.hs" $
+        [ "module ExampleSpec (spec) where"
+        , ""
+        , "import Skeletest"
+        , ""
+        , "spec = do"
+        , "  markManual . withMarkers [\"foo\"] $ do"
+        , "    it \"foo1\" $ pure ()"
+        , "    it \"foo2\" $ pure ()"
+        , "  it \"bar1\" $ pure ()"
+        , "  it \"bar2\" $ pure ()"
+        ]
+
+      (stdout, stderr) <- expectSuccess $ runTests runner []
+      stderr `shouldBe` ""
+      stdout
+        `shouldSatisfy` P.and
+          [ P.not $ P.hasInfix "foo1"
+          , P.not $ P.hasInfix "foo2"
+          , P.hasInfix "bar1"
+          , P.hasInfix "bar2"
+          ]
+
+    integration . it "runs selected manual tests" $ do
+      runner <- getFixture
+      addTestFile runner "ExampleSpec.hs" $
+        [ "module ExampleSpec (spec) where"
+        , ""
+        , "import Skeletest"
+        , ""
+        , "spec = do"
+        , "  markManual . withMarkers [\"foo\"] $ do"
+        , "    it \"foo1\" $ pure ()"
+        , "    it \"foo2\" $ pure ()"
+        , "  it \"bar1\" $ pure ()"
+        , "  it \"bar2\" $ pure ()"
+        ]
+
+      (stdout, stderr) <- expectSuccess $ runTests runner ["*"]
+      stderr `shouldBe` ""
+      stdout
+        `shouldSatisfy` P.and
+          [ P.hasInfix "foo1"
+          , P.hasInfix "foo2"
+          , P.hasInfix "bar1"
+          , P.hasInfix "bar2"
+          ]
+
   describe "withMarkers" $ do
     integration . it "allows selecting from command line" $ do
       runner <- getFixture
@@ -82,82 +133,6 @@ spec = do
           , P.hasInfix "foo2"
           , P.not $ P.hasInfix "bar1"
           , P.not $ P.hasInfix "bar2"
-          ]
-
-  describe "withManualMarkers" $ do
-    integration . it "allows selecting from command line" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
-        [ "module ExampleSpec (spec) where"
-        , ""
-        , "import Skeletest"
-        , ""
-        , "spec = do"
-        , "  withManualMarkers [\"foo\"] $ do"
-        , "    it \"foo1\" $ pure ()"
-        , "    it \"foo2\" $ pure ()"
-        , "  it \"bar1\" $ pure ()"
-        , "  it \"bar2\" $ pure ()"
-        ]
-
-      (stdout, stderr) <- expectSuccess $ runTests runner ["@foo"]
-      stderr `shouldBe` ""
-      stdout
-        `shouldSatisfy` P.and
-          [ P.hasInfix "foo1"
-          , P.hasInfix "foo2"
-          , P.not $ P.hasInfix "bar1"
-          , P.not $ P.hasInfix "bar2"
-          ]
-
-    integration . it "skips tests marked with manual marker by default" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
-        [ "module ExampleSpec (spec) where"
-        , ""
-        , "import Skeletest"
-        , ""
-        , "spec = do"
-        , "  withManualMarkers [\"foo\"] $ do"
-        , "    it \"foo1\" $ pure ()"
-        , "    it \"foo2\" $ pure ()"
-        , "  it \"bar1\" $ pure ()"
-        , "  it \"bar2\" $ pure ()"
-        ]
-
-      (stdout, stderr) <- expectSuccess $ runTests runner []
-      stderr `shouldBe` ""
-      stdout
-        `shouldSatisfy` P.and
-          [ P.not $ P.hasInfix "foo1"
-          , P.not $ P.hasInfix "foo2"
-          , P.hasInfix "bar1"
-          , P.hasInfix "bar2"
-          ]
-
-    integration . it "runs selected tests marked with manual marker" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
-        [ "module ExampleSpec (spec) where"
-        , ""
-        , "import Skeletest"
-        , ""
-        , "spec = do"
-        , "  withManualMarkers [\"foo\"] $ do"
-        , "    it \"foo1\" $ pure ()"
-        , "    it \"foo2\" $ pure ()"
-        , "  it \"bar1\" $ pure ()"
-        , "  it \"bar2\" $ pure ()"
-        ]
-
-      (stdout, stderr) <- expectSuccess $ runTests runner ["*"]
-      stderr `shouldBe` ""
-      stdout
-        `shouldSatisfy` P.and
-          [ P.hasInfix "foo1"
-          , P.hasInfix "foo2"
-          , P.hasInfix "bar1"
-          , P.hasInfix "bar2"
           ]
 
   describe "withMarker" $ do
@@ -187,64 +162,4 @@ spec = do
           , P.hasInfix "foo2"
           , P.not $ P.hasInfix "bar1"
           , P.not $ P.hasInfix "bar2"
-          ]
-
-    integration . it "skips tests marked with manual marker by default" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
-        [ "module ExampleSpec (spec) where"
-        , ""
-        , "import Skeletest"
-        , ""
-        , "data MyMarker = MyMarker deriving (Show)"
-        , "instance IsMarker MyMarker where"
-        , "  getMarkerName _ = \"my-marker\""
-        , "  isManualMarker _ = True"
-        , ""
-        , "spec = do"
-        , "  withMarker MyMarker $ do"
-        , "    it \"foo1\" $ pure ()"
-        , "    it \"foo2\" $ pure ()"
-        , "  it \"bar1\" $ pure ()"
-        , "  it \"bar2\" $ pure ()"
-        ]
-
-      (stdout, stderr) <- expectSuccess $ runTests runner []
-      stderr `shouldBe` ""
-      stdout
-        `shouldSatisfy` P.and
-          [ P.not $ P.hasInfix "foo1"
-          , P.not $ P.hasInfix "foo2"
-          , P.hasInfix "bar1"
-          , P.hasInfix "bar2"
-          ]
-
-    integration . it "runs selected tests marked with manual marker" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
-        [ "module ExampleSpec (spec) where"
-        , ""
-        , "import Skeletest"
-        , ""
-        , "data MyMarker = MyMarker deriving (Show)"
-        , "instance IsMarker MyMarker where"
-        , "  getMarkerName _ = \"my-marker\""
-        , "  isManualMarker _ = True"
-        , ""
-        , "spec = do"
-        , "  withMarker MyMarker $ do"
-        , "    it \"foo1\" $ pure ()"
-        , "    it \"foo2\" $ pure ()"
-        , "  it \"bar1\" $ pure ()"
-        , "  it \"bar2\" $ pure ()"
-        ]
-
-      (stdout, stderr) <- expectSuccess $ runTests runner ["*"]
-      stderr `shouldBe` ""
-      stdout
-        `shouldSatisfy` P.and
-          [ P.hasInfix "foo1"
-          , P.hasInfix "foo2"
-          , P.hasInfix "bar1"
-          , P.hasInfix "bar2"
           ]

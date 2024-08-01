@@ -15,21 +15,12 @@ class (Show a, Typeable a) => IsMarker a where
   -- underscores, and periods.
   getMarkerName :: a -> String
 
-  -- | If true, skips tests if no selections are specified on the command
-  -- line. Defaults to false.
-  isManualMarker :: a -> Bool
-  isManualMarker _ = False
-
 -- | A marker that can be used for bespoke marker definitions.
-data AnonMarker = AnonMarker
-  { anonMarkerName :: String
-  , anonMarkerManual :: Bool
-  }
+newtype AnonMarker = AnonMarker String
   deriving (Show)
 
 instance IsMarker AnonMarker where
-  getMarkerName = anonMarkerName
-  isManualMarker = anonMarkerManual
+  getMarkerName (AnonMarker name) = name
 
 data SomeMarker = forall a. (IsMarker a) => SomeMarker a
 

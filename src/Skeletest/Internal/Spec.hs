@@ -24,11 +24,11 @@ module Skeletest.Internal.Spec (
   -- ** Modifiers
   xfail,
   skip,
+  markManual,
 
   -- ** Markers
   IsMarker (..),
   withMarkers,
-  withManualMarkers,
   withMarker,
 ) where
 
@@ -37,7 +37,7 @@ import Control.Monad (forM, guard)
 import Control.Monad.Trans.Reader qualified as Trans
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
 import Data.Functor.Identity (runIdentity)
-import Data.Maybe (catMaybes, listToMaybe, mapMaybe)
+import Data.Maybe (catMaybes, isJust, listToMaybe, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
@@ -307,7 +307,7 @@ applyTestSelections = \case
     hideManualTests = mapSpecTrees (\go -> filter (not . isManualTest) . map go)
     isManualTest = \case
       SpecGroup{} -> False
-      SpecTest{testMarkers} -> or [isManualMarker marker | SomeMarker marker <- testMarkers]
+      SpecTest{testMarkers} -> isJust $ findMarker @MarkerManual testMarkers
 
 applyTestSelections' :: TestTarget -> SpecInfo -> SpecInfo
 applyTestSelections' selections info = info{specSpec = applySelections $ specSpec info}
@@ -407,6 +407,9 @@ data SkeletestSkip = SkeletestSkip Text
 
 instance Exception SkeletestSkip
 
+markManual :: Spec -> Spec
+markManual = withMarker MarkerManual
+
 {----- Markers -----}
 
 newtype MarkerXFail = MarkerXFail Text
@@ -420,6 +423,12 @@ newtype MarkerSkip = MarkerSkip Text
 
 instance IsMarker MarkerSkip where
   getMarkerName _ = "skip"
+
+data MarkerManual = MarkerManual
+  deriving (Show)
+
+instance IsMarker MarkerManual where
+  getMarkerName _ = "manual"
 
 -- | Adds the given marker to all the tests in the given spec.
 --
@@ -436,19 +445,4 @@ withMarker m = mapSpecTrees (\go -> map (addMarker . go))
 --
 -- See 'getMarkerName'.
 withMarkers :: [String] -> Spec -> Spec
-withMarkers = withMarkers' False
-
--- | Adds the given names as manual markers to all tests in the given spec.
---
--- See 'isManualMarker'.
-withManualMarkers :: [String] -> Spec -> Spec
-withManualMarkers = withMarkers' True
-
-withMarkers' :: Bool -> [String] -> Spec -> Spec
-withMarkers' isManual = foldr (\mark acc -> withMarker (toTag mark) . acc) id
-  where
-    toTag name =
-      AnonMarker
-        { anonMarkerName = name
-        , anonMarkerManual = isManual
-        }
+withMarkers = foldr (\name acc -> withMarker (AnonMarker name) . acc) id

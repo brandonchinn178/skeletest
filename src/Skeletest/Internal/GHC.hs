@@ -551,7 +551,7 @@ compileHsExpr = goExpr
             ]
         pure
           . genLoc
-          . GHC.HsCase (onPsOrRn @p GHC.noAnn GHC.CaseAlt) expr'
+          . GHC.HsCase (onPsOrRn @p GHC.noAnn GHC.Compat.xCaseRn) expr'
           $ GHC.MG origin (genLoc matches')
       HsExprOther ->
         invariantViolation "Compiling HsExprOther not supported"

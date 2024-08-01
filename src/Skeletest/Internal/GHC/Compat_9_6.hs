@@ -16,10 +16,13 @@ hsLamSingle = HsLam noExtField
 lamAltSingle :: HsMatchContext fn
 lamAltSingle = LambdaExpr
 
+xCaseRn :: XCase GhcRn
+xCaseRn = noExtField
+
 hsLit :: HsLit (GhcPass p) -> HsExpr (GhcPass p)
 hsLit = HsLit noAnn
 
-hsPar :: LHsExpr p -> HsExpr p
+hsPar :: LHsExpr (GhcPass p) -> HsExpr (GhcPass p)
 hsPar e = HsPar noAnn (L NoTokenLoc HsTok) e (L NoTokenLoc HsTok)
 
 unHsPar :: HsExpr GhcRn -> LHsExpr GhcRn

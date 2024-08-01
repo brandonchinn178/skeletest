@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskellQuotes #-}
@@ -10,6 +11,10 @@ module Skeletest.Internal.Plugin (
 import Data.Functor.Const (Const (..))
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Text qualified as Text
+
+#if !MIN_VERSION_base(4, 20, 0)
+import Data.Foldable (foldl')
+#endif
 
 import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
 import Skeletest.Internal.Error (skeletestPluginError)

@@ -424,7 +424,7 @@ infixr 1 <<<, >>>
 
 (<<<) :: (Monad m) => Predicate m a -> (b -> a) -> Predicate m b
 Predicate{..} <<< f =
-  -- TODO: render function name in predicateDisp?
+  -- TODO: render function name + intermediate values in predicateDisp?
   Predicate
     { predicateFunc = fmap showCtx . predicateFunc . f
     , predicateDisp

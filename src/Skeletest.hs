@@ -2,7 +2,6 @@ module Skeletest (
   -- * Spec
   Spec,
   describe,
-  test,
   it,
   prop,
 

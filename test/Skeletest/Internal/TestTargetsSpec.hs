@@ -122,6 +122,11 @@ spec = do
             , TestTargetName "test"
             )
           ,
+            ( "parses test name with spaces"
+            , ["[foo test]"]
+            , TestTargetName "foo test"
+            )
+          ,
             ( "parses test marker"
             , ["@fast"]
             , TestTargetMarker "fast"

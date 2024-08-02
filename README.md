@@ -361,7 +361,7 @@ spec = do
     getUser conn "alice" `shouldSatisfy` P.just (P.con User{name = P.eq "alice"})
 ```
 
-### Built-in fixtures
+#### Built-in fixtures
 
 The following fixtures are available out of the box:
 

@@ -2,7 +2,33 @@ cabal-version: 3.0
 
 name: skeletest
 version: 0.1.0
+synopsis: Batteries-included, opinionated test framework
+description: Batteries-included, opinionated test framework. See README.md for more details.
+homepage: https://github.com/brandonchinn178/skeletest#readme
+bug-reports: https://github.com/brandonchinn178/skeletest/issues
+author: Brandon Chinn <brandonchinn178@gmail.com>
+maintainer: Brandon Chinn <brandonchinn178@gmail.com>
+license: BSD-3-Clause
+license-file: LICENSE.md
+category: Test
 build-type: Simple
+extra-source-files:
+  README.md
+  CHANGELOG.md
+  test/__snapshots__/ExampleSpec.snap.md
+  test/Skeletest/__snapshots__/AssertionsSpec.snap.md
+  test/Skeletest/__snapshots__/PropSpec.snap.md
+  test/Skeletest/__snapshots__/MainSpec.snap.md
+  test/Skeletest/__snapshots__/PredicateSpec.snap.md
+  test/Skeletest/Internal/__snapshots__/SnapshotSpec.snap.md
+  test/Skeletest/Internal/__snapshots__/CLISpec.snap.md
+  test/Skeletest/Internal/__snapshots__/FixturesSpec.snap.md
+  test/Skeletest/Internal/__snapshots__/TestTargetsSpec.snap.md
+  test/Skeletest/Internal/__snapshots__/SpecSpec.snap.md
+
+source-repository head
+  type: git
+  location: https://github.com/brandonchinn178/skeletest
 
 library
   hs-source-dirs: src

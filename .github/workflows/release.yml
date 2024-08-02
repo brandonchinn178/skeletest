@@ -1,0 +1,55 @@
+name: Release
+on: workflow_dispatch
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    runs-on: ubuntu-latest
+    needs:
+      - ci
+
+    steps:
+      -
+        uses: actions/checkout@v3
+      -
+        uses: actions/download-artifact@v3
+        with:
+          name: skeletest-sdist
+          path: ./sdist/
+      -
+        id: cabal_file
+        uses: haskell-actions/parse-cabal-file@v1
+        with:
+          cabal_file: skeletest.cabal
+      -
+        name: Set version label
+        run: echo 'VERSION=v${{ steps.cabal_file.outputs.version }}' >> "${GITHUB_ENV}"
+      -
+        id: hackage_token_secret
+        name: Load Hackage token secret name
+        run: |
+          USERNAME="$(echo "${GITHUB_ACTOR}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')"
+          echo "name=HACKAGE_TOKEN_${USERNAME}" >> "${GITHUB_OUTPUT}"
+      -
+        name: Get CHANGELOG section
+        run: |
+          sed '/^## Unreleased/,/^$/d' CHANGELOG.md > /tmp/changelog-without-unreleased
+          if [[ "$(head -n 1 /tmp/changelog-without-unreleased)" != "## ${VERSION}" ]]; then
+            echo "CHANGELOG doesn't look updated" >&2
+            exit 1
+          fi
+          sed '1 d; /^## v/,$ d' /tmp/changelog-without-unreleased > /tmp/changelog-body
+      -
+        uses: haskell-actions/hackage-publish@v1
+        with:
+          hackageToken: ${{ secrets[steps.hackage_token_secret.outputs.name] }}
+          packagesPath: ./sdist/
+      -
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.VERSION }}
+          body_path: /tmp/changelog-body
+          draft: true
+          target_commitish: ${{ github.sha }}

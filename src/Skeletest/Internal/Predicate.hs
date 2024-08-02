@@ -27,6 +27,7 @@ module Skeletest.Internal.Predicate (
   nothing,
   left,
   right,
+  IsPredTuple (..),
   tup,
   con,
   conMatches,
@@ -309,6 +310,11 @@ instance IsPredTuple m (a, b, c, d, e, f) where
   type ToPredTuple m (a, b, c, d, e, f) = (Predicate m a, Predicate m b, Predicate m c, Predicate m d, Predicate m e, Predicate m f)
   toHListPred _ (a, b, c, d, e, f) = HCons a . HCons b . HCons c . HCons d . HCons e . HCons f $ HNil
 
+-- | Matches a tuple satisfying the given predicates. Works for tuples up to 6 elements.
+--
+-- @
+-- P.tup (P.eq 1, P.gt 2, P.hasPrefix "hello ")
+-- @
 tup :: forall a m. (IsPredTuple m a, Monad m) => ToPredTuple m a -> Predicate m a
 tup predTup =
   Predicate
@@ -644,12 +650,19 @@ throws Predicate{..} =
 data Fun a b = Fun String (a -> b)
 data IsoChecker a b = IsoChecker (Fun a b) (Fun a b)
 
--- | Use in conjunction with 'isoWith' to verify if two functions are isomorphic.
+-- | Verify if two functions are isomorphic.
+--
+-- @
+-- prop "reverse . reverse === id" $ do
+--   let genList = Gen.list (Gen.linear 0 10) $ Gen.int (Gen.linear 0 1000)
+--   (reverse . reverse) === id \`shouldSatisfy\` P.isoWith genList
+-- @
 (===) :: (a -> b) -> (a -> b) -> IsoChecker a b
 f === g = IsoChecker (Fun "lhs" f) (Fun "rhs" g)
 
 infix 2 ===
 
+-- | See '(===)'.
 isoWith :: (GHC.HasCallStack, Show a, Eq b) => Gen a -> Predicate PropertyM (IsoChecker a b)
 isoWith gen =
   Predicate

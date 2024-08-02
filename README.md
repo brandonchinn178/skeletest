@@ -190,7 +190,7 @@ All assertions in Skeletest use the following functions:
 
 `shouldSatisfy` is the most general function, but the others are provided for convenience. `shouldSatisfy` takes in the value being tested on the left, and a predicate on the right. Predicates should be imported from `Skeletest.Predicate`, qualified as `P`.
 
-Some notable predicates are listed here. See the Haddocks for a full list of available predicates.
+Some notable predicates are listed here. See the [Haddocks](https://hackage.haskell.org/package/aeson-schemas/docs/Skeletest-Predicate.html) for a full list of available predicates.
 
 * `P.eq 10`
     * Satisfied when the actual value is equal to `10`.
@@ -278,7 +278,7 @@ import qualified Skeletest.Prop.Gen as Gen
 import qualified Skeletest.Prop.Range as Range
 ```
 
-Property tests consist of two things: generating random data with `forAll` and checking properties using the usual `shouldSatisfy` assertions. See the Haddocks for the different ways to generate data.
+Property tests consist of two things: generating random data with `forAll` and checking properties using the usual `shouldSatisfy` assertions. See the [Haddocks](https://hackage.haskell.org/package/skeletest/docs/Skeletest-Prop-Gen.html) for the different ways to generate data.
 
 ```haskell
 prop "reverse does not change the length" $ do
@@ -360,6 +360,17 @@ spec = do
     DbConnFixture conn <- getFixture
     getUser conn "alice" `shouldSatisfy` P.just (P.con User{name = P.eq "alice"})
 ```
+
+### Built-in fixtures
+
+The following fixtures are available out of the box:
+
+* `FixtureTmpDir` - Contains a temporary directory that is cleaned up between tests.
+
+    ```haskell
+    FixtureTmpDir tmpDir <- getFixture
+    writeFile (tmpDir </> "myfile.txt") "test"
+    ````
 
 ### Markers
 

@@ -287,7 +287,7 @@ prop = test
 -- | Mark the given spec as expected to fail.
 -- Fails tests if they unexpectedly pass.
 --
--- Can be selected with the marker '@xfail'
+-- Can be selected with the marker @@xfail@
 xfail :: String -> Spec -> Spec
 xfail = withMarker . MarkerXFail . Text.pack
 
@@ -317,7 +317,7 @@ xfailHook =
 
 -- | Skip all tests in the given spec.
 --
--- Can be selected with the marker '@skip'
+-- Can be selected with the marker @@skip@
 skip :: String -> Spec -> Spec
 skip = withMarker . MarkerSkip . Text.pack
 

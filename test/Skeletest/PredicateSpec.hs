@@ -7,10 +7,10 @@ module Skeletest.PredicateSpec (spec) where
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Text qualified as Text
 import Skeletest
-import Skeletest.Predicate (PredicateResult (..), runPredicate)
 import Skeletest.Predicate qualified as P
 import UnliftIO.Exception (Exception, throwIO)
 
+import Skeletest.Internal.Predicate (PredicateResult (..), runPredicate)
 import Skeletest.TestUtils.Integration
 
 data User = User

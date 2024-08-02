@@ -9,7 +9,7 @@ import Data.Maybe (listToMaybe, mapMaybe)
 import Data.Typeable (Typeable, cast)
 
 class (Show a, Typeable a) => IsMarker a where
-  -- | The name of the marker that can be selected with '@name' syntax.
+  -- | The name of the marker that can be selected with @@name@ syntax.
   --
   -- Marker names must only include alphanumeric characters, hyphens,
   -- underscores, and periods.

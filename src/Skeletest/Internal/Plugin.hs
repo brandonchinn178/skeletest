@@ -1,14 +1,20 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskellQuotes #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Skeletest.Internal.Plugin (
   plugin,
 ) where
 
 import Data.Functor.Const (Const (..))
-import Data.Maybe (listToMaybe)
+import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Text qualified as Text
+
+#if !MIN_VERSION_base(4, 20, 0)
+import Data.Foldable (foldl')
+#endif
 
 import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
 import Skeletest.Internal.Error (skeletestPluginError)
@@ -25,46 +31,56 @@ plugin =
   mkPlugin
     PluginDef
       { isPure = True
-      , afterParse = \modName modl ->
+      , modifyParsed = \modName modl ->
           if modName == "Main"
             then transformMainModule modl
-            else transformTestModule modl
+            else modl
+      , onRename = \ctx modName expr ->
+          if "Spec" `Text.isSuffixOf` modName
+            then transformTestModule ctx expr
+            else expr
       }
 
 -- | Add 'main' function.
 transformMainModule :: ParsedModule -> ParsedModule
-transformMainModule modl = addModuleFun mainFun modl
+transformMainModule modl = modl{moduleFuncs = (hsVarName "main", Just mainFun) : moduleFuncs modl}
   where
-    moduleVals = map moduleValName $ getModuleVals modl
-    getVal name = listToMaybe $ filter ((== name) . getHsName) moduleVals
-    varOr name def = maybe def HsExprVar (getVal name)
+    findVar name =
+      fmap hsExprVar . listToMaybe $
+        [ funName
+        | (funName, _) <- moduleFuncs modl
+        , getHsName funName == name
+        ]
 
-    cliFlagsExpr = varOr "cliFlags" (HsExprList [])
-    snapshotRenderersExpr = varOr "snapshotRenderers" (HsExprList [])
-    pluginsExpr = varOr "plugins" (HsExprList [])
+    cliFlagsExpr = fromMaybe (hsExprList []) $ findVar "cliFlags"
+    snapshotRenderersExpr = fromMaybe (hsExprList []) $ findVar "snapshotRenderers"
+    pluginsExpr = fromMaybe (hsExprList []) $ findVar "plugins"
 
     mainFun =
       FunDef
-        { funName = "main"
-        , funType = HsTypeApp (HsTypeCon $ hsName ''IO) [HsTypeTuple []]
+        { funType = HsTypeApps (HsTypeCon $ hsName ''IO) [HsTypeTuple []]
         , funPats = []
         , funBody =
-            hsApps
-              (HsExprVar $ hsName 'Main.runSkeletest)
-              [ hsApps (HsExprVar (hsName '(:))) $
-                  [ HsExprRecordCon
+            hsExprApps
+              (hsExprVar $ hsName 'Main.runSkeletest)
+              [ hsExprApps (hsExprVar (hsName '(:))) $
+                  [ hsExprRecordCon
                       (hsName 'Plugin.Plugin)
                       [ (hsName 'Plugin.cliFlags, cliFlagsExpr)
                       , (hsName 'Plugin.snapshotRenderers, snapshotRenderersExpr)
                       ]
                   , pluginsExpr
                   ]
-              , HsExprVar $ hsNewName mainFileSpecsListIdentifier
+              , hsExprVar $ hsVarName mainFileSpecsListIdentifier
               ]
         }
 
-transformTestModule :: ParsedModule -> ParsedModule
-transformTestModule = replaceConMatch . replaceIsoChecker
+transformTestModule :: Ctx -> HsExpr GhcRn -> HsExpr GhcRn
+transformTestModule ctx =
+  foldl' (.) id $
+    [ replaceConMatch ctx
+    , replaceIsoChecker ctx
+    ]
 
 -- | Replace all uses of P.con with P.conMatches. See P.con.
 --
@@ -89,60 +105,65 @@ transformTestModule = replaceConMatch . replaceIsoChecker
 --       _ -> Nothing
 --   )
 --   (HCons (P.eq "user1") $ HCons (P.contains "@") $ HNil)
-replaceConMatch :: ParsedModule -> ParsedModule
-replaceConMatch = modifyModuleExprs go
+replaceConMatch :: Ctx -> HsExpr GhcRn -> HsExpr GhcRn
+replaceConMatch ctx e =
+  case getExpr e of
+    -- Matches:
+    --   P.con User{name = ...}
+    --   P.con (User "...")
+    HsExprApps (getExpr -> HsExprVar name) [arg]
+      | isCon name ->
+          convertCon arg
+    -- Matches:
+    --   P.con $ User "..."
+    HsExprOp (getExpr -> HsExprVar name) (getExpr -> HsExprVar dollar) arg
+      | matchesName ctx (hsName '($)) dollar
+      , isCon name ->
+          convertCon arg
+    -- Check if P.con is by itself
+    HsExprVar name
+      | isCon name ->
+          skeletestPluginError "P.con must be applied to a constructor"
+    -- Check if P.con is being applied more than once
+    HsExprApps (getExpr -> HsExprVar name) (_ : _ : _)
+      | isCon name ->
+          skeletestPluginError "P.con must be applied to exactly one argument"
+    _ -> e
   where
-    go = \case
-      -- Matches:
-      --   P.con User{name = ...}
-      --   P.con (User "...")
-      HsExprApp (HsExprVar name) arg
-        | isCon name ->
-            convertCon arg
-      -- Matches:
-      --   P.con $ User "..."
-      HsExprOp (HsExprVar name) (HsExprVar dollar) arg
-        | getHsName dollar == "$"
-        , isCon name ->
-            convertCon arg
-      -- Check if P.con is by itself
-      HsExprVar name
-        | isCon name ->
-            skeletestPluginError "P.con must be applied to a constructor"
-      -- Check if P.con is being applied more than once
-      HsExprApp (HsExprApp (HsExprVar name) _) _
-        | isCon name ->
-            skeletestPluginError "P.con must be applied to exactly one argument"
-      _ -> Nothing
+    isCon = matchesName ctx (hsName 'P.con)
 
-    -- TODO: Make this more precise. It seems like the only information we get here is P.con,
-    -- but it might be possible to look up what modules were imported as "P".
-    isCon n = getHsName n == "con" && getHsNameMod n == Just "P"
-
-    convertCon = \case
-      arg | (HsExprCon conName, preds) <- collectApps arg -> do
-        let exprNames = mkVarNames preds
-        Just . hsApps (HsExprVar $ hsName 'P.conMatches) $
-          [ HsExprLitString $ renderHsName conName
-          , HsExprCon $ hsName 'Nothing
+    convertCon con =
+      case getExpr con of
+        HsExprCon conName -> convertPrefixCon conName []
+        HsExprApps (getExpr -> HsExprCon conName) preds -> convertPrefixCon conName preds
+        HsExprRecordCon conName fields -> convertRecordCon conName fields
+        _ -> skeletestPluginError "P.con must be applied to a constructor"
+    convertPrefixCon conName preds =
+      let
+        exprNames = mkVarNames preds
+       in
+        hsExprApps (hsExprVar $ hsName 'P.conMatches) $
+          [ hsExprLitString $ getHsName conName
+          , hsExprCon $ hsName 'Nothing
           , mkDeconstruct (HsPatCon conName $ map HsPatVar exprNames) exprNames
           , mkPredList preds
           ]
-      HsExprRecordCon conName fields -> do
-        let (fieldNames, preds) = unzip fields
-            fieldPats = [(field, HsPatVar field) | field <- fieldNames]
-        Just . hsApps (HsExprVar $ hsName 'P.conMatches) $
-          [ HsExprLitString $ renderHsName conName
-          , HsExprApp (HsExprCon $ hsName 'Just) (mkNamesList fieldNames)
+    convertRecordCon conName fields =
+      let
+        (fieldNames, preds) = unzip fields
+        fieldPats = [(field, HsPatVar field) | field <- fieldNames]
+       in
+        hsExprApps (hsExprVar $ hsName 'P.conMatches) $
+          [ hsExprLitString $ getHsName conName
+          , hsExprApps (hsExprCon $ hsName 'Just) [mkNamesList fieldNames]
           , mkDeconstruct (HsPatRecord conName fieldPats) fieldNames
           , mkPredList preds
           ]
-      _ -> skeletestPluginError "P.con must be applied to a constructor"
 
     -- Generate variable names like x0, x1, ... for each element in the given list.
     mkVarNames =
       let mkVar i = "x" <> (Text.pack . show) i
-       in zipWith (\i _ -> hsNewName (mkVar i)) [0 :: Int ..]
+       in zipWith (\i _ -> hsVarName (mkVar i)) [0 :: Int ..]
 
     -- Create the deconstruction function:
     --
@@ -159,21 +180,22 @@ replaceConMatch = modifyModuleExprs go
     --     Just User{name} -> Just (HCons (pure name) HNil)
     --     _ -> Nothing
     mkDeconstruct pat argNames =
-      HsExprLam (HsPatVar $ hsNewName "actual") $
-        HsExprCase (HsExprVar (hsName 'pure) `HsExprApp` HsExprVar (hsNewName "actual")) $
-          [ (HsPatCon (hsName 'Just) [pat], HsExprApp (HsExprCon $ hsName 'Just) (mkValsList argNames))
-          , (HsPatWild, HsExprCon $ hsName 'Nothing)
+      hsExprLam [HsPatVar $ hsVarName "actual"] $
+        hsExprCase (hsExprApps (hsExprVar $ hsName 'pure) [hsExprVar $ hsVarName "actual"]) $
+          [ (HsPatCon (hsName 'Just) [pat], hsExprApps (hsExprCon $ hsName 'Just) [mkValsList argNames])
+          , (HsPatWild, hsExprCon $ hsName 'Nothing)
           ]
 
     mkHList f = \case
-      [] -> HsExprCon (hsName 'HNil)
+      [] -> hsExprCon (hsName 'HNil)
       x : xs ->
-        HsExprCon (hsName 'HCons)
-          `HsExprApp` f x
-          `HsExprApp` mkHList f xs
+        hsExprApps (hsExprCon $ hsName 'HCons) $
+          [ f x
+          , mkHList f xs
+          ]
 
-    mkNamesList = mkHList $ \name -> HsExprApp (HsExprCon $ hsName 'Const) (HsExprLitString $ renderHsName name)
-    mkValsList = mkHList $ \val -> HsExprApp (HsExprVar $ hsName 'pure) (HsExprVar val)
+    mkNamesList = mkHList $ \name -> hsExprApps (hsExprCon $ hsName 'Const) [hsExprLitString $ getHsName name]
+    mkValsList = mkHList $ \val -> hsExprApps (hsExprVar $ hsName 'pure) [hsExprVar val]
     mkPredList = mkHList id
 
 -- | Replace all uses of P.=== with inlined IsoChecker value, with
@@ -182,12 +204,13 @@ replaceConMatch = modifyModuleExprs go
 -- (encode . decode) P.=== id
 -- ====>
 -- IsoChecker (Fun "encode . decode" (encode . decode)) (Fun "id" id)
-replaceIsoChecker :: ParsedModule -> ParsedModule
-replaceIsoChecker parsedModule = modifyModuleExprs go parsedModule
+replaceIsoChecker :: Ctx -> HsExpr GhcRn -> HsExpr GhcRn
+replaceIsoChecker ctx e =
+  case getExpr e of
+    HsExprOp l (getExpr -> HsExprVar eqeqeq) r
+      | matchesName ctx (hsName '(P.===)) eqeqeq ->
+          inlineIsoChecker l r
+    _ -> e
   where
-    go = \case
-      HsExprOp l (HsExprVar eqeqeq) r | getHsName eqeqeq == "===" -> Just $ inlineIsoChecker l r
-      _ -> Nothing
-
-    inlineIsoChecker l r = hsApps (HsExprCon $ hsName 'P.IsoChecker) [mkFun l, mkFun r]
-    mkFun f = hsApps (HsExprCon $ hsName 'P.Fun) [HsExprLitString $ renderHsExpr parsedModule f, f]
+    inlineIsoChecker l r = hsExprApps (hsExprCon $ hsName 'P.IsoChecker) [mkFun l, mkFun r]
+    mkFun f = hsExprApps (hsExprCon $ hsName 'P.Fun) [hsExprLitString $ renderHsExpr f, f]

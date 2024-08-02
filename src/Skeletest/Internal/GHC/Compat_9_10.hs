@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 
 module Skeletest.Internal.GHC.Compat_9_10 (
@@ -9,27 +10,35 @@ import GHC
 
 import Skeletest.Internal.Error (invariantViolation)
 
-hsLamSingle :: MatchGroup GhcPs (LHsExpr GhcPs) -> HsExpr GhcPs
+hsLamSingle :: MatchGroup (GhcPass p) (LHsExpr (GhcPass p)) -> HsExpr (GhcPass p)
 hsLamSingle = HsLam noAnn LamSingle
 
 lamAltSingle :: HsMatchContext fn
 lamAltSingle = LamAlt LamSingle
 
-hsLit :: HsLit GhcPs -> HsExpr GhcPs
+xCaseRn :: XCase GhcRn
+xCaseRn = CaseAlt
+
+hsLit :: HsLit (GhcPass p) -> HsExpr (GhcPass p)
 hsLit = HsLit noExtField
 
-hsPar :: LHsExpr GhcPs -> HsExpr GhcPs
-hsPar = HsPar noAnn
+hsPar :: forall p. (IsPass p) => LHsExpr (GhcPass p) -> HsExpr (GhcPass p)
+hsPar =
+  HsPar $
+    case ghcPass @p of
+      GhcPs -> noAnn
+      GhcRn -> noExtField
+      GhcTc -> invariantViolation "hsPar called in GhcTc"
 
-unHsPar :: HsExpr GhcPs -> LHsExpr GhcPs
+unHsPar :: HsExpr GhcRn -> LHsExpr GhcRn
 unHsPar = \case
   HsPar _ e -> e
   e -> invariantViolation $ "unHsPar called on " <> (show . toConstr) e
 
-hsTupPresent :: LHsExpr GhcPs -> HsTupArg GhcPs
+hsTupPresent :: LHsExpr (GhcPass p) -> HsTupArg (GhcPass p)
 hsTupPresent = Present noExtField
 
-hsApp :: LHsExpr GhcPs -> LHsExpr GhcPs -> HsExpr GhcPs
+hsApp :: LHsExpr (GhcPass p) -> LHsExpr (GhcPass p) -> HsExpr (GhcPass p)
 hsApp = HsApp noExtField
 
 genLoc :: (NoAnn ann) => e -> GenLocated (EpAnn ann) e

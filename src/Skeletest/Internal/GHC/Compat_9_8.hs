@@ -10,27 +10,30 @@ import GHC.Types.SrcLoc
 
 import Skeletest.Internal.Error (invariantViolation)
 
-hsLamSingle :: MatchGroup GhcPs (LHsExpr GhcPs) -> HsExpr GhcPs
+hsLamSingle :: MatchGroup (GhcPass p) (LHsExpr (GhcPass p)) -> HsExpr (GhcPass p)
 hsLamSingle = HsLam noExtField
 
 lamAltSingle :: HsMatchContext fn
 lamAltSingle = LambdaExpr
 
-hsLit :: HsLit GhcPs -> HsExpr GhcPs
+xCaseRn :: XCase GhcRn
+xCaseRn = CaseAlt
+
+hsLit :: HsLit (GhcPass p) -> HsExpr (GhcPass p)
 hsLit = HsLit noAnn
 
-hsPar :: LHsExpr GhcPs -> HsExpr GhcPs
+hsPar :: LHsExpr (GhcPass p) -> HsExpr (GhcPass p)
 hsPar e = HsPar noAnn (L NoTokenLoc HsTok) e (L NoTokenLoc HsTok)
 
-unHsPar :: HsExpr GhcPs -> LHsExpr GhcPs
+unHsPar :: HsExpr GhcRn -> LHsExpr GhcRn
 unHsPar = \case
   HsPar _ _ e _ -> e
   e -> invariantViolation $ "unHsPar called on " <> (show . toConstr) e
 
-hsTupPresent :: LHsExpr GhcPs -> HsTupArg GhcPs
+hsTupPresent :: LHsExpr (GhcPass p) -> HsTupArg (GhcPass p)
 hsTupPresent = Present noAnn
 
-hsApp :: LHsExpr GhcPs -> LHsExpr GhcPs -> HsExpr GhcPs
+hsApp :: LHsExpr (GhcPass p) -> LHsExpr (GhcPass p) -> HsExpr (GhcPass p)
 hsApp = HsApp noAnn
 
 genLoc :: e -> GenLocated (SrcAnn ann) e

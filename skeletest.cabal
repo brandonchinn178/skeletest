@@ -70,7 +70,7 @@ library
     other-modules:
         Skeletest.Internal.GHC.Compat_9_10
   build-depends:
-      base
+      base < 5
     , aeson
     , aeson-pretty
     , ansi-terminal >= 0.4.0

@@ -26,12 +26,6 @@ instance IsFlag FooFlag where
       , flagParse = Right . FooFlag
       }
 
--- TODO: test parsing `-x asdf`
--- TODO: test forwarding args with `--`
--- TODO: test --help
--- TODO: test error if same flag registered twice
--- TODO: test error if required flag not set
--- TODO: test default flag defaults to value if not set
 spec :: Spec
 spec = do
   describe "parseCliArgs" $ do

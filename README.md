@@ -81,8 +81,6 @@ TODO
 
 ## Guide
 
-<!-- TODO: Move to website? -->
-
 ### Defining tests
 
 TODO - describe, it, xfail, skip

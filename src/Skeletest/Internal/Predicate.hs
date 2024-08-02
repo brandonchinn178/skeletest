@@ -59,8 +59,6 @@ module Skeletest.Internal.Predicate (
   -- * IO
   returns,
   throws,
-  -- TODO: evals (check if WHNF errors)
-  -- TODO: evalsDeep (check if NF errors)
 
   -- * Functions
   Fun (..),
@@ -220,7 +218,6 @@ anything =
 
 {----- Ord -----}
 
--- TODO: if rendered vals are too long, show a diff
 eq :: (Eq a, Monad m) => a -> Predicate m a
 eq = mkPredicateOp "=" "≠" $ \actual expected -> actual == expected
 
@@ -424,7 +421,6 @@ infixr 1 <<<, >>>
 
 (<<<) :: (Monad m) => Predicate m a -> (b -> a) -> Predicate m b
 Predicate{..} <<< f =
-  -- TODO: render function name + intermediate values in predicateDisp?
   Predicate
     { predicateFunc = fmap showCtx . predicateFunc . f
     , predicateDisp

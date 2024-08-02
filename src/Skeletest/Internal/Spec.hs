@@ -140,9 +140,6 @@ mapSpecTrees f = runIdentity . traverseSpecTrees (\go -> pure . f (runIdentity .
 {----- Execute spec -----}
 
 -- | Run the given Specs and return whether all of the tests passed.
---
--- TODO: allow running tests in parallel
--- TODO: print summary: # total tests, # failing tests, # snapshots updated
 runSpecs :: SpecRegistry -> IO Bool
 runSpecs specs =
   (`finally` cleanupFixtures PerSessionFixtureKey) $
@@ -169,8 +166,6 @@ runSpecs specs =
         let lvl = getIndentLevel testInfo
         Text.putStr $ indent lvl (testName <> ": ")
 
-        -- TODO: timeout
-        -- TODO: show timing info for long tests
         let testInfo' =
               testInfo
                 { TestInfo.testName = testName

@@ -165,7 +165,10 @@ runProperty = \case
       Hedgehog.DiscardCount discards = Hedgehog.reportDiscards report
 
     case Hedgehog.reportStatus report of
-      Hedgehog.OK -> pure () -- TODO: show (# tests ran, # discards, coverage)
+      Hedgehog.OK ->
+        -- TODO: show details
+        -- https://github.com/brandonchinn178/skeletest/issues/19
+        pure ()
       Hedgehog.GaveUp -> do
         testInfo <- getTestInfo
         throwIO
@@ -220,7 +223,7 @@ runProperty = \case
                     testFailContext failure <> reverse info
                 }
   where
-    reportProgress _ = pure () -- TODO: show progress?
+    reportProgress _ = pure ()
     renderSeed Hedgehog.Report{reportSeed = Hedgehog.Seed value gamma} = show value <> ":" <> show gamma
     toCallStack mSpan =
       GHC.fromCallSiteList $

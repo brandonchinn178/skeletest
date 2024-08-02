@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
 module Skeletest.PredicateSpec (spec) where
@@ -173,7 +174,7 @@ spec = do
         (code, stdout, stderr) <- runTests runner []
         code `shouldBe` ExitFailure 1
         stdout `shouldBe` ""
-        normalizeConFailure stderr `shouldSatisfy` P.matchesSnapshot
+        (normalizeConFailure . normalizeVars) stderr `shouldSatisfy` P.matchesSnapshot
 
       integration . it "fails to compile with non-constructor" $ do
         runner <- getFixture
@@ -383,6 +384,15 @@ spec = do
 
 snapshotFailure :: (HasCallStack) => Predicate IO a -> a -> IO ()
 snapshotFailure p x = runPredicate p x `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)
+
+normalizeVars :: String -> String
+normalizeVars = go
+  where
+    go = \case
+      [] -> []
+      'x' : '0' : '_' : cs -> "x0" <> go (drop 4 cs)
+      'a' : 'c' : 't' : 'u' : 'a' : 'l' : '_' : cs -> "actual" <> go (drop 4 cs)
+      c : cs -> c : go cs
 
 normalizeConFailure :: String -> String
 #if __GLASGOW_HASKELL__ == 906

@@ -226,13 +226,13 @@ P.con must be applied to a constructor
 ```
 ExampleSpec.hs:9:3: error: [GHC-27346]
     • The data constructor ‘User’ should have 2 arguments, but has been given 1
-    • In the pattern: User x0_a2nR
-      In the pattern: Just (User x0_a2nR)
+    • In the pattern: User x0
+      In the pattern: Just (User x0)
       In a case alternative:
-          Just (User x0_a2nR)
+          Just (User x0)
             -> Just
                  (Skeletest.Internal.Utils.HList.HCons
-                    (pure x0_a2nR) Skeletest.Internal.Utils.HList.HNil)
+                    (pure x0) Skeletest.Internal.Utils.HList.HNil)
   |
 9 |   User "alice" (Just 1) `shouldSatisfy` P.con (User (P.eq ""))
   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

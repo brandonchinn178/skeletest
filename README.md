@@ -1,5 +1,8 @@
 # Skeletest
 
+[![GitHub Actions](https://img.shields.io/github/actions/workflow/status/brandonchinn178/skeletest/ci.yml?branch=main)](https://github.com/brandonchinn178/skeletest/actions?query=branch%3Amain)
+[![](https://img.shields.io/hackage/v/skeletest)](https://hackage.haskell.org/package/skeletest)
+
 Skeletest is a batteries-included, opinionated test framework heavily inspired by [pytest](https://pytest.org) and [jest](https://jestjs.io). It's the built-in test framework for [Skelly](https://github.com/brandonchinn178/skelly), but it can be used as a standalone library as well.
 
 Features:

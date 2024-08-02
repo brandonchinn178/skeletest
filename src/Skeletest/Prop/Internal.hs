@@ -48,7 +48,7 @@ import Data.Foldable (foldl')
 
 import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..), getFlag)
 import Skeletest.Internal.TestInfo (getTestInfo)
-import Skeletest.Internal.Testable (TestFailure (..), Testable (..))
+import Skeletest.Internal.Testable (AssertionFail (..), Testable (..))
 
 -- | A property to run, with optional configuration settings specified up front.
 --
@@ -60,7 +60,7 @@ data PropertyM a
   = PropertyPure [PropertyConfig] a
   | PropertyIO [PropertyConfig] (Trans.ReaderT FailureRef (Hedgehog.PropertyT IO) a)
 
-type FailureRef = IORef (Maybe TestFailure)
+type FailureRef = IORef (Maybe AssertionFail)
 
 instance Functor PropertyM where
   fmap f = \case
@@ -169,7 +169,7 @@ runProperty = \case
       Hedgehog.GaveUp -> do
         testInfo <- getTestInfo
         throwIO
-          TestFailure
+          AssertionFail
             { testInfo
             , testFailMessage =
                 Text.pack . List.intercalate "\n" $
@@ -184,7 +184,7 @@ runProperty = \case
           Nothing -> do
             testInfo <- getTestInfo
             throwIO
-              TestFailure
+              AssertionFail
                 { testInfo
                 , testFailMessage = Text.pack failureMessage
                 , testFailContext = []

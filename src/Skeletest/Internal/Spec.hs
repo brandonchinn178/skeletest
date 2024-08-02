@@ -54,7 +54,7 @@ import UnliftIO.Exception (
   trySyncOrAsync,
  )
 
-import Skeletest.Assertions (TestFailure (..), Testable, runTestable)
+import Skeletest.Assertions (AssertionFail (..), Testable, runTestable)
 import Skeletest.Internal.Error (SkeletestError)
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.Markers (
@@ -201,7 +201,7 @@ runSpecs specs =
                 pure False
             | Just failure <- fromException e -> do
                 Text.putStrLn $ red "FAIL"
-                Text.putStrLn =<< renderTestFailure failure
+                Text.putStrLn =<< renderAssertionFail failure
                 pure False
             | Just (err :: SkeletestError) <- fromException e -> do
                 Text.putStrLn $ red "ERROR"
@@ -233,8 +233,8 @@ runSpecs specs =
 --
 -- Right 1 ≠ Left 1
 -- @
-renderTestFailure :: TestFailure -> IO Text
-renderTestFailure TestFailure{..} = do
+renderAssertionFail :: AssertionFail -> IO Text
+renderAssertionFail AssertionFail{..} = do
   prettyStackTrace <- mapM renderCallLine . reverse $ GHC.getCallStack callStack
   pure . withBorder . Text.intercalate "\n\n" . concat $
     [ prettyStackTrace

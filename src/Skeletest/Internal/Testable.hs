@@ -1,6 +1,6 @@
 module Skeletest.Internal.Testable (
   Testable (..),
-  TestFailure (..),
+  AssertionFail (..),
   FailContext,
 ) where
 
@@ -14,9 +14,9 @@ import Skeletest.Internal.TestInfo (TestInfo)
 class (MonadIO m) => Testable m where
   runTestable :: m () -> IO ()
   context :: String -> m a -> m a
-  throwFailure :: TestFailure -> m a
+  throwFailure :: AssertionFail -> m a
 
-data TestFailure = TestFailure
+data AssertionFail = AssertionFail
   { testInfo :: TestInfo
   , testFailMessage :: Text
   , testFailContext :: FailContext
@@ -24,7 +24,7 @@ data TestFailure = TestFailure
   }
   deriving (Show)
 
-instance Exception TestFailure
+instance Exception AssertionFail
 
 -- | Context for failures, in order of most recently added -> least recently added
 type FailContext = [Text]

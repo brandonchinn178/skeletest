@@ -9,7 +9,7 @@ module Skeletest.Assertions (
   shouldNotSatisfy,
   context,
   failTest,
-  TestFailure (..),
+  AssertionFail (..),
 
   -- * Testable
   Testable,
@@ -31,7 +31,7 @@ import Skeletest.Internal.Predicate (
  )
 import Skeletest.Internal.Predicate qualified as P
 import Skeletest.Internal.TestInfo (getTestInfo)
-import Skeletest.Internal.Testable (FailContext, TestFailure (..), Testable (..))
+import Skeletest.Internal.Testable (AssertionFail (..), FailContext, Testable (..))
 
 instance Testable IO where
   runTestable = id
@@ -70,7 +70,7 @@ failTest' msg = do
   testInfo <- getTestInfo
   ctx <- readIORef failContextRef
   throwFailure
-    TestFailure
+    AssertionFail
       { testInfo
       , testFailMessage = msg
       , testFailContext = ctx

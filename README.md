@@ -267,7 +267,7 @@ snapshotRenderers =
 
 You can also specify a custom renderer by implementing a `SnapshotRenderer` yourself, probably using `plainRenderer`.
 
-Currently, old snapshots are not cleaned up, so you'll have to manually clean up snapshots if you rename or remove a test. (https://github.com/brandonchinn178/skeletest/issues/24)
+Currently, old snapshots are not cleaned up, so you'll have to manually clean up snapshots if you rename or remove a test. ([Issue #24](https://github.com/brandonchinn178/skeletest/issues/24))
 
 ### Property tests
 
@@ -396,7 +396,7 @@ Markers are a useful way to mark tests for selection (see "Test selection"). The
       ...
     ```
 
-    All tests in the given section will be marked with the given marker, which can be selected with `@my-marker`. You can see if a test has a marker (e.g. in `Hooks`) with `findMarkers`.
+    All tests in the given section will be marked with the given marker, which can be selected with `@my-marker`. You can see if a test has a marker with `findMarkers` (see the "Hooks" section).
 
 ### Custom CLI flags
 
@@ -419,6 +419,12 @@ To register and use your own CLI flags, do the following:
     ```haskell
     MyFlag flagVal <- getFlag
     ```
+
+### Hooks
+
+Skeletest lets you hook into specific parts of test execution. Skeletest currently supports the following hooks:
+
+* `hookRunTest` - Modify how/if a test is run. Takes the `TestInfo` of the currently running test. `TestInfo` contains `testInfoMarkers`, which you can query with `findMarker` or `hasMarkerNamed`.
 
 ### Plugins
 

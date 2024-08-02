@@ -3,6 +3,7 @@ module Skeletest.Internal.Markers (
   AnonMarker (..),
   SomeMarker (..),
   findMarker,
+  hasMarkerNamed,
 ) where
 
 import Data.Maybe (listToMaybe, mapMaybe)
@@ -29,3 +30,7 @@ deriving instance Show SomeMarker
 -- | Find the first marker in the given list with the given type.
 findMarker :: forall a. (IsMarker a) => [SomeMarker] -> Maybe a
 findMarker = listToMaybe . mapMaybe (\(SomeMarker m) -> cast m)
+
+-- | Return true if the given marker name is present.
+hasMarkerNamed :: String -> [SomeMarker] -> Bool
+hasMarkerNamed name = any (\(SomeMarker m) -> getMarkerName m == name)

@@ -12,14 +12,18 @@ module Skeletest.Plugin (
   TestResult (..),
   TestResultMessage (..),
 
+  -- ** TestInfo
+  TestInfo (..),
+
   -- ** Markers
   findMarker,
+  hasMarkerNamed,
 ) where
 
 import Skeletest.Internal.CLI (Flag)
-import Skeletest.Internal.Markers (findMarker)
+import Skeletest.Internal.Markers (findMarker, hasMarkerNamed)
 import Skeletest.Internal.Snapshot (SnapshotRenderer)
-import Skeletest.Internal.TestInfo (TestInfo)
+import Skeletest.Internal.TestInfo (TestInfo (..))
 import Skeletest.Internal.TestRunner (TestResult (..), TestResultMessage (..))
 
 data Plugin = Plugin

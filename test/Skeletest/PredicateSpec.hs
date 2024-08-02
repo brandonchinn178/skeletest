@@ -7,10 +7,10 @@ module Skeletest.PredicateSpec (spec) where
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Text qualified as Text
 import Skeletest
-import Skeletest.Predicate (PredicateResult (..), runPredicate)
 import Skeletest.Predicate qualified as P
 import UnliftIO.Exception (Exception, throwIO)
 
+import Skeletest.Internal.Predicate (PredicateResult (..), runPredicate)
 import Skeletest.TestUtils.Integration
 
 data User = User
@@ -405,7 +405,7 @@ normalizeConFailure = Text.unpack . Text.replace old new . Text.pack
         , "    • In a stmt of a 'do' block:"
         , "        User \"alice\" (Just 1)"
         , "          `shouldSatisfy`"
-        , "            P.conMatches"
+        , "            Skeletest.Internal.Predicate.conMatches"
         , "              \"User\" Nothing"
         , "              \\ actual"
         , "                -> case pure actual of"
@@ -419,7 +419,7 @@ normalizeConFailure = Text.unpack . Text.replace old new . Text.pack
         , "      In the second argument of ‘($)’, namely"
         , "        ‘do User \"alice\" (Just 1)"
         , "              `shouldSatisfy`"
-        , "                P.conMatches"
+        , "                Skeletest.Internal.Predicate.conMatches"
         , "                  \"User\" Nothing"
         , "                  \\ actual"
         , "                    -> case pure actual of"
@@ -431,7 +431,7 @@ normalizeConFailure = Text.unpack . Text.replace old new . Text.pack
         , "        it \"should error\""
         , "          $ do User \"alice\" (Just 1)"
         , "                 `shouldSatisfy`"
-        , "                   P.conMatches"
+        , "                   Skeletest.Internal.Predicate.conMatches"
         , "                     \"User\" Nothing"
         , "                     \\ actual"
         , "                       -> case pure actual of"
@@ -460,7 +460,7 @@ normalizeConFailure = Text.unpack . Text.replace old new . Text.pack
         [ "    • In a stmt of a 'do' block:"
         , "        User \"alice\" (Just 1)"
         , "          `shouldSatisfy`"
-        , "            P.conMatches"
+        , "            Skeletest.Internal.Predicate.conMatches"
         , "              \"User\" Nothing"
         , "              \\ actual"
         , "                -> case pure actual of"
@@ -474,7 +474,7 @@ normalizeConFailure = Text.unpack . Text.replace old new . Text.pack
         , "      In the second argument of ‘($)’, namely"
         , "        ‘do User \"alice\" (Just 1)"
         , "              `shouldSatisfy`"
-        , "                P.conMatches"
+        , "                Skeletest.Internal.Predicate.conMatches"
         , "                  \"User\" Nothing"
         , "                  \\ actual"
         , "                    -> case pure actual of"
@@ -486,7 +486,7 @@ normalizeConFailure = Text.unpack . Text.replace old new . Text.pack
         , "        it \"should error\""
         , "          $ do User \"alice\" (Just 1)"
         , "                 `shouldSatisfy`"
-        , "                   P.conMatches"
+        , "                   Skeletest.Internal.Predicate.conMatches"
         , "                     \"User\" Nothing"
         , "                     \\ actual"
         , "                       -> case pure actual of"

@@ -18,7 +18,6 @@ module Skeletest.Prop.Internal (
   setConfidence,
   setVerifiedTermination,
   setTestLimit,
-  setSkipTo,
 
   -- * CLI flags
   PropSeedFlag,
@@ -31,7 +30,6 @@ import Control.Monad.Trans.Class qualified as Trans
 import Control.Monad.Trans.Reader qualified as Trans
 import Data.List qualified as List
 import Data.Maybe (catMaybes)
-import Data.String (fromString)
 import Data.Text qualified as Text
 import GHC.Stack qualified as GHC
 import Hedgehog qualified
@@ -50,7 +48,7 @@ import Data.Foldable (foldl')
 
 import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..), getFlag)
 import Skeletest.Internal.TestInfo (getTestInfo)
-import Skeletest.Internal.Testable (TestFailure (..), Testable (..))
+import Skeletest.Internal.TestRunner (AssertionFail (..), Testable (..))
 
 -- | A property to run, with optional configuration settings specified up front.
 --
@@ -62,7 +60,7 @@ data PropertyM a
   = PropertyPure [PropertyConfig] a
   | PropertyIO [PropertyConfig] (Trans.ReaderT FailureRef (Hedgehog.PropertyT IO) a)
 
-type FailureRef = IORef (Maybe TestFailure)
+type FailureRef = IORef (Maybe AssertionFail)
 
 instance Functor PropertyM where
   fmap f = \case
@@ -106,11 +104,19 @@ data PropertyConfig
   | SetConfidence Int
   | SetVerifiedTermination
   | SetTestLimit Int
-  | SkipTo String
 
 resolveConfig :: [PropertyConfig] -> Hedgehog.PropertyConfig
-resolveConfig = foldl' go Hedgehog.defaultConfig
+resolveConfig = foldl' go defaultConfig
   where
+    defaultConfig =
+      Hedgehog.PropertyConfig
+        { propertyDiscardLimit = 100
+        , propertyShrinkLimit = 1000
+        , propertyShrinkRetries = 0
+        , propertyTerminationCriteria = Hedgehog.NoConfidenceTermination 100
+        , propertySkip = Nothing
+        }
+
     go cfg = \case
       DiscardLimit x -> cfg{Hedgehog.propertyDiscardLimit = Hedgehog.DiscardLimit x}
       ShrinkLimit x -> cfg{Hedgehog.propertyShrinkLimit = Hedgehog.ShrinkLimit x}
@@ -139,7 +145,6 @@ resolveConfig = foldl' go Hedgehog.defaultConfig
                 Hedgehog.NoConfidenceTermination _ -> Hedgehog.NoConfidenceTermination (Hedgehog.TestLimit x)
                 Hedgehog.EarlyTermination c _ -> Hedgehog.EarlyTermination c (Hedgehog.TestLimit x)
           }
-      SkipTo s -> cfg{Hedgehog.propertySkip = Just (fromString s)}
 
 runProperty :: Property -> IO ()
 runProperty = \case
@@ -160,11 +165,14 @@ runProperty = \case
       Hedgehog.DiscardCount discards = Hedgehog.reportDiscards report
 
     case Hedgehog.reportStatus report of
-      Hedgehog.OK -> pure () -- TODO: show (# tests ran, # discards, coverage)
+      Hedgehog.OK ->
+        -- TODO: show details
+        -- https://github.com/brandonchinn178/skeletest/issues/19
+        pure ()
       Hedgehog.GaveUp -> do
         testInfo <- getTestInfo
         throwIO
-          TestFailure
+          AssertionFail
             { testInfo
             , testFailMessage =
                 Text.pack . List.intercalate "\n" $
@@ -179,7 +187,7 @@ runProperty = \case
           Nothing -> do
             testInfo <- getTestInfo
             throwIO
-              TestFailure
+              AssertionFail
                 { testInfo
                 , testFailMessage = Text.pack failureMessage
                 , testFailContext = []
@@ -215,7 +223,7 @@ runProperty = \case
                     testFailContext failure <> reverse info
                 }
   where
-    reportProgress _ = pure () -- TODO: show progress?
+    reportProgress _ = pure ()
     renderSeed Hedgehog.Report{reportSeed = Hedgehog.Seed value gamma} = show value <> ":" <> show gamma
     toCallStack mSpan =
       GHC.fromCallSiteList $
@@ -273,9 +281,6 @@ setVerifiedTermination = propConfig SetVerifiedTermination
 
 setTestLimit :: Int -> Property
 setTestLimit = propConfig . SetTestLimit
-
-setSkipTo :: String -> Property
-setSkipTo = propConfig . SkipTo
 
 {----- CLI flags -----}
 

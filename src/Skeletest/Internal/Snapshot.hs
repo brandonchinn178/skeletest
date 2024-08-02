@@ -84,7 +84,6 @@ data SnapshotTestFixture = SnapshotTestFixture
 instance Fixture SnapshotTestFixture where
   fixtureAction = do
     snapshotIndexRef <- newIORef 0
-    -- TODO: if --update, clean up extraneous snapshots when test
     pure . noCleanup $ SnapshotTestFixture{..}
 
 getAndIncSnapshotIndex :: (MonadIO m) => m Int
@@ -92,7 +91,6 @@ getAndIncSnapshotIndex = do
   SnapshotTestFixture{snapshotIndexRef} <- getFixture
   atomicModifyIORef' snapshotIndexRef $ \i -> (i + 1, i)
 
--- TODO: if all tests in file were run, error if snapshot file contains outdated tests (--update to remove)
 data SnapshotFileFixture = SnapshotFileFixture
   { snapshotFileRef :: IORef (Maybe SnapshotFile)
   }
@@ -115,8 +113,6 @@ instance Fixture SnapshotFileFixture where
     let snapshotChanged newSnapshot = mSnapshotFile /= Just newSnapshot
 
     snapshotFileRef <- newIORef mSnapshotFile
-    -- TODO: don't remove snapshot if test failed before checking (after cleaning up
-    -- extraneous snapshots with --update)
     pure . withCleanup SnapshotFileFixture{..} $
       -- write snapshot back out when file is done
       readIORef snapshotFileRef >>= \case
@@ -124,10 +120,6 @@ instance Fixture SnapshotFileFixture where
           createDirectoryIfMissing True (takeDirectory snapshotPath)
           Text.writeFile snapshotPath $ encodeSnapshotFile $ normalizeSnapshotFile snapshotFile
         _ -> pure ()
-
--- TODO: statically analyze if P.matchesSnapshot appears anywhere in a test file
--- and check if there are snapshot files for test files that don't have snapshot
--- assertions. if --update, remove such files, or error if not --update.
 
 newtype SnapshotUpdateFlag = SnapshotUpdateFlag Bool
 
@@ -191,7 +183,6 @@ data SnapshotResult
       }
   deriving (Show, Eq)
 
--- TODO: use a per-file fixture to cache snapshot files and write it all back in cleanup?
 checkSnapshot :: (Typeable a, MonadIO m) => SnapshotContext -> a -> m SnapshotResult
 checkSnapshot snapshotContext testResult =
   fmap (either id absurd) . runExceptT $ do
@@ -228,7 +219,6 @@ checkSnapshot snapshotContext testResult =
 
 {----- Snapshot file -----}
 
--- TODO: keep ordered by test order?
 data SnapshotFile = SnapshotFile
   { moduleName :: Text
   , snapshots :: Map TestIdentifier [SnapshotValue]
@@ -237,7 +227,6 @@ data SnapshotFile = SnapshotFile
   }
   deriving (Show, Eq)
 
--- TODO: sanitize "```" lines in snapshotContent
 data SnapshotValue = SnapshotValue
   { snapshotContent :: Text
   , snapshotLang :: Maybe Text
@@ -247,7 +236,6 @@ data SnapshotValue = SnapshotValue
 getContent :: SnapshotValue -> Text
 getContent SnapshotValue{snapshotContent} = snapshotContent
 
--- TODO: sanitize slashes in identifier
 type TestIdentifier = [Text]
 
 getSnapshotPath :: FilePath -> FilePath
@@ -363,6 +351,9 @@ plainRenderer render =
     , snapshotLang = Nothing
     }
 
+renderWithShow :: forall a. (Typeable a, Show a) => SnapshotRenderer
+renderWithShow = plainRenderer (Text.pack . show @a)
+
 defaultSnapshotRenderers :: [SnapshotRenderer]
 defaultSnapshotRenderers =
   [ plainRenderer @String Text.pack
@@ -414,6 +405,3 @@ setSnapshotRenderers = writeIORef snapshotRenderersRef
 
 getSnapshotRenderers :: (MonadIO m) => m [SnapshotRenderer]
 getSnapshotRenderers = readIORef snapshotRenderersRef
-
-renderWithShow :: forall a. (Typeable a, Show a) => SnapshotRenderer
-renderWithShow = plainRenderer (Text.pack . show @a)

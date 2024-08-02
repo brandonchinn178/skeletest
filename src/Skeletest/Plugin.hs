@@ -1,14 +1,35 @@
 module Skeletest.Plugin (
   Plugin (..),
+  defaultPlugin,
+
+  -- * Hooks
+  Hooks (..),
+  defaultHooks,
+
+  -- * Re-exports
+
+  -- ** TestResult
+  TestResult (..),
+  TestResultMessage (..),
+
+  -- ** TestInfo
+  TestInfo (..),
+
+  -- ** Markers
+  findMarker,
+  hasMarkerNamed,
 ) where
 
 import Skeletest.Internal.CLI (Flag)
+import Skeletest.Internal.Markers (findMarker, hasMarkerNamed)
 import Skeletest.Internal.Snapshot (SnapshotRenderer)
+import Skeletest.Internal.TestInfo (TestInfo (..))
+import Skeletest.Internal.TestRunner (TestResult (..), TestResultMessage (..))
 
--- TODO: allow registering hooks to modify test execution
 data Plugin = Plugin
   { cliFlags :: [Flag]
   , snapshotRenderers :: [SnapshotRenderer]
+  , hooks :: Hooks
   }
 
 instance Semigroup Plugin where
@@ -16,11 +37,35 @@ instance Semigroup Plugin where
     Plugin
       { cliFlags = cliFlags plugin1 <> cliFlags plugin2
       , snapshotRenderers = snapshotRenderers plugin1 <> snapshotRenderers plugin2
+      , hooks = hooks plugin1 <> hooks plugin2
       }
 
 instance Monoid Plugin where
-  mempty =
-    Plugin
-      { cliFlags = []
-      , snapshotRenderers = []
+  mempty = defaultPlugin
+
+defaultPlugin :: Plugin
+defaultPlugin =
+  Plugin
+    { cliFlags = []
+    , snapshotRenderers = []
+    , hooks = defaultHooks
+    }
+
+data Hooks = Hooks
+  { hookRunTest :: TestInfo -> IO TestResult -> IO TestResult
+  }
+
+instance Semigroup Hooks where
+  hooks1 <> hooks2 =
+    Hooks
+      { hookRunTest = \testInfo -> hookRunTest hooks2 testInfo . hookRunTest hooks1 testInfo
       }
+
+instance Monoid Hooks where
+  mempty = defaultHooks
+
+defaultHooks :: Hooks
+defaultHooks =
+  Hooks
+    { hookRunTest = \_ -> id
+    }

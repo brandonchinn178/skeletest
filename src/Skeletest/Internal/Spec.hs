@@ -24,11 +24,11 @@ module Skeletest.Internal.Spec (
   -- ** Modifiers
   xfail,
   skip,
+  markManual,
 
   -- ** Markers
   IsMarker (..),
   withMarkers,
-  withManualMarkers,
   withMarker,
 ) where
 
@@ -37,25 +37,17 @@ import Control.Monad (forM, guard)
 import Control.Monad.Trans.Reader qualified as Trans
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
 import Data.Functor.Identity (runIdentity)
-import Data.Maybe (catMaybes, listToMaybe, mapMaybe)
+import Data.Maybe (catMaybes, isJust, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
-import GHC.Stack qualified as GHC
-import System.Console.ANSI qualified as ANSI
 import UnliftIO.Exception (
-  Exception,
-  SomeException,
-  displayException,
   finally,
   fromException,
-  throwIO,
   try,
-  trySyncOrAsync,
  )
 
-import Skeletest.Assertions (TestFailure (..), Testable, runTestable)
-import Skeletest.Internal.Error (SkeletestError)
+import Skeletest.Assertions (Testable, runTestable)
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.Markers (
   AnonMarker (..),
@@ -65,8 +57,17 @@ import Skeletest.Internal.Markers (
  )
 import Skeletest.Internal.TestInfo (TestInfo (TestInfo), withTestInfo)
 import Skeletest.Internal.TestInfo qualified as TestInfo
+import Skeletest.Internal.TestRunner (
+  TestResult (..),
+  TestResultMessage (..),
+  testResultFromAssertionFail,
+  testResultFromError,
+  testResultPass,
+ )
 import Skeletest.Internal.TestTargets (TestTarget, TestTargets, matchesTest)
 import Skeletest.Internal.TestTargets qualified as TestTargets
+import Skeletest.Internal.Utils.Color qualified as Color
+import Skeletest.Plugin (Hooks (..), defaultHooks)
 import Skeletest.Prop.Internal (Property)
 
 type Spec = Spec' ()
@@ -140,11 +141,8 @@ mapSpecTrees f = runIdentity . traverseSpecTrees (\go -> pure . f (runIdentity .
 {----- Execute spec -----}
 
 -- | Run the given Specs and return whether all of the tests passed.
---
--- TODO: allow running tests in parallel
--- TODO: print summary: # total tests, # failing tests, # snapshots updated
-runSpecs :: SpecRegistry -> IO Bool
-runSpecs specs =
+runSpecs :: Hooks -> SpecRegistry -> IO Bool
+runSpecs hooks0 specs =
   (`finally` cleanupFixtures PerSessionFixtureKey) $
     fmap and . forM specs $ \SpecInfo{..} ->
       (`finally` cleanupFixtures (PerFileFixtureKey specPath)) $ do
@@ -159,124 +157,49 @@ runSpecs specs =
         Text.putStrLn specName
         runTrees emptyTestInfo $ getSpecTrees specSpec
   where
-    runTrees testInfo = fmap and . mapM (runTree testInfo)
-    runTree testInfo = \case
+    Hooks{..} = builtinHooks <> hooks0
+    builtinHooks = xfailHook <> skipHook
+
+    runTrees baseTestInfo = fmap and . mapM (runTree baseTestInfo)
+    runTree baseTestInfo = \case
       SpecGroup{..} -> do
-        let lvl = getIndentLevel testInfo
+        let lvl = getIndentLevel baseTestInfo
         Text.putStrLn $ indent lvl groupLabel
-        runTrees testInfo{TestInfo.testContexts = TestInfo.testContexts testInfo <> [groupLabel]} groupTrees
+        runTrees baseTestInfo{TestInfo.testContexts = TestInfo.testContexts baseTestInfo <> [groupLabel]} groupTrees
       SpecTest{..} -> do
-        let lvl = getIndentLevel testInfo
+        let lvl = getIndentLevel baseTestInfo
         Text.putStr $ indent lvl (testName <> ": ")
 
-        -- TODO: timeout
-        -- TODO: show timing info for long tests
-        let testInfo' =
-              testInfo
+        let testInfo =
+              baseTestInfo
                 { TestInfo.testName = testName
                 , TestInfo.testMarkers = testMarkers
                 }
-        result <-
-          trySyncOrAsync $
-            withTestInfo testInfo' $ do
-              tid <- myThreadId
-              modifyTest testInfo' testAction `finally` cleanupFixtures (PerTestFixtureKey tid)
+        TestResult{..} <-
+          withTestInfo testInfo $ do
+            tid <- myThreadId
+            runTest testInfo testAction `finally` cleanupFixtures (PerTestFixtureKey tid)
 
-        case result of
-          Right () -> do
-            Text.putStrLn $ green "OK"
-            pure True
+        Text.putStrLn testResultLabel
+        case testResultMessage of
+          TestResultMessageNone -> pure ()
+          TestResultMessageInline msg -> Text.putStrLn $ indent (lvl + 1) msg
+          TestResultMessageSection msg -> Text.putStrLn $ withBorder msg
+        pure testResultSuccess
+
+    runTest info action =
+      hookRunTest info $ do
+        try action >>= \case
+          Right () -> pure testResultPass
           Left e
-            | Just (SkeletestSkip reason) <- fromException e -> do
-                Text.putStrLn $ yellow "SKIP"
-                Text.putStrLn $ indent (lvl + 1) reason
-                pure True
-            | Just (SkeletestXFail reason) <- fromException e -> do
-                Text.putStrLn $ yellow "XFAIL"
-                Text.putStrLn $ indent (lvl + 1) reason
-                pure True
-            | Just (SkeletestXPass reason) <- fromException e -> do
-                Text.putStrLn $ red "XPASS"
-                Text.putStrLn $ indent (lvl + 1) reason
-                pure False
-            | Just failure <- fromException e -> do
-                Text.putStrLn $ red "FAIL"
-                Text.putStrLn =<< renderTestFailure failure
-                pure False
-            | Just (err :: SkeletestError) <- fromException e -> do
-                Text.putStrLn $ red "ERROR"
-                Text.putStrLn $ indent (lvl + 1) (Text.pack $ displayException err)
-                pure False
-            | otherwise -> do
-                Text.putStrLn $ red "ERROR"
-                Text.putStrLn $ indent (lvl + 1) (Text.pack $ displayException e)
-                pure False
-
-    -- TODO: make pluggable
-    modifyTest info = foldr (.) id $ map ($ info) [checkXFail, checkSkip]
+            | Just e' <- fromException e -> testResultFromAssertionFail e'
+            | otherwise -> pure $ testResultFromError e
 
     getIndentLevel testInfo = length (TestInfo.testContexts testInfo) + 1 -- +1 to include the module name
     indent lvl = Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"
 
-    withANSI codes s = Text.pack (ANSI.setSGRCode codes) <> s <> Text.pack (ANSI.setSGRCode [ANSI.Reset])
-    green = withANSI [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Green]
-    red = withANSI [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Red]
-    yellow = withANSI [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Yellow]
-
--- | Render a test failure like:
---
--- @
--- At test/Skeletest/Internal/TestTargetsSpec.hs:19:
--- |
--- |           parseTestTargets input `shouldBe` Right (Just expected)
--- |                                   ^^^^^^^^
---
--- Right 1 ≠ Left 1
--- @
-renderTestFailure :: TestFailure -> IO Text
-renderTestFailure TestFailure{..} = do
-  prettyStackTrace <- mapM renderCallLine . reverse $ GHC.getCallStack callStack
-  pure . withBorder . Text.intercalate "\n\n" . concat $
-    [ prettyStackTrace
-    , if null testFailContext
-        then []
-        else [Text.intercalate "\n" $ reverse testFailContext]
-    , [testFailMessage]
-    ]
-  where
     border = Text.replicate 80 "-"
     withBorder msg = Text.intercalate "\n" [border, msg, border]
-
-    renderCallLine (_, loc) = do
-      let
-        path = GHC.srcLocFile loc
-        lineNum = GHC.srcLocStartLine loc
-        startCol = GHC.srcLocStartCol loc
-        endCol = GHC.srcLocEndCol loc
-
-      mLine <-
-        try (Text.readFile path) >>= \case
-          Right srcFile -> pure $ getLineNum lineNum srcFile
-          Left (_ :: SomeException) -> pure Nothing
-      let (srcLine, pointerLine) =
-            case mLine of
-              Just line ->
-                ( line
-                , Text.replicate (startCol - 1) " " <> Text.replicate (endCol - startCol) "^"
-                )
-              Nothing ->
-                ( "<unknown line>"
-                , ""
-                )
-
-      pure . Text.intercalate "\n" $
-        [ Text.pack path <> ":" <> (Text.pack . show) lineNum <> ":"
-        , "|"
-        , "| " <> srcLine
-        , "| " <> pointerLine
-        ]
-
-    getLineNum n = listToMaybe . take 1 . drop (n - 1) . Text.lines
 
 {----- Entrypoint -----}
 
@@ -298,6 +221,7 @@ pruneSpec = mapMaybe $ \info -> do
       SpecGroup _ [] -> True
       _ -> False
 
+-- TODO: make hookable? implement manual tests with hook?
 applyTestSelections :: TestTargets -> SpecRegistry -> SpecRegistry
 applyTestSelections = \case
   Just selections -> map (applyTestSelections' selections)
@@ -307,7 +231,7 @@ applyTestSelections = \case
     hideManualTests = mapSpecTrees (\go -> filter (not . isManualTest) . map go)
     isManualTest = \case
       SpecGroup{} -> False
-      SpecTest{testMarkers} -> or [isManualMarker marker | SomeMarker marker <- testMarkers]
+      SpecTest{testMarkers} -> isJust $ findMarker @MarkerManual testMarkers
 
 applyTestSelections' :: TestTarget -> SpecInfo -> SpecInfo
 applyTestSelections' selections info = info{specSpec = applySelections $ specSpec info}
@@ -363,49 +287,57 @@ prop = test
 -- | Mark the given spec as expected to fail.
 -- Fails tests if they unexpectedly pass.
 --
--- Can be selected with the marker '@xfail'
+-- Can be selected with the marker @@xfail@
 xfail :: String -> Spec -> Spec
 xfail = withMarker . MarkerXFail . Text.pack
 
-checkXFail :: TestInfo -> IO a -> IO a
-checkXFail info m =
-  case findMarker (TestInfo.testMarkers info) of
-    Just (MarkerXFail reason) ->
-      try m >>= \case
-        Left (_ :: SomeException) -> throwIO $ SkeletestXFail reason
-        Right _ -> throwIO $ SkeletestXPass reason
-    Nothing -> m
-
--- TODO: instead of throwing xfail, allow checkXFail to
--- explicitly modify the test result
-data SkeletestXFail = SkeletestXFail Text
-  deriving (Show)
-
-instance Exception SkeletestXFail
-
-data SkeletestXPass = SkeletestXPass Text
-  deriving (Show)
-
-instance Exception SkeletestXPass
+xfailHook :: Hooks
+xfailHook =
+  defaultHooks
+    { hookRunTest = \testInfo runTest ->
+        case findMarker (TestInfo.testMarkers testInfo) of
+          Just (MarkerXFail reason) -> modify reason <$> runTest
+          Nothing -> runTest
+    }
+  where
+    modify reason TestResult{..} =
+      if testResultSuccess
+        then
+          TestResult
+            { testResultSuccess = False
+            , testResultLabel = Color.red "XPASS"
+            , testResultMessage = TestResultMessageInline reason
+            }
+        else
+          TestResult
+            { testResultSuccess = True
+            , testResultLabel = Color.yellow "XFAIL"
+            , testResultMessage = TestResultMessageInline reason
+            }
 
 -- | Skip all tests in the given spec.
 --
--- Can be selected with the marker '@skip'
+-- Can be selected with the marker @@skip@
 skip :: String -> Spec -> Spec
 skip = withMarker . MarkerSkip . Text.pack
 
-checkSkip :: TestInfo -> IO a -> IO a
-checkSkip info m =
-  case findMarker (TestInfo.testMarkers info) of
-    Just (MarkerSkip reason) -> throwIO $ SkeletestSkip reason
-    Nothing -> m
+skipHook :: Hooks
+skipHook =
+  defaultHooks
+    { hookRunTest = \testInfo runTest ->
+        case findMarker (TestInfo.testMarkers testInfo) of
+          Just (MarkerSkip reason) ->
+            pure
+              TestResult
+                { testResultSuccess = True
+                , testResultLabel = Color.yellow "SKIP"
+                , testResultMessage = TestResultMessageInline reason
+                }
+          Nothing -> runTest
+    }
 
--- TODO: instead of throwing skip, allow checkSkip to
--- explicitly modify the test result
-data SkeletestSkip = SkeletestSkip Text
-  deriving (Show)
-
-instance Exception SkeletestSkip
+markManual :: Spec -> Spec
+markManual = withMarker MarkerManual
 
 {----- Markers -----}
 
@@ -420,6 +352,12 @@ newtype MarkerSkip = MarkerSkip Text
 
 instance IsMarker MarkerSkip where
   getMarkerName _ = "skip"
+
+data MarkerManual = MarkerManual
+  deriving (Show)
+
+instance IsMarker MarkerManual where
+  getMarkerName _ = "manual"
 
 -- | Adds the given marker to all the tests in the given spec.
 --
@@ -436,19 +374,4 @@ withMarker m = mapSpecTrees (\go -> map (addMarker . go))
 --
 -- See 'getMarkerName'.
 withMarkers :: [String] -> Spec -> Spec
-withMarkers = withMarkers' False
-
--- | Adds the given names as manual markers to all tests in the given spec.
---
--- See 'isManualMarker'.
-withManualMarkers :: [String] -> Spec -> Spec
-withManualMarkers = withMarkers' True
-
-withMarkers' :: Bool -> [String] -> Spec -> Spec
-withMarkers' isManual = foldr (\mark acc -> withMarker (toTag mark) . acc) id
-  where
-    toTag name =
-      AnonMarker
-        { anonMarkerName = name
-        , anonMarkerManual = isManual
-        }
+withMarkers = foldr (\name acc -> withMarker (AnonMarker name) . acc) id

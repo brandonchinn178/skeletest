@@ -27,7 +27,6 @@ type TestTargets = Maybe TestTarget
 
 data TestTarget
   = -- | Useful for selecting all tests, whether manual or not.
-    -- TODO: replace with allowing globs in TestTargetFile
     TestTargetEverything
   | TestTargetFile FilePath
   | TestTargetName Text

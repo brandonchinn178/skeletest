@@ -99,8 +99,6 @@ addSpecsList testModules file =
     renderSpecInfo (fp, name, spec) = "(" <> fp <> ", " <> name <> ", " <> spec <> ")"
 
 -- | Add imports after the Skeletest.Main import, which should always be present in the Main module.
---
--- TODO: handle user using explicit multiline import list in Skeletest.Main import
 insertImports :: [(FilePath, Text)] -> Text -> Text
 insertImports testModules file =
   let (pre, post) = break isSkeletestImport $ Text.lines file

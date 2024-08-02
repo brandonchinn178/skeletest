@@ -2,18 +2,17 @@ module Skeletest (
   -- * Spec
   Spec,
   describe,
-  test,
   it,
   prop,
 
   -- ** Modifiers
   xfail,
   skip,
+  markManual,
 
   -- ** Markers
   IsMarker (..),
   withMarkers,
-  withManualMarkers,
   withMarker,
 
   -- * Assertions
@@ -41,7 +40,6 @@ module Skeletest (
   setConfidence,
   setVerifiedTermination,
   setTestLimit,
-  setSkipTo,
 
   -- * Fixtures
   Fixture (..),

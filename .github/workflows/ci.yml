@@ -87,3 +87,24 @@ jobs:
       -
         name: Run fourmolu
         run: fourmolu -m check $(git ls-files '*.hs')
+
+  build_sdist:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        uses: actions/checkout@v3
+      -
+        id: setup
+        name: Set up GHC
+        uses: haskell-actions/setup@v2
+      -
+        name: Strip unreleased section from CHANGELOG
+        run: sed -i -n '/^## Unreleased/d; /^## /,$p' CHANGELOG.md
+      -
+        name: Create sdist bundle
+        run: cabal sdist --output-directory=.
+      -
+        uses: actions/upload-artifact@v3
+        with:
+          name: skeletest-sdist
+          path: skeletest-*.tar.gz

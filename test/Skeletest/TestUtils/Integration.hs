@@ -32,10 +32,9 @@ data MarkerIntegration = MarkerIntegration
 
 instance IsMarker MarkerIntegration where
   getMarkerName _ = "integration"
-  isManualMarker _ = True
 
 integration :: Spec -> Spec
-integration = withMarker MarkerIntegration
+integration = markManual . withMarker MarkerIntegration
 
 {----- runTests -----}
 

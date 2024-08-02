@@ -151,7 +151,6 @@ loadCliArgs builtinFlags flags = do
 
 getHelpText :: [Flag] -> [Flag] -> Text
 getHelpText builtinFlags customFlags =
-  -- TODO: rewrap to terminal width
   Text.intercalate "\n\n" $
     "Usage: skeletest [OPTIONS] [--] [TARGETS]" : map (uncurry renderSection) helpSections
   where
@@ -285,7 +284,6 @@ parseCliArgsWith longFlags shortFlags = Trans.runExcept . flip Trans.execStateT 
             case Text.unpack chars of
               [] -> argError "Invalid flag: -"
               [shortFlag] -> parseShortFlag shortFlag rest
-              -- TODO: allow multiple short flags at once?
               _ -> argError $ "Invalid flag: -" <> chars
         | otherwise -> addArgs [curr] >> parseArgs rest
 

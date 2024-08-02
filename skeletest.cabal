@@ -21,9 +21,10 @@ library
     Skeletest.Internal.Preprocessor
     Skeletest.Internal.Snapshot
     Skeletest.Internal.Spec
-    Skeletest.Internal.Testable
     Skeletest.Internal.TestInfo
+    Skeletest.Internal.TestRunner
     Skeletest.Internal.TestTargets
+    Skeletest.Internal.Utils.Color
     Skeletest.Internal.Utils.Diff
     Skeletest.Internal.Utils.HList
     Skeletest.Internal.Utils.Map

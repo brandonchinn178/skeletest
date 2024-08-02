@@ -54,6 +54,7 @@ transformMainModule modl = modl{moduleFuncs = (hsVarName "main", Just mainFun) :
 
     cliFlagsExpr = fromMaybe (hsExprList []) $ findVar "cliFlags"
     snapshotRenderersExpr = fromMaybe (hsExprList []) $ findVar "snapshotRenderers"
+    hooksExpr = fromMaybe (hsExprVar $ hsName 'Plugin.defaultHooks) $ findVar "hooks"
     pluginsExpr = fromMaybe (hsExprList []) $ findVar "plugins"
 
     mainFun =
@@ -68,6 +69,7 @@ transformMainModule modl = modl{moduleFuncs = (hsVarName "main", Just mainFun) :
                       (hsName 'Plugin.Plugin)
                       [ (hsName 'Plugin.cliFlags, cliFlagsExpr)
                       , (hsName 'Plugin.snapshotRenderers, snapshotRenderersExpr)
+                      , (hsName 'Plugin.hooks, hooksExpr)
                       ]
                   , pluginsExpr
                   ]

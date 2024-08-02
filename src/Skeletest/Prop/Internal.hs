@@ -48,7 +48,7 @@ import Data.Foldable (foldl')
 
 import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..), getFlag)
 import Skeletest.Internal.TestInfo (getTestInfo)
-import Skeletest.Internal.Testable (AssertionFail (..), Testable (..))
+import Skeletest.Internal.TestRunner (AssertionFail (..), Testable (..))
 
 -- | A property to run, with optional configuration settings specified up front.
 --

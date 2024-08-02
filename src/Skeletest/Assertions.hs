@@ -31,7 +31,7 @@ import Skeletest.Internal.Predicate (
  )
 import Skeletest.Internal.Predicate qualified as P
 import Skeletest.Internal.TestInfo (getTestInfo)
-import Skeletest.Internal.Testable (AssertionFail (..), FailContext, Testable (..))
+import Skeletest.Internal.TestRunner (AssertionFail (..), FailContext, Testable (..))
 
 instance Testable IO where
   runTestable = id

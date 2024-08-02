@@ -385,7 +385,7 @@ Markers are a useful way to mark tests for selection (see "Test selection"). The
       ...
     ```
 
-    All tests in the given section will be marked with the given marker, which can be selected with `@my-marker`. In the future, these markers can be queried in a hook to modify running a test. (FIXME: link)
+    All tests in the given section will be marked with the given marker, which can be selected with `@my-marker`. You can see if a test has a marker (e.g. in `Hooks`) with `findMarkers`.
 
 ### Custom CLI flags
 
@@ -412,6 +412,25 @@ To register and use your own CLI flags, do the following:
 ### Plugins
 
 Skeletest is fully pluggable; any configuration specified in `Main.hs` (e.g. `cliFlags` or `snapshotRenderer`) can be defined in a `Plugin` that you can import from another module or even another package.
+
+```haskell
+module TestUtils.Plugins (myPlugin) where
+
+import Skeletest.Plugin
+
+myPlugin :: Plugin
+myPlugin =
+  defaultPlugin
+    { hooks =
+        defaultHooks
+          { hookRunTest = \testInfo runTest -> do
+              putStrLn "before test"
+              result <- runTest
+              putStrLn "after test"
+              pure result
+          }
+    }
+```
 
 ```haskell
 import TestUtils.Plugins (myPlugin)

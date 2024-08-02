@@ -52,7 +52,7 @@ runSkeletest' Plugin{..} testModules = do
   setSnapshotRenderers (snapshotRenderers <> defaultSnapshotRenderers)
 
   let initialSpecs = map mkSpec testModules
-  success <- runSpecs . pruneSpec . applyTestSelections selections $ initialSpecs
+  success <- runSpecs hooks . pruneSpec . applyTestSelections selections $ initialSpecs
   unless success exitFailure
   where
     builtinFlags =

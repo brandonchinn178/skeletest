@@ -98,6 +98,7 @@ executable skeletest-preprocessor
       base
     , skeletest
     , text
+    , unliftio
   default-language: GHC2021
   ghc-options: -Wall -Wcompat
 

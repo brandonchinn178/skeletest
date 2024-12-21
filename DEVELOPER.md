@@ -1,3 +1,13 @@
+# Development
+
+```shell
+cabal build --ghc-options -Werror
+
+# Note: must use the default GHC executable; integration tests
+# will not work with --with-compiler set differently
+cabal exec -- cabal test --test-option '*'
+```
+
 # Release
 
 Follow these steps to release this project:

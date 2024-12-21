@@ -1,0 +1,24 @@
+packages: .
+
+-- TODO: remove when packages updated for GHC 9.12
+allow-newer:
+  , aeson:ghc-prim
+  , aeson:hashable
+  , aeson:template-haskell
+  , boring:base
+  , hedgehog:template-haskell
+  , indexed-traversable:base
+  , indexed-traversable-instances:base
+  , integer-conversion:base
+  , recover-rtti:base
+  , recover-rtti:ghc-heap
+  , recover-rtti:ghc-prim
+  , scientific:base
+  , scientific:template-haskell
+  , semialign:base
+  , sop-core:base
+  , these:base
+  , time-compat:base
+  , time-compat:time
+  , unordered-containers:template-haskell
+  , uuid-types:template-haskell

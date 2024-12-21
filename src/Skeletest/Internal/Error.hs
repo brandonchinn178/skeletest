@@ -7,14 +7,17 @@ module Skeletest.Internal.Error (
   invariantViolation,
 ) where
 
-import Data.List (dropWhileEnd)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import GHC.Utils.Panic (pgmError)
-import UnliftIO.Exception (Exception (..))
+import UnliftIO.Exception (Exception (..), impureThrow)
 
 data SkeletestError
-  = TestInfoNotFound
+  = -- | A user error during compilation, e.g. during the preprocessor or plugin phases.
+    CompilationError Text
+  | -- | An error in a situation that should never happen, and indicates a bug.
+    InvariantViolation Text
+  | TestInfoNotFound
   | CliFlagNotFound Text
   | FixtureCircularDependency [Text]
   | SnapshotFileCorrupted FilePath
@@ -23,6 +26,17 @@ data SkeletestError
 instance Exception SkeletestError where
   displayException =
     Text.unpack . \case
+      CompilationError msg ->
+        Text.unlines
+          [ ""
+          , "******************** skeletest failure ********************"
+          , msg
+          ]
+      InvariantViolation msg ->
+        Text.unlines
+          [ "Invariant violation: " <> msg
+          , "**** This is a skeletest bug. Please report it at https://github.com/brandonchinn178/skeletest/issues"
+          ]
       TestInfoNotFound ->
         "Could not find test info"
       CliFlagNotFound name ->
@@ -32,19 +46,10 @@ instance Exception SkeletestError where
       SnapshotFileCorrupted fp ->
         "Snapshot file was corrupted: " <> Text.pack fp
 
--- | Throw a user error during compilation, e.g. during the preprocessor or plugin phases.
 skeletestPluginError :: String -> a
-skeletestPluginError msg =
-  pgmError . dropWhileEnd (== '\n') . unlines $
-    [ ""
-    , "******************** skeletest failure ********************"
-    , msg
-    ]
+skeletestPluginError = pgmError . stripEnd . displayException . CompilationError . Text.pack
+  where
+    stripEnd = Text.unpack . Text.stripEnd . Text.pack
 
--- | Throw an error in a situation that should never happen, and indicates a bug.
 invariantViolation :: String -> a
-invariantViolation msg =
-  error . unlines $
-    [ "Invariant violation: " <> msg
-    , "**** This is a skeletest bug. Please report it at https://github.com/brandonchinn178/skeletest/issues"
-    ]
+invariantViolation = impureThrow . InvariantViolation . Text.pack

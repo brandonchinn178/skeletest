@@ -12,9 +12,10 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (makeRelative, splitExtensions, takeDirectory, (</>))
+import UnliftIO.Exception (throwIO)
 
 import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
-import Skeletest.Internal.Error (skeletestPluginError)
+import Skeletest.Internal.Error (SkeletestError (..))
 
 -- | Preprocess the given Haskell file. See Main.hs
 processFile :: FilePath -> Text -> IO Text
@@ -51,10 +52,10 @@ isMain file =
 updateMainFile :: FilePath -> Text -> IO Text
 updateMainFile path file = do
   modules <- findTestModules path
-  pure
-    . addSpecsList modules
-    . insertImports modules
-    $ file
+  either throwIO pure $
+    pure file
+      >>= insertImports modules
+      >>= pure . addSpecsList modules
 
 -- | Find all test modules using the given path to the Main module.
 --
@@ -99,12 +100,12 @@ addSpecsList testModules file =
     renderSpecInfo (fp, name, spec) = "(" <> fp <> ", " <> name <> ", " <> spec <> ")"
 
 -- | Add imports after the Skeletest.Main import, which should always be present in the Main module.
-insertImports :: [(FilePath, Text)] -> Text -> Text
+insertImports :: [(FilePath, Text)] -> Text -> Either SkeletestError Text
 insertImports testModules file =
   let (pre, post) = break isSkeletestImport $ Text.lines file
    in if null post
-        then skeletestPluginError "Could not find Skeletest.Main import in Main module"
-        else Text.unlines $ pre <> importTests <> post
+        then Left $ CompilationError "Could not find Skeletest.Main import in Main module"
+        else pure . Text.unlines $ pre <> importTests <> post
   where
     isSkeletestImport line =
       case Text.words line of

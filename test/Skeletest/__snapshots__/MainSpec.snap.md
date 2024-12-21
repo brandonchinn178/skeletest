@@ -3,7 +3,6 @@
 ## errors if Skeletest.Main not imported
 
 ```
-skeletest-preprocessor: 
 ******************** skeletest failure ********************
 Could not find Skeletest.Main import in Main module
 

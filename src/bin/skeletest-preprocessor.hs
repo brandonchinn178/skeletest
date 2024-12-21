@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 
 {-| A preprocessor that registers skeletest in a test suite.
@@ -18,14 +19,19 @@ the code. So what we'll do here is:
 -}
 module Main where
 
+import Data.List (dropWhileEnd)
 import Data.Text.IO qualified as Text
 import GHC.IO.Encoding (setLocaleEncoding, utf8)
 import System.Environment (getArgs)
+import System.Exit (exitFailure)
+import System.IO (hPutStrLn, stderr)
+import UnliftIO.Exception (displayException, handle)
 
+import Skeletest.Internal.Error (SkeletestError)
 import Skeletest.Internal.Preprocessor (processFile)
 
 main :: IO ()
-main = do
+main = handleErrors $ do
   -- just to be extra sure we don't run into encoding issues
   setLocaleEncoding utf8
 
@@ -33,3 +39,13 @@ main = do
     -- https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/phases.html#options-affecting-a-haskell-pre-processor
     [fp, input, output] -> Text.readFile input >>= processFile fp >>= Text.writeFile output
     _ -> error "The skeletest preprocessor does not accept any additional arguments."
+
+-- | Output SkeletestError
+handleErrors :: IO a -> IO a
+handleErrors = handle $ \(e :: SkeletestError) -> do
+  hPutStrLn stderr $ normalizeLines $ displayException e
+  exitFailure
+  where
+    normalizeLines
+      | __GLASGOW_HASKELL__ == (908 :: Int) = dropWhileEnd (== '\n')
+      | otherwise = id

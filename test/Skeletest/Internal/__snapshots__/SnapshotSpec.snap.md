@@ -33,7 +33,7 @@ Example
 Result differed from snapshot. Update snapshot with --update.
 --- expected
 +++ actual
-@@
+@@ -1,4 +1,4 @@
 +new1
  same1
 -old1

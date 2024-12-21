@@ -58,17 +58,7 @@ minimalTest name =
   ]
 
 normalizePluginError, normalizeGhc29916 :: String -> String
-#if __GLASGOW_HASKELL__ == 906
-normalizePluginError =
-  Text.unpack
-    . Text.replace (Text.pack "*** Exception: ExitFailure 1") (Text.pack "\n*** Exception: ExitFailure 1")
-    . Text.pack
-normalizeGhc29916 =
-  Text.unpack
-    . Text.replace (Text.pack "error:\n") (Text.pack "error: [GHC-29916]\n")
-    . Text.replace (Text.pack "<generated>") (Text.pack "<no location info>")
-    . Text.pack
-#elif __GLASGOW_HASKELL__ == 908
+#if __GLASGOW_HASKELL__ == 908
 normalizePluginError =
   Text.unpack
     . Text.replace (Text.pack "*** Exception: ExitFailure 1") (Text.pack "\n*** Exception: ExitFailure 1")

@@ -11,11 +11,10 @@ jobs:
     strategy:
       matrix:
         ghc_version:
-          - '9.6'
           - '9.8'
           - '9.10'
         include:
-          - ghc_version: '9.6.1'
+          - ghc_version: '9.8.1'
             oldest: true
 
     name: build_and_test (${{ matrix.ghc_version }})

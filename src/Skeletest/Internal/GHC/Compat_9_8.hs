@@ -16,9 +16,6 @@ hsLamSingle = HsLam noExtField
 lamAltSingle :: HsMatchContext fn
 lamAltSingle = LambdaExpr
 
-xCaseRn :: XCase GhcRn
-xCaseRn = CaseAlt
-
 hsLit :: HsLit (GhcPass p) -> HsExpr (GhcPass p)
 hsLit = HsLit noAnn
 

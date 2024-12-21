@@ -60,9 +60,6 @@ library
     Skeletest.Prop.Gen
     Skeletest.Prop.Internal
     Skeletest.Prop.Range
-  if impl(ghc >= 9.6) && impl(ghc < 9.8)
-    other-modules:
-        Skeletest.Internal.GHC.Compat_9_6
   if impl(ghc >= 9.8) && impl(ghc < 9.10)
     other-modules:
         Skeletest.Internal.GHC.Compat_9_8
@@ -78,7 +75,7 @@ library
     , Diff >= 1.0
     , directory
     , filepath
-    , ghc ^>= 9.6 || ^>= 9.8 || ^>= 9.10
+    , ghc ^>= 9.8 || ^>= 9.10
     , hedgehog
     , megaparsec
     , ordered-containers >= 0.2.4

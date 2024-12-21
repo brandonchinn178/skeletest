@@ -280,7 +280,7 @@ parseHsExpr = goExpr
       _ -> HsExprOther
 
     getRecField GHC.HsFieldBind{hfbLHS = field, hfbRHS = expr} =
-      (hsGhcName . GHC.foExt . unLoc $ field, goExpr expr)
+      (hsGhcName . unLoc . GHC.Compat.foLabel . unLoc $ field, goExpr expr)
 
     -- Collect an application of the form `((f a) b) c` and return `f [a, b, c]`
     collectApps = \case
@@ -402,16 +402,18 @@ compileFunDef funName FunDef{..} = do
     [ mkSigD name ty
     , genLoc . GHC.ValD GHC.noExtField $
         GHC.FunBind GHC.noExtField (genLoc name) . GHC.MG GHC.FromSource . genLoc $
-          [ genLoc $
+          [ genLoc
               GHC.Match
-                GHC.noAnn
-                (GHC.FunRhs (genLoc name) GHC.Prefix GHC.NoSrcStrict)
-                pats
-                ( GHC.GRHSs
-                    GHC.emptyComments
-                    [genLoc $ GHC.GRHS GHC.noAnn [] body]
-                    (GHC.EmptyLocalBinds GHC.noExtField)
-                )
+                { m_ext = GHC.Compat.xMatch
+                , m_ctxt = GHC.Compat.mkPrefixFunRhs (genLoc name) GHC.noAnn
+                , m_pats = GHC.Compat.toMatchArgs pats
+                , m_grhss =
+                    GHC.GRHSs
+                      { grhssExt = GHC.emptyComments
+                      , grhssGRHSs = [genLoc $ GHC.GRHS GHC.noAnn [] body]
+                      , grhssLocalBinds = GHC.EmptyLocalBinds GHC.noExtField
+                      }
+                }
           ]
     ]
   where
@@ -517,9 +519,9 @@ compileHsExpr = goExpr
           GHC.MG origin . genLoc $
             [ genLoc $
                 GHC.Match
-                  { m_ext = GHC.noAnn
+                  { m_ext = GHC.Compat.xMatch
                   , m_ctxt = GHC.Compat.lamAltSingle
-                  , m_pats = pats'
+                  , m_pats = GHC.Compat.toMatchArgs pats'
                   , m_grhss =
                       GHC.GRHSs
                         { grhssExt = GHC.emptyComments
@@ -537,9 +539,9 @@ compileHsExpr = goExpr
                 body' <- goExpr body
                 pure . genLoc $
                   GHC.Match
-                    { m_ext = GHC.noAnn
+                    { m_ext = GHC.Compat.xMatch
                     , m_ctxt = GHC.CaseAlt
-                    , m_pats = [pat']
+                    , m_pats = GHC.Compat.toMatchArgs [pat']
                     , m_grhss =
                         GHC.GRHSs
                           { grhssExt = GHC.emptyComments
@@ -641,11 +643,7 @@ compileRecFields f fields = do
               }
       | (field, x) <- fields
       ]
-  pure
-    GHC.HsRecFields
-      { rec_flds = fields'
-      , rec_dotdot = Nothing
-      }
+  pure $ GHC.Compat.mkHsRecFields fields'
   where
     compileFieldOcc field = do
       name <- compileHsName field
@@ -655,10 +653,7 @@ compileRecFields f fields = do
             { foExt = GHC.noExtField
             , foLabel = genLoc name
             }
-          GHC.FieldOcc
-            { foExt = name
-            , foLabel = genLoc $ GHC.getRdrName name
-            }
+          (GHC.Compat.fieldOccRn name)
 
 genLocConLikeP ::
   forall p.

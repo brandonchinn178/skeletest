@@ -1,12 +1,13 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Skeletest.Internal.GHC.Compat_9_10 (
-  module Skeletest.Internal.GHC.Compat_9_10,
+module Skeletest.Internal.GHC.Compat_9_12 (
+  module Skeletest.Internal.GHC.Compat_9_12,
+  mkPrefixFunRhs,
 ) where
 
 import Data.Data (toConstr)
-import GHC hiding (FieldOcc (..), mkPrefixFunRhs)
+import GHC hiding (FieldOcc (..))
 import GHC qualified
 import GHC.Types.Name.Reader (getRdrName)
 
@@ -38,23 +39,32 @@ hsTupPresent :: LHsExpr (GhcPass p) -> HsTupArg (GhcPass p)
 hsTupPresent = Present noExtField
 
 xMatch :: XCMatch (GhcPass p) b
-xMatch = noAnn
+xMatch = noExtField
 
-mkHsRecFields :: [LHsRecField (GhcPass p) arg] -> HsRecFields (GhcPass p) arg
+mkHsRecFields ::
+  forall p arg.
+  (IsPass p) =>
+  [LHsRecField (GhcPass p) arg]
+  -> HsRecFields (GhcPass p) arg
 mkHsRecFields fields =
   GHC.HsRecFields
-    { rec_flds = fields
+    { rec_ext =
+        case ghcPass @p of
+          GhcPs -> noExtField
+          GhcRn -> noExtField
+          GhcTc -> invariantViolation "mkHsRecFields called in GhcTc"
+    , rec_flds = fields
     , rec_dotdot = Nothing
     }
 
 foLabel :: GHC.FieldOcc GhcRn -> LIdP GhcRn
-foLabel = genLoc . GHC.foExt
+foLabel = GHC.foLabel
 
 fieldOccRn :: Name -> GHC.FieldOcc GhcRn
 fieldOccRn name =
   GHC.FieldOcc
-    { GHC.foExt = name
-    , GHC.foLabel = genLoc $ getRdrName name
+    { GHC.foExt = getRdrName name
+    , GHC.foLabel = genLoc name
     }
 
 hsApp :: LHsExpr (GhcPass p) -> LHsExpr (GhcPass p) -> HsExpr (GhcPass p)
@@ -63,8 +73,5 @@ hsApp = HsApp noExtField
 genLoc :: (NoAnn ann) => e -> GenLocated ann e
 genLoc = L noAnn
 
-mkPrefixFunRhs :: fn -> [ann] -> HsMatchContext fn
-mkPrefixFunRhs fn _ = GHC.mkPrefixFunRhs fn
-
-toMatchArgs :: [LPat p] -> [LPat p]
-toMatchArgs = id
+toMatchArgs :: [LPat p] -> LocatedE [LPat p]
+toMatchArgs = genLoc

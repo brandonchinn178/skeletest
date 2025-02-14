@@ -50,10 +50,12 @@ import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..), getFlag)
 import Skeletest.Internal.TestInfo (getTestInfo)
 import Skeletest.Internal.TestRunner (
   AssertionFail (..),
-  TestResult,
+  TestResult (..),
+  TestResultMessage (..),
   Testable (..),
   testResultPass,
  )
+import Skeletest.Internal.Utils.Color qualified as Color
 
 -- | A property to run, with optional configuration settings specified up front.
 --
@@ -171,9 +173,13 @@ runProperty = \case
 
     case Hedgehog.reportStatus report of
       Hedgehog.OK ->
-        -- TODO: show details
-        -- https://github.com/brandonchinn178/skeletest/issues/19
-        pure testResultPass
+        pure
+          testResultPass
+            { testResultMessage =
+                TestResultMessageInline . Color.gray . Text.pack . List.intercalate "\n" $
+                  [ show testCount <> " tests, " <> show discards <> " discards"
+                  ]
+            }
       Hedgehog.GaveUp -> do
         testInfo <- getTestInfo
         throwIO

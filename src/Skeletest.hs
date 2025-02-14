@@ -33,14 +33,6 @@ module Skeletest (
   forAll,
   discard,
 
-  -- ** Settings
-  setDiscardLimit,
-  setShrinkLimit,
-  setShrinkRetries,
-  setConfidence,
-  setVerifiedTermination,
-  setTestLimit,
-
   -- * Fixtures
   Fixture (..),
   FixtureScope (..),

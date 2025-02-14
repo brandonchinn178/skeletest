@@ -277,6 +277,7 @@ Currently, old snapshots are not cleaned up, so you'll have to manually clean up
 Property tests are written with `prop` and run in the `PropertyM` monad (`Property` is an alias for `PropertyM ()`). To write property tests, add the following imports:
 
 ```haskell
+import qualified Skeletest.Prop as Prop
 import qualified Skeletest.Prop.Gen as Gen
 import qualified Skeletest.Prop.Range as Range
 ```
@@ -309,27 +310,27 @@ when (x == 0) discard
 
 Property tests can also be configured with the following functions. These must be called at the very beginning of the test, before any `forAll` calls. Values specified with CLI flags take precedence over the values in the code.
 
-* `setDiscardLimit`
+* `Prop.setDiscardLimit`
     * The max number of values to discard before reporting a failure
     * Default: `100`
 
-* `setShrinkLimit`
+* `Prop.setShrinkLimit`
     * The max number of shrinks before giving up
     * Default: `1000`
 
-* `setShrinkRetries`
+* `Prop.setShrinkRetries`
     * The number of times to re-run a test during shrinking. This is useful if you are testing something which fails non-deterministically and you want to increase the change of getting a good shrink. e.g. `10` means a test must pass 10 times before trying a different shrink
     * Default: `0`
 
-* `setConfidence`
+* `Prop.setConfidence`
     * The acceptable occurrence of false positives. e.g. `10^9` means accepting a false positive for 1 in 10^9 tests
     * Default: don't check confidence
 
-* `setVerifiedTermination`
+* `Prop.setVerifiedTermination`
     * Validate confidence is reached
     * Default: disabled
 
-* `setTestLimit`
+* `Prop.setTestLimit`
     * The number of tests to run before reporting success
     * Default: `100`
     * CLI flag: `--prop-test-limit`

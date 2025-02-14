@@ -19,6 +19,12 @@ module Skeletest.Prop.Internal (
   setVerifiedTermination,
   setTestLimit,
 
+  -- * Coverage
+  classify,
+  cover,
+  label,
+  collect,
+
   -- * CLI flags
   PropSeedFlag,
   PropLimitFlag,
@@ -52,7 +58,7 @@ import Skeletest.Internal.TestRunner (AssertionFail (..), Testable (..))
 
 -- | A property to run, with optional configuration settings specified up front.
 --
--- Settings should be specified before any 'forAll' or IO calls; any settings
+-- Settings should be specified before any other 'Property' calls; any settings
 -- specified afterwards are ignored.
 type Property = PropertyM ()
 
@@ -281,6 +287,41 @@ setVerifiedTermination = propConfig SetVerifiedTermination
 
 setTestLimit :: Int -> Property
 setTestLimit = propConfig . SetTestLimit
+
+{----- Coverage -----}
+
+-- | Record the propotion of tests which satisfy a given condition
+--
+-- @
+-- xs <- forAll $ Gen.list (Range.linear 0 100) $ Gen.int (Range.linear 0 100)
+-- for_ xs $ \x -> do
+--   classify "newborns" $ x == 0
+--   classify "children" $ x > 0 && x < 13
+--   classify "teens" $ x > 12 && x < 20
+-- @
+classify :: GHC.HasCallStack => String -> Bool -> Property
+classify l cond = GHC.withFrozenCallStack $ propM $ Hedgehog.classify (fromString l) cond
+
+-- | Require a certain percentage of the tests to be covered by the classifier.
+--
+-- In the following example, if the condition does not have at least 30%
+-- coverage, the test will fail.
+-- @
+-- match <- forAll Gen.bool
+-- cover 30 "True" $ match
+-- cover 30 "False" $ not match
+-- @
+cover :: GHC.HasCallStack => Double -> String -> Bool -> Property
+cover p l cond = GHC.withFrozenCallStack $ propM $ Hedgehog.cover (Hedgehog.CoverPercentage p) (fromString l) cond
+
+-- | Add a label for each test run. It produces a table showing the percentage
+-- of test runs that produced each label.
+label :: GHC.HasCallStack => String -> Property
+label l = GHC.withFrozenCallStack $ propM $ Hedgehog.label (fromString l)
+
+-- | Like 'label', but uses 'Show' to render its argument for display.
+collect :: (Show a, GHC.HasCallStack) => a -> Property
+collect a = GHC.withFrozenCallStack $ propM $ Hedgehog.collect a
 
 {----- CLI flags -----}
 

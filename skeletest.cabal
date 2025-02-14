@@ -57,6 +57,7 @@ library
     Skeletest.Main
     Skeletest.Plugin
     Skeletest.Predicate
+    Skeletest.Prop
     Skeletest.Prop.Gen
     Skeletest.Prop.Internal
     Skeletest.Prop.Range

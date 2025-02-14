@@ -1,5 +1,7 @@
 ## Unreleased
 
+* Move setting properties to `Skeletest.Prop`
+
 ## v0.1.1
 
 * Support Diff-1.0

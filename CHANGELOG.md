@@ -1,5 +1,7 @@
 ## Unreleased
 
+## v0.2.0
+
 * Move setting properties to `Skeletest.Prop`
 * Add coverage functions for property tests
 

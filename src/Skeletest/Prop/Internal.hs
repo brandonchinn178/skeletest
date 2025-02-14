@@ -48,7 +48,12 @@ import Data.Foldable (foldl')
 
 import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..), getFlag)
 import Skeletest.Internal.TestInfo (getTestInfo)
-import Skeletest.Internal.TestRunner (AssertionFail (..), Testable (..))
+import Skeletest.Internal.TestRunner (
+  AssertionFail (..),
+  TestResult,
+  Testable (..),
+  testResultPass,
+ )
 
 -- | A property to run, with optional configuration settings specified up front.
 --
@@ -146,7 +151,7 @@ resolveConfig = foldl' go defaultConfig
                 Hedgehog.EarlyTermination c _ -> Hedgehog.EarlyTermination c (Hedgehog.TestLimit x)
           }
 
-runProperty :: Property -> IO ()
+runProperty :: Property -> IO TestResult
 runProperty = \case
   PropertyPure cfg () -> runProperty $ PropertyIO cfg (pure ())
   PropertyIO cfg m -> do
@@ -168,7 +173,7 @@ runProperty = \case
       Hedgehog.OK ->
         -- TODO: show details
         -- https://github.com/brandonchinn178/skeletest/issues/19
-        pure ()
+        pure testResultPass
       Hedgehog.GaveUp -> do
         testInfo <- getTestInfo
         throwIO

@@ -62,7 +62,6 @@ import Skeletest.Internal.TestRunner (
   TestResultMessage (..),
   testResultFromAssertionFail,
   testResultFromError,
-  testResultPass,
  )
 import Skeletest.Internal.TestTargets (TestTarget, TestTargets, matchesTest)
 import Skeletest.Internal.TestTargets qualified as TestTargets
@@ -96,7 +95,7 @@ data SpecTree
       -- will contain
       --
       -- >>> SpecTest { testMarkers = [MarkerA, MarkerB] }
-      , testAction :: IO ()
+      , testAction :: IO TestResult
       }
 
 -- | Traverse the tree with the given processing function.
@@ -190,7 +189,7 @@ runSpecs hooks0 specs =
     runTest info action =
       hookRunTest info $ do
         try action >>= \case
-          Right () -> pure testResultPass
+          Right result -> pure result
           Left e
             | Just e' <- fromException e -> testResultFromAssertionFail e'
             | otherwise -> pure $ testResultFromError e

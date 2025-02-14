@@ -7,6 +7,7 @@ import Data.Text qualified as Text
 
 import Skeletest
 import Skeletest.Predicate qualified as P
+import Skeletest.Prop qualified as Prop
 import Skeletest.Prop.Gen qualified as Gen
 import Skeletest.Prop.Range qualified as Range
 
@@ -56,6 +57,9 @@ spec = do
       forAll $
         Gen.list (Range.linear 0 10) $
           Gen.string (Range.linear 0 100) Gen.unicode
+    Prop.label $ show $ length input
+    Prop.classify "even" $ even $ length input
+    Prop.classify "odd" $ odd $ length input
     length (reverse input) `shouldBe` length input
 
   prop "read . show === id" $

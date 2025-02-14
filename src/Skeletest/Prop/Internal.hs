@@ -19,6 +19,12 @@ module Skeletest.Prop.Internal (
   setVerifiedTermination,
   setTestLimit,
 
+  -- * Coverage
+  classify,
+  cover,
+  label,
+  collect,
+
   -- * CLI flags
   PropSeedFlag,
   PropLimitFlag,
@@ -29,6 +35,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class qualified as Trans
 import Control.Monad.Trans.Reader qualified as Trans
 import Data.List qualified as List
+import Data.Map qualified as Map
 import Data.Maybe (catMaybes)
 import Data.Text qualified as Text
 import GHC.Stack qualified as GHC
@@ -59,7 +66,7 @@ import Skeletest.Internal.Utils.Color qualified as Color
 
 -- | A property to run, with optional configuration settings specified up front.
 --
--- Settings should be specified before any 'forAll' or IO calls; any settings
+-- Settings should be specified before any other 'Property' calls; any settings
 -- specified afterwards are ignored.
 type Property = PropertyM ()
 
@@ -170,14 +177,16 @@ runProperty = \case
     let
       Hedgehog.TestCount testCount = Hedgehog.reportTests report
       Hedgehog.DiscardCount discards = Hedgehog.reportDiscards report
+      Hedgehog.Coverage coverage = Hedgehog.reportCoverage report
 
     case Hedgehog.reportStatus report of
       Hedgehog.OK ->
         pure
           testResultPass
             { testResultMessage =
-                TestResultMessageInline . Color.gray . Text.pack . List.intercalate "\n" $
-                  [ show testCount <> " tests, " <> show discards <> " discards"
+                TestResultMessageInline . Color.gray . Text.pack . List.intercalate "\n" . concat $
+                  [ [show testCount <> " tests, " <> show discards <> " discards"]
+                  , renderCoverage coverage testCount
                   ]
             }
       Hedgehog.GaveUp -> do
@@ -235,7 +244,45 @@ runProperty = \case
                 }
   where
     reportProgress _ = pure ()
-    renderSeed Hedgehog.Report{reportSeed = Hedgehog.Seed value gamma} = show value <> ":" <> show gamma
+    renderSeed report =
+      let Hedgehog.Seed value gamma = Hedgehog.reportSeed report
+       in show value <> ":" <> show gamma
+    renderCoverage coverage testCount =
+      let columns =
+            [ (name, percentStr, percentBar)
+            | Hedgehog.MkLabel{..} <- List.sortOn Hedgehog.labelLocation $ Map.elems coverage
+            , let
+                Hedgehog.LabelName name = labelName
+                Hedgehog.CoverCount count = labelAnnotation
+                percent = round $ fromIntegral count / fromIntegral testCount * (100 :: Double)
+                percentStr = show percent <> "%"
+                percentBar = renderPercentBar percent
+            ]
+          (maxNameLen, maxPercentLen) =
+            foldr
+              ( \(name, percent, _) (nameAcc, percentAcc) ->
+                  (max (length name) nameAcc, max (length percent) percentAcc)
+              )
+              (0, 0)
+              columns
+       in [ rjust maxNameLen name <> " " <> rjust maxPercentLen percentStr <> " " <> percentBar
+          | (name, percentStr, percentBar) <- columns
+          ]
+    rjust n s = replicate (n - length s) ' ' <> s
+    renderPercentBar percent =
+      -- render percentage bar 20 characters wide
+      let (n, r) = percent `divMod` 5
+       in concat
+            [ replicate n '█'
+            , case r of
+                0 -> ""
+                1 -> "▏"
+                2 -> "▍"
+                3 -> "▌"
+                4 -> "▊"
+                _ -> "" -- unreachable
+            , replicate (20 - n - (if r == 0 then 0 else 1)) '·'
+            ]
     toCallStack mSpan =
       GHC.fromCallSiteList $
         case mSpan of
@@ -292,6 +339,41 @@ setVerifiedTermination = propConfig SetVerifiedTermination
 
 setTestLimit :: Int -> Property
 setTestLimit = propConfig . SetTestLimit
+
+{----- Coverage -----}
+
+-- | Record the propotion of tests which satisfy a given condition
+--
+-- @
+-- xs <- forAll $ Gen.list (Range.linear 0 100) $ Gen.int (Range.linear 0 100)
+-- for_ xs $ \x -> do
+--   classify "newborns" $ x == 0
+--   classify "children" $ x > 0 && x < 13
+--   classify "teens" $ x > 12 && x < 20
+-- @
+classify :: (GHC.HasCallStack) => String -> Bool -> Property
+classify l cond = GHC.withFrozenCallStack $ propM $ Hedgehog.classify (Hedgehog.LabelName l) cond
+
+-- | Require a certain percentage of the tests to be covered by the classifier.
+--
+-- In the following example, if the condition does not have at least 30%
+-- coverage, the test will fail.
+-- @
+-- match <- forAll Gen.bool
+-- cover 30 "True" $ match
+-- cover 30 "False" $ not match
+-- @
+cover :: (GHC.HasCallStack) => Double -> String -> Bool -> Property
+cover p l cond = GHC.withFrozenCallStack $ propM $ Hedgehog.cover (Hedgehog.CoverPercentage p) (Hedgehog.LabelName l) cond
+
+-- | Add a label for each test run. It produces a table showing the percentage
+-- of test runs that produced each label.
+label :: (GHC.HasCallStack) => String -> Property
+label l = GHC.withFrozenCallStack $ propM $ Hedgehog.label (Hedgehog.LabelName l)
+
+-- | Like 'label', but uses 'Show' to render its argument for display.
+collect :: (Show a, GHC.HasCallStack) => a -> Property
+collect a = GHC.withFrozenCallStack $ propM $ Hedgehog.collect a
 
 {----- CLI flags -----}
 

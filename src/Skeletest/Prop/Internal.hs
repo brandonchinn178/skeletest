@@ -358,10 +358,11 @@ classify l cond = GHC.withFrozenCallStack $ propM $ Hedgehog.classify (Hedgehog.
 --
 -- In the following example, if the condition does not have at least 30%
 -- coverage, the test will fail.
+--
 -- @
 -- match <- forAll Gen.bool
--- cover 30 "True" $ match
--- cover 30 "False" $ not match
+-- cover 30 "true" $ match
+-- cover 30 "false" $ not match
 -- @
 cover :: (GHC.HasCallStack) => Double -> String -> Bool -> Property
 cover p l cond = GHC.withFrozenCallStack $ propM $ Hedgehog.cover (Hedgehog.CoverPercentage p) (Hedgehog.LabelName l) cond

@@ -1,7 +1,7 @@
 cabal-version: 3.0
 
 name: skeletest
-version: 0.1.1
+version: 0.2.0
 synopsis: Batteries-included, opinionated test framework
 description: Batteries-included, opinionated test framework. See README.md for more details.
 homepage: https://github.com/brandonchinn178/skeletest#readme
@@ -57,6 +57,7 @@ library
     Skeletest.Main
     Skeletest.Plugin
     Skeletest.Predicate
+    Skeletest.Prop
     Skeletest.Prop.Gen
     Skeletest.Prop.Internal
     Skeletest.Prop.Range
@@ -73,7 +74,8 @@ library
       base < 5
     , aeson
     , aeson-pretty
-    , ansi-terminal >= 0.4.0
+    , ansi-terminal >= 0.7.0
+    , colour
     , containers
     , Diff >= 1.0
     , directory

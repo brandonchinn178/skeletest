@@ -40,7 +40,7 @@ import Skeletest.Internal.Utils.Color qualified as Color
 {----- Testable -----}
 
 class (MonadIO m) => Testable m where
-  runTestable :: m () -> IO ()
+  runTestable :: m () -> IO TestResult
   context :: String -> m a -> m a
   throwFailure :: AssertionFail -> m a
 

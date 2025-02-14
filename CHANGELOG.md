@@ -1,5 +1,10 @@
 ## Unreleased
 
+## v0.2.0
+
+* Move setting properties to `Skeletest.Prop`
+* Add coverage functions for property tests
+
 ## v0.1.1
 
 * Support Diff-1.0

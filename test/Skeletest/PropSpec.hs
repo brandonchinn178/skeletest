@@ -16,9 +16,10 @@ spec = do
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
+        , "import qualified Skeletest.Prop as Prop"
         , ""
         , "spec = prop \"discards\" $ do"
-        , "  setDiscardLimit 10"
+        , "  Prop.setDiscardLimit 10"
         , "  discard"
         ]
 

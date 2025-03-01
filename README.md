@@ -219,7 +219,7 @@ Some notable predicates are listed here. See the [Haddocks](https://hackage.hask
 * `P.returns (P.gt 10)`
     * Satisfied when the left hand side is an `IO` action that returns a value greater than `10`.
 
-* `P.throws MyException`
+* `P.throws (P.eq MyException)`
     * Satisfied when the left hand side is an `IO` action that throws the given exception.
 
 ### Unit and Integration tests

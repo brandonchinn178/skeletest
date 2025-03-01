@@ -256,6 +256,7 @@ applyTestSelections' selections info = info{specSpec = applySelections $ specSpe
 
 {----- Defining a Spec -----}
 
+-- | The entity or concept being tested.
 describe :: String -> Spec -> Spec
 describe name = runIdentity . withSpecTrees (pure . (: []) . mkGroup)
   where
@@ -275,9 +276,27 @@ test name t = Spec $ tell [mkTest]
         , testAction = runTestable t
         }
 
+-- | Define an IO-based test.
+--
+-- Should typically be written to be read as full sentences in traditional BDD style:
+-- https://en.wikipedia.org/wiki/Behavior-driven_development.
+--
+-- @
+-- describe \"User\" $ do
+--   it "can be checked for equality" $ do
+--     user1 `shouldBe` user1
+-- @
 it :: String -> IO () -> Spec
 it = test
 
+-- | Define a property test.
+--
+-- @
+-- describe \"User\" $ do
+--   prop "decode . encode === Just" $ do
+--     let genUser = ...
+--     (decode . encode) P.=== Just \`shouldSatisfy\` P.isoWith genUser
+-- @
 prop :: String -> Property -> Spec
 prop = test
 
@@ -335,6 +354,7 @@ skipHook =
           Nothing -> runTest
     }
 
+-- | Mark tests as tests that should only be run when explicitly specified on the command line.
 markManual :: Spec -> Spec
 markManual = withMarker MarkerManual
 

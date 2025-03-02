@@ -306,6 +306,8 @@ right p = conMatches "Right" fieldNames toFields preds
 -- >>> [1, 2, 3] `shouldSatisfy` P.list [P.eq 1, P.eq 2, P.eq 3]
 -- >>> [1, 2, 3] `shouldNotSatisfy` P.list [P.eq 1, P.eq 2]
 -- >>> [1, 2, 3] `shouldNotSatisfy` P.list [P.eq 1, P.eq 2, P.eq 3, P.eq 4]
+--
+-- @since 0.2.1
 list :: (Monad m) => [Predicate m a] -> Predicate m [a]
 list predList =
   Predicate

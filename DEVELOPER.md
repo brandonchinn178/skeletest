@@ -18,7 +18,7 @@ Follow these steps to release this project:
        moving everything previously in `Unreleased` into the new section
        (keeping `Unreleased` as a section)
     1. Add comments to new features indicating when it was added (e.g.
-       `-- @since v2.0.0`)
+       `-- @since 2.0.0`)
     1. Run `cabal haddock` and skim through documentation
 
 1. Create PR as usual and merge into `main`
@@ -31,3 +31,15 @@ Follow these steps to release this project:
 1. Publish the candidate: https://hackage.haskell.org/package/skeletest/candidates
 
 1. Publish the GitHub release: https://github.com/brandonchinn178/skeletest/releases
+
+## Docs
+
+Hackage still builds docs with GHC 9.6, which doesn't work for this project. Until that's fixed, generate docs ourselves:
+
+```shell
+cabal v2-haddock --builddir="$dir" --haddock-for-hackage --enable-doc
+
+cabal upload -d --publish $dir/*-docs.tar.gz
+```
+
+https://github.com/haskell/hackage-server/issues/1361

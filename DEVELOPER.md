@@ -34,12 +34,10 @@ Follow these steps to release this project:
 
 ## Docs
 
-Hackage still builds docs with GHC 9.6, which doesn't work for this project. Until that's fixed, generate docs ourselves:
+Hackage still builds docs with [GHC 9.6](https://github.com/haskell/hackage-server/issues/1361), which doesn't work for this project. Until that's fixed, generate docs ourselves:
 
 ```shell
-cabal v2-haddock --builddir="$dir" --haddock-for-hackage --enable-doc
-
-cabal upload -d --publish $dir/*-docs.tar.gz
+cabal v2-haddock --builddir="$PWD/dist-newstyle/docs" --haddock-for-hackage --enable-doc
 ```
 
-https://github.com/haskell/hackage-server/issues/1361
+Then on Hackage, go to "edit package information", then "Manage documentation for ...", then upload the docs. `cabal upload` has a [bug](https://github.com/haskell/cabal/issues/10252).

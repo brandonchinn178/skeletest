@@ -268,6 +268,28 @@ Got:
 --------------------------------------------------------------------------------
 ```
 
+## Data types / list / shows helpful failure messages
+
+```
+10 ≠ 1
+
+Expected:
+  [= 0, = 1]
+
+Got:
+  [0,10]
+```
+
+```
+Got different number of elements
+
+Expected:
+  [= 0, = 1]
+
+Got:
+  [0]
+```
+
 ## Data types / tup / shows helpful failure messages
 
 ```

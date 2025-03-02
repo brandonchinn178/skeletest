@@ -89,6 +89,17 @@ spec = do
         Right 1 `shouldNotSatisfy` P.right (P.gt 2)
         Left 1 `shouldNotSatisfy` P.right P.anything
 
+    describe "list" $ do
+      it "checks list" $ do
+        [1, 2, 3] `shouldSatisfy` P.list [P.eq 1, P.eq 2, P.eq 3]
+        [1, 2, 3] `shouldNotSatisfy` P.list [P.eq 1, P.eq 2, P.lt 0]
+        [1, 2, 3] `shouldNotSatisfy` P.list [P.eq 1, P.eq 2]
+        [1, 2, 3] `shouldNotSatisfy` P.list [P.eq 1, P.eq 2, P.eq 3, P.eq 4]
+
+      it "shows helpful failure messages" $ do
+        snapshotFailure (P.list [P.eq 0, P.eq 1]) [0, 10]
+        snapshotFailure (P.list [P.eq 0, P.eq 1]) [0]
+
     describe "tup" $ do
       it "checks all predicates" $ do
         (1, "hello") `shouldSatisfy` P.tup (P.eq 1, P.hasPrefix "he")

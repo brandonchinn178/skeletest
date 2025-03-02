@@ -16,6 +16,7 @@ module Skeletest.Predicate (
   nothing,
   left,
   right,
+  list,
   tup,
   con,
 

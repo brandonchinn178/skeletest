@@ -27,6 +27,7 @@ module Skeletest.Internal.Predicate (
   nothing,
   left,
   right,
+  list,
   IsPredTuple (..),
   tup,
   con,
@@ -299,6 +300,32 @@ right p = conMatches "Right" fieldNames toFields preds
       Right x -> Just . HCons (pure x) $ HNil
       _ -> Nothing
     preds = HCons p HNil
+
+-- | A predicate checking if the input is a list matching exactly the given predicates.
+--
+-- >>> [1, 2, 3] `shouldSatisfy` P.list [P.eq 1, P.eq 2, P.eq 3]
+-- >>> [1, 2, 3] `shouldNotSatisfy` P.list [P.eq 1, P.eq 2]
+-- >>> [1, 2, 3] `shouldNotSatisfy` P.list [P.eq 1, P.eq 2, P.eq 3, P.eq 4]
+list :: (Monad m) => [Predicate m a] -> Predicate m [a]
+list predList =
+  Predicate
+    { predicateFunc = \actual ->
+        if length actual == length predList
+          then verifyAll listify <$> sequence (zipWith predicateFunc predList actual)
+          else
+            pure
+              PredicateFuncResult
+                { predicateSuccess = False
+                , predicateExplain = "Got different number of elements"
+                , predicateShowFailCtx = ShowFailCtx
+                }
+    , predicateDisp = disp
+    , predicateDispNeg = dispNeg
+    }
+  where
+    listify vals = "[" <> Text.intercalate ", " vals <> "]"
+    disp = listify $ map predicateDisp predList
+    dispNeg = "not " <> disp
 
 class IsTuple a where
   type TupleArgs a :: [Type]

@@ -41,7 +41,13 @@ import Skeletest.Internal.Utils.Color qualified as Color
 
 class (MonadIO m) => Testable m where
   runTestable :: m () -> IO TestResult
+
+  -- | Add any context to display if the test fails.
+  --
+  -- >>> (code, stdout) <- runCommand ...
+  -- >>> context stdout $ code `shouldBe` ExitSuccess
   context :: String -> m a -> m a
+
   throwFailure :: AssertionFail -> m a
 
 {----- TestResult -----}

@@ -27,6 +27,7 @@ module Skeletest.Internal.Predicate (
   nothing,
   left,
   right,
+  list,
   IsPredTuple (..),
   tup,
   con,
@@ -203,6 +204,7 @@ showCtx result = result{predicateShowFailCtx = max ShowFailCtx $ predicateShowFa
 
 {----- General -----}
 
+-- | A predicate that matches any value
 anything :: (Monad m) => Predicate m a
 anything =
   Predicate
@@ -219,23 +221,41 @@ anything =
 
 {----- Ord -----}
 
+-- | A predicate checking if the input is equal to the given value
+--
+-- >>> 1 `shouldSatisfy` P.eq 1
 eq :: (Eq a, Monad m) => a -> Predicate m a
 eq = mkPredicateOp "=" "≠" $ \actual expected -> actual == expected
 
+-- | A predicate checking if the input is greater than the given value
+--
+-- >>> 1 `shouldSatisfy` P.gt 0
 gt :: (Ord a, Monad m) => a -> Predicate m a
 gt = mkPredicateOp ">" "≯" $ \actual expected -> actual > expected
 
+-- | A predicate checking if the input is greater than or equal to the given value
+--
+-- >>> 1 `shouldSatisfy` P.gte 0
 gte :: (Ord a, Monad m) => a -> Predicate m a
 gte = mkPredicateOp "≥" "≱" $ \actual expected -> actual > expected Prelude.|| actual == expected
 
+-- | A predicate checking if the input is less than the given value
+--
+-- >>> 1 `shouldSatisfy` P.lt 10
 lt :: (Ord a, Monad m) => a -> Predicate m a
 lt = mkPredicateOp "<" "≮" $ \actual expected -> actual < expected
 
+-- | A predicate checking if the input is less than or equal to the given value
+--
+-- >>> 1 `shouldSatisfy` P.lte 10
 lte :: (Ord a, Monad m) => a -> Predicate m a
 lte = mkPredicateOp "≤" "≰" $ \actual expected -> actual < expected Prelude.|| actual == expected
 
 {----- Data types -----}
 
+-- | A predicate checking if the input is Just, wrapping a value matching the given predicate.
+--
+-- >>> Just 1 `shouldSatisfy` P.just (P.gt 0)
 just :: (Monad m) => Predicate m a -> Predicate m (Maybe a)
 just p = conMatches "Just" fieldNames toFields preds
   where
@@ -245,6 +265,9 @@ just p = conMatches "Just" fieldNames toFields preds
       _ -> Nothing
     preds = HCons p HNil
 
+-- | A predicate checking if the input is Nothing
+--
+-- >>> Nothing `shouldSatisfy` P.nothing
 nothing :: (Monad m) => Predicate m (Maybe a)
 nothing = conMatches "Nothing" fieldNames toFields preds
   where
@@ -254,6 +277,9 @@ nothing = conMatches "Nothing" fieldNames toFields preds
       _ -> Nothing
     preds = HNil
 
+-- | A predicate checking if the input is Left, wrapping a value matching the given predicate.
+--
+-- >>> Left 1 `shouldSatisfy` P.left (P.gt 0)
 left :: (Monad m) => Predicate m a -> Predicate m (Either a b)
 left p = conMatches "Left" fieldNames toFields preds
   where
@@ -263,6 +289,9 @@ left p = conMatches "Left" fieldNames toFields preds
       _ -> Nothing
     preds = HCons p HNil
 
+-- | A predicate checking if the input is Right, wrapping a value matching the given predicate.
+--
+-- >>> Right 1 `shouldSatisfy` P.right (P.gt 0)
 right :: (Monad m) => Predicate m b -> Predicate m (Either a b)
 right p = conMatches "Right" fieldNames toFields preds
   where
@@ -271,6 +300,34 @@ right p = conMatches "Right" fieldNames toFields preds
       Right x -> Just . HCons (pure x) $ HNil
       _ -> Nothing
     preds = HCons p HNil
+
+-- | A predicate checking if the input is a list matching exactly the given predicates.
+--
+-- >>> [1, 2, 3] `shouldSatisfy` P.list [P.eq 1, P.eq 2, P.eq 3]
+-- >>> [1, 2, 3] `shouldNotSatisfy` P.list [P.eq 1, P.eq 2]
+-- >>> [1, 2, 3] `shouldNotSatisfy` P.list [P.eq 1, P.eq 2, P.eq 3, P.eq 4]
+--
+-- @since 0.2.1
+list :: (Monad m) => [Predicate m a] -> Predicate m [a]
+list predList =
+  Predicate
+    { predicateFunc = \actual ->
+        if length actual == length predList
+          then verifyAll listify <$> sequence (zipWith predicateFunc predList actual)
+          else
+            pure
+              PredicateFuncResult
+                { predicateSuccess = False
+                , predicateExplain = "Got different number of elements"
+                , predicateShowFailCtx = ShowFailCtx
+                }
+    , predicateDisp = disp
+    , predicateDispNeg = dispNeg
+    }
+  where
+    listify vals = "[" <> Text.intercalate ", " vals <> "]"
+    disp = listify $ map predicateDisp predList
+    dispNeg = "not " <> disp
 
 class IsTuple a where
   type TupleArgs a :: [Type]
@@ -310,11 +367,10 @@ instance IsPredTuple m (a, b, c, d, e, f) where
   type ToPredTuple m (a, b, c, d, e, f) = (Predicate m a, Predicate m b, Predicate m c, Predicate m d, Predicate m e, Predicate m f)
   toHListPred _ (a, b, c, d, e, f) = HCons a . HCons b . HCons c . HCons d . HCons e . HCons f $ HNil
 
--- | Matches a tuple satisfying the given predicates. Works for tuples up to 6 elements.
+-- | A predicate checking if the input matches a tuple matching the given predicates.
+-- Works for tuples up to 6 elements.
 --
--- @
--- P.tup (P.eq 1, P.gt 2, P.hasPrefix "hello ")
--- @
+-- >>> (1, 10, "hello world") `shouldSatisfy` P.tup (P.eq 1, P.gt 2, P.hasPrefix "hello ")
 tup :: forall a m. (IsPredTuple m a, Monad m) => ToPredTuple m a -> Predicate m a
 tup predTup =
   Predicate
@@ -329,13 +385,13 @@ tup predTup =
     disp = tupify $ HList.toListWith predicateDisp preds
     dispNeg = "not " <> disp
 
--- | A predicate for checking that a value matches the given constructor.
+-- | A predicate checking if the input matches the given constructor.
 --
 -- It takes one argument, which is the constructor, except with all fields
 -- taking a Predicate instead of the normal value. Skeletest will rewrite
 -- the expression so it typechecks correctly.
 --
--- >>> user `shouldSatisfy` P.con User{name = P.eq "user1", email = P.contains "@"}
+-- >>> User "user1" "user1@example.com" `shouldSatisfy` P.con User{name = P.eq "user1", email = P.contains "@"}
 --
 -- Record fields that are omitted are not checked at all; i.e.
 -- @P.con Foo{}@ and @P.con Foo{a = P.anything}@ are equivalent.
@@ -386,7 +442,7 @@ conMatches conNameS mFieldNames deconstruct preds =
 
 {----- Numeric -----}
 
--- | A predicate for checking that a value is equal within some tolerance.
+-- | A predicate checking if the input is equal to the given value within some tolerance.
 --
 -- Useful for checking equality with floats, which might not be exactly equal.
 -- For more information, see: https://jvns.ca/blog/2023/01/13/examples-of-floating-point-problems/.
@@ -413,11 +469,18 @@ approx Tolerance{..} =
       | x < 0 = error $ "tolerance can't be negative: " <> show x
       | otherwise = fromRational x
 
+-- | The tolerance to use in 'approx'.
+--
+-- An input satisfies a tolerance if it's within the relative tolerance
+-- (rel * input) or the absolute tolerance of the reference value.
 data Tolerance = Tolerance
   { rel :: Maybe Rational
+  -- ^ If provided, the relative tolerance. Defaults to 1e-6.
   , abs :: Rational
+  -- ^ The absolute tolerance. Defaults to 1e-12.
   }
 
+-- | The default tolerance for 'approx'.
 tol :: Tolerance
 tol = Tolerance{rel = Just 1e-6, abs = 1e-12}
 
@@ -425,6 +488,9 @@ tol = Tolerance{rel = Just 1e-6, abs = 1e-12}
 
 infixr 1 <<<, >>>
 
+-- | A predicate checking if the input matches the given predicate, after applying the given function.
+--
+-- >>> "hello" `shouldSatisfy` (P.eq 5 P.<<< length)
 (<<<) :: (Monad m) => Predicate m a -> (b -> a) -> Predicate m b
 Predicate{..} <<< f =
   Predicate
@@ -433,9 +499,15 @@ Predicate{..} <<< f =
     , predicateDispNeg
     }
 
+-- | Same as '<<<', except with the arguments flipped.
+--
+-- >>> "hello" `shouldSatisfy` (length P.>>> P.eq 5)
 (>>>) :: (Monad m) => (b -> a) -> Predicate m a -> Predicate m b
 (>>>) = flip (<<<)
 
+-- | A predicate checking if the input does not match the given predicate
+--
+-- >>> Just 2 `shouldSatisfy` P.just (P.not (P.eq 1))
 not :: (Monad m) => Predicate m a -> Predicate m a
 not Predicate{..} =
   Predicate
@@ -446,12 +518,21 @@ not Predicate{..} =
     , predicateDispNeg = predicateDisp
     }
 
+-- | A predicate checking if the input matches both of the given predicates
+--
+-- >>> 1 `shouldSatisfy` P.gt 0 P.&& P.lt 2
 (&&) :: (Monad m) => Predicate m a -> Predicate m a -> Predicate m a
 p1 && p2 = and [p1, p2]
 
+-- | A predicate checking if the input matches one of the given predicates
+--
+-- >>> 1 `shouldSatisfy` P.lt 5 P.|| P.gt 10
 (||) :: (Monad m) => Predicate m a -> Predicate m a -> Predicate m a
 p1 || p2 = or [p1, p2]
 
+-- | A predicate checking if the input matches all of the given predicates
+--
+-- >>> 1 `shouldSatisfy` P.and [P.gt 0, P.lt 2]
 and :: (Monad m) => [Predicate m a] -> Predicate m a
 and preds =
   Predicate
@@ -464,6 +545,9 @@ and preds =
     andify = Text.intercalate "\nand "
     predList = map (parens . predicateDisp) preds
 
+-- | A predicate checking if the input matches any of the given predicates
+--
+-- >>> 1 `shouldSatisfy` P.or [P.lt 5, P.gt 10]
 or :: (Monad m) => [Predicate m a] -> Predicate m a
 or preds =
   Predicate
@@ -478,6 +562,9 @@ or preds =
 
 {----- Containers -----}
 
+-- | A predicate checking if the input is a list-like type where some element matches the given predicate.
+--
+-- >>> [1, 2, 3] `shouldSatisfy` P.any (P.eq 1)
 any :: (Foldable t, Monad m) => Predicate m a -> Predicate m (t a)
 any Predicate{..} =
   Predicate
@@ -487,6 +574,9 @@ any Predicate{..} =
     , predicateDispNeg = "no elements matching " <> parens predicateDisp
     }
 
+-- | A predicate checking if the input is a list-like type where all elements match the given predicate.
+--
+-- >>> [1, 2, 3] `shouldSatisfy` P.all (P.gt 0)
 all :: (Foldable t, Monad m) => Predicate m a -> Predicate m (t a)
 all Predicate{..} =
   Predicate
@@ -496,6 +586,10 @@ all Predicate{..} =
     , predicateDispNeg = "some elements not matching " <> parens predicateDisp
     }
 
+-- | A predicate checking if the input is a list-like type where the given element is present.
+-- Equivalent to @P.any . P.eq@.
+--
+-- >>> [1, 2, 3] `shouldSatisfy` P.elem 1
 elem :: (Eq a, Foldable t, Monad m) => a -> Predicate m (t a)
 elem = any . eq
 
@@ -514,6 +608,10 @@ instance HasSubsequences Text where
   isInfixOf = Text.isInfixOf
   isSuffixOf = Text.isSuffixOf
 
+-- | A predicate checking if the input has the given prefix
+--
+-- >>> [1, 2, 3] `shouldSatisfy` P.hasPrefix [1, 2]
+-- >>> "hello world" `shouldSatisfy` P.hasPrefix "hello "
 hasPrefix :: (HasSubsequences a, Monad m) => a -> Predicate m a
 hasPrefix prefix =
   Predicate
@@ -535,6 +633,10 @@ hasPrefix prefix =
     disp = "has prefix " <> render prefix
     dispNeg = "does not have prefix " <> render prefix
 
+-- | A predicate checking if the input contains the given subsequence
+--
+-- >>> [1, 2, 3] `shouldSatisfy` P.hasInfix [2]
+-- >>> "hello world" `shouldSatisfy` P.hasInfix "ello"
 hasInfix :: (HasSubsequences a, Monad m) => a -> Predicate m a
 hasInfix elems =
   Predicate
@@ -556,6 +658,10 @@ hasInfix elems =
     disp = "has infix " <> render elems
     dispNeg = "does not have infix " <> render elems
 
+-- | A predicate checking if the input has the given suffix
+--
+-- >>> [1, 2, 3] `shouldSatisfy` P.hasSuffix [2, 3]
+-- >>> "hello world" `shouldSatisfy` P.hasSuffix " world"
 hasSuffix :: (HasSubsequences a, Monad m) => a -> Predicate m a
 hasSuffix suffix =
   Predicate
@@ -579,6 +685,9 @@ hasSuffix suffix =
 
 {----- IO -----}
 
+-- | A predicate checking if the input is an IO action that returns a value matching the given predicate.
+--
+-- >>> pure 1 `shouldSatisfy` P.returns (P.eq 1)
 returns :: (MonadIO m) => Predicate m a -> Predicate m (m a)
 returns Predicate{..} =
   Predicate
@@ -604,6 +713,9 @@ returns Predicate{..} =
     , predicateDispNeg = predicateDispNeg
     }
 
+-- | A predicate checking if the input is an IO action that throws an exception matching the given predicate.
+--
+-- >>> throwIO MyException `shouldSatisfy` P.throws (P.eq MyException)
 throws :: (Exception e, MonadUnliftIO m) => Predicate m e -> Predicate m (m a)
 throws Predicate{..} =
   Predicate
@@ -655,7 +767,7 @@ data IsoChecker a b = IsoChecker (Fun a b) (Fun a b)
 -- @
 -- prop "reverse . reverse === id" $ do
 --   let genList = Gen.list (Gen.linear 0 10) $ Gen.int (Gen.linear 0 1000)
---   (reverse . reverse) === id \`shouldSatisfy\` P.isoWith genList
+--   (reverse . reverse) P.=== id \`shouldSatisfy\` P.isoWith genList
 -- @
 (===) :: (a -> b) -> (a -> b) -> IsoChecker a b
 f === g = IsoChecker (Fun "lhs" f) (Fun "rhs" g)
@@ -697,6 +809,10 @@ isoWith gen =
 
 {----- Snapshot -----}
 
+-- | A predicate checking if the input matches the snapshot.
+-- See the "Snapshot tests" section in the README.
+--
+-- >>> user `shouldSatisfy` P.matchesSnapshot
 matchesSnapshot :: (Typeable a, MonadIO m) => Predicate m a
 matchesSnapshot =
   Predicate

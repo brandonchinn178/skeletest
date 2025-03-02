@@ -1,5 +1,9 @@
 ## Unreleased
 
+## v0.2.1
+
+* Add `P.list`
+
 ## v0.2.0
 
 * Move setting properties to `Skeletest.Prop`

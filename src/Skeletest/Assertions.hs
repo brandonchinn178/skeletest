@@ -45,12 +45,17 @@ instance Testable IO where
 
 infix 1 `shouldBe`, `shouldNotBe`, `shouldSatisfy`, `shouldNotSatisfy`
 
+-- | Assert that the given input should match the given value.
+-- Equivalent to @actual `shouldSatisfy` P.eq expected@
 shouldBe :: (HasCallStack, Testable m, Eq a) => a -> a -> m ()
 actual `shouldBe` expected = GHC.withFrozenCallStack $ actual `shouldSatisfy` P.eq expected
 
+-- | Assert that the given input should not match the given value.
+-- Equivalent to @actual `shouldNotSatisfy` P.eq expected@
 shouldNotBe :: (HasCallStack, Testable m, Eq a) => a -> a -> m ()
 actual `shouldNotBe` expected = GHC.withFrozenCallStack $ actual `shouldNotSatisfy` P.eq expected
 
+-- | Assert that the given input should satisfy the given predicate.
 shouldSatisfy :: (HasCallStack, Testable m) => a -> Predicate m a -> m ()
 actual `shouldSatisfy` p =
   GHC.withFrozenCallStack $
@@ -58,6 +63,7 @@ actual `shouldSatisfy` p =
       PredicateSuccess -> pure ()
       PredicateFail msg -> failTest' msg
 
+-- | Assert that the given input should not satisfy the given predicate.
 shouldNotSatisfy :: (HasCallStack, Testable m) => a -> Predicate m a -> m ()
 actual `shouldNotSatisfy` p = GHC.withFrozenCallStack $ actual `shouldSatisfy` P.not p
 
@@ -67,6 +73,7 @@ contextIO msg =
     (modifyIORef failContextRef (Text.pack msg :))
     (modifyIORef failContextRef (drop 1))
 
+-- | Unconditionally fail the test with the given message.
 failTest :: (HasCallStack, Testable m) => String -> m a
 failTest = GHC.withFrozenCallStack $ failTest' . Text.pack
 

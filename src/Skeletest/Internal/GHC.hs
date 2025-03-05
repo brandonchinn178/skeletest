@@ -70,7 +70,7 @@ import GHC (
   IsPass,
   unLoc,
  )
-import GHC qualified as GHC
+import GHC qualified
 import GHC.Driver.Main qualified as GHC
 import GHC.Plugins qualified as GHC hiding (getHscEnv)
 import GHC.Tc.Utils.Monad qualified as GHC
@@ -84,7 +84,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import Data.Foldable (foldl')
 #endif
 
-import Skeletest.Internal.Error (invariantViolation, skeletestPluginError)
+import Skeletest.Internal.Error (invariantViolation)
 import Skeletest.Internal.GHC.Compat (genLoc)
 import Skeletest.Internal.GHC.Compat qualified as GHC.Compat
 
@@ -324,7 +324,7 @@ fromTHName :: GHC.NameCache -> TH.Name -> GHC.Name
 fromTHName nameCache name =
   case unsafePerformIO $ GHC.thNameToGhcNameIO nameCache name of
     Just n -> n
-    Nothing -> skeletestPluginError $ "Could not get Name for `" <> show name <> "`"
+    Nothing -> invariantViolation $ "Could not get Name for `" <> show name <> "`"
 
 matchesNameImpl :: GHC.NameCache -> HsName GhcRn -> HsName GhcRn -> Bool
 matchesNameImpl nameCache n1 n2 = fromMaybe False $ (==) <$> go n1 <*> go n2

@@ -197,31 +197,29 @@ Got:
 ## Data types / con / fails to compile when applied to multiple arguments
 
 ```
-<no location info>: error:
-    
-******************** skeletest failure ********************
-P.con must be applied to exactly one argument
-    at ExampleSpec.hs:7:22-30
+ExampleSpec.hs:7:22: error:
+    P.con must be applied to exactly one argument
+  |
+7 |   "" `shouldSatisfy` P.con 1 2
+  |                      ^^^^^^^^^
 ```
 
 ## Data types / con / fails to compile when not applied to anything
 
 ```
-<no location info>: error:
-    
-******************** skeletest failure ********************
-P.con must be applied to a constructor
-    at ExampleSpec.hs:7:22-26
+ExampleSpec.hs:7:22: error: P.con must be applied to a constructor
+  |
+7 |   "" `shouldSatisfy` P.con
+  |                      ^^^^^
 ```
 
 ## Data types / con / fails to compile with non-constructor
 
 ```
-<no location info>: error:
-    
-******************** skeletest failure ********************
-P.con must be applied to a constructor
-    at ExampleSpec.hs:7:28-29
+ExampleSpec.hs:7:22: error: P.con must be applied to a constructor
+  |
+7 |   "" `shouldSatisfy` P.con ""
+  |                      ^^^^^^^^
 ```
 
 ## Data types / con / fails to compile with omitted positional fields

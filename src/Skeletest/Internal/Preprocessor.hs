@@ -104,7 +104,7 @@ insertImports :: [(FilePath, Text)] -> Text -> Either SkeletestError Text
 insertImports testModules file =
   let (pre, post) = break isSkeletestImport $ Text.lines file
    in if null post
-        then Left $ CompilationError "Could not find Skeletest.Main import in Main module"
+        then Left $ CompilationError Nothing "Could not find Skeletest.Main import in Main module"
         else pure . Text.unlines $ pre <> importTests <> post
   where
     isSkeletestImport line =

@@ -79,6 +79,7 @@ library
     , containers
     , Diff >= 1.0
     , directory
+    , exceptions
     , filepath
     , ghc ^>= 9.8 || ^>= 9.10 || ^>= 9.12
     , hedgehog

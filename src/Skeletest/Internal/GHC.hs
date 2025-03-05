@@ -52,6 +52,7 @@ module Skeletest.Internal.GHC (
   getHsName,
 ) where
 
+import Control.Monad.Catch (handleJust)
 import Control.Monad.Trans.Class qualified as Trans
 import Control.Monad.Trans.State (StateT, evalStateT)
 import Control.Monad.Trans.State qualified as State
@@ -74,10 +75,12 @@ import GHC (
 import GHC qualified
 import GHC.Driver.Main qualified as GHC
 import GHC.Plugins qualified as GHC hiding (getHscEnv)
+import GHC.Tc.Errors.Types qualified as GHC
 import GHC.Tc.Utils.Monad qualified as GHC
 import GHC.Types.Name qualified as GHC.Name
 import GHC.Types.Name.Cache qualified as GHC (NameCache)
 import GHC.Types.SourceText qualified as GHC.SourceText
+import GHC.Utils.Error qualified as GHC
 import Language.Haskell.TH.Syntax qualified as TH
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -85,7 +88,10 @@ import System.IO.Unsafe (unsafePerformIO)
 import Data.Foldable (foldl')
 #endif
 
-import Skeletest.Internal.Error (invariantViolation)
+import Skeletest.Internal.Error (
+  SkeletestError (CompilationError),
+  invariantViolation,
+ )
 import Skeletest.Internal.GHC.Compat (genLoc)
 import Skeletest.Internal.GHC.Compat qualified as GHC.Compat
 
@@ -374,7 +380,18 @@ newtype CompileRn a = CompileRn (StateT (Map Text GHC.Name) GHC.TcM a)
   deriving (Functor, Applicative, Monad)
 
 runCompileRn :: CompileRn a -> GHC.TcM a
-runCompileRn (CompileRn m) = evalStateT m Map.empty
+runCompileRn (CompileRn m) = handleCompilationError $ evalStateT m Map.empty
+  where
+    handleCompilationError =
+      handleJust
+        ( \case
+            CompilationError mloc msg -> Just $ do
+              GHC.failAt (fromMaybe GHC.noSrcSpan mloc) $ mkTcError msg
+            _ -> Nothing
+        )
+        id
+
+    mkTcError = GHC.mkTcRnUnknownMessage . GHC.mkPlainError GHC.noHints . GHC.text . Text.unpack
 
 instance MonadHasNameCache CompileRn where
   getNameCache = GHC.hsc_NC . GHC.env_top <$> (CompileRn . Trans.lift) GHC.getEnv

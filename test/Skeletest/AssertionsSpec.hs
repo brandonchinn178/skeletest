@@ -140,3 +140,21 @@ spec = do
     code `shouldBe` ExitFailure 1
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
+
+  integration . it "shows helpful error on pattern match fail" $ do
+    runner <- getFixture
+    addTestFile runner "ExampleSpec.hs" $
+      [ "module ExampleSpec (spec) where"
+      , ""
+      , "import Skeletest"
+      , "import qualified Skeletest.Predicate as P"
+      , ""
+      , "spec = it \"should fail\" $ do"
+      , "  Just x <- pure Nothing"
+      , "  x `shouldBe` True"
+      ]
+
+    (code, stdout, stderr) <- runTests runner []
+    code `shouldBe` ExitFailure 1
+    stderr `shouldBe` ""
+    stdout `shouldSatisfy` P.matchesSnapshot

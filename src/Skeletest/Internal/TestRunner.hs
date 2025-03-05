@@ -18,13 +18,16 @@ module Skeletest.Internal.TestRunner (
   FailContext,
 ) where
 
+import Control.Monad (guard)
 import Control.Monad.IO.Class (MonadIO)
 import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
+import GHC.IO.Exception qualified as GHC
 import GHC.Stack (CallStack)
 import GHC.Stack qualified as GHC
+import Text.Read (readMaybe)
 import UnliftIO.Exception (
   Exception,
   SomeException,
@@ -81,20 +84,68 @@ testResultFromAssertionFail e = do
       , testResultMessage = TestResultMessageSection msg
       }
 
-testResultFromError :: SomeException -> TestResult
-testResultFromError e =
-  TestResult
-    { testResultSuccess = False
-    , testResultLabel = Color.red "ERROR"
-    , testResultMessage = TestResultMessageInline $ Text.pack msg
-    }
+testResultFromError :: SomeException -> IO TestResult
+testResultFromError e = do
+  msg <- renderMsg
+  pure
+    TestResult
+      { testResultSuccess = False
+      , testResultLabel = Color.red "ERROR"
+      , testResultMessage = msg
+      }
   where
-    msg =
-      case fromException e of
-        -- In GHC 9.10+, SomeException shows the callstack, which we don't
-        -- want to see for known Skeletest errors
-        Just (err :: SkeletestError) -> displayException err
-        Nothing -> displayException e
+    renderMsg
+      -- In GHC 9.10+, SomeException shows the callstack, which we don't
+      -- want to see for known Skeletest errors
+      | Just (err :: SkeletestError) <- fromException e =
+          pure . TestResultMessageInline . Text.pack $ displayException err
+      -- Handle pattern match fail in a do-block
+      | Just err <- parseDoBlockFail e =
+          TestResultMessageSection <$> renderDoBlockFail err
+      | otherwise =
+          pure . TestResultMessageInline . Text.pack $ displayException e
+
+{----- DoBlockFail -----}
+
+data DoBlockFail = DoBlockFail
+  { doBlockFailMessage :: Text
+  , doBlockFailFile :: FilePath
+  , doBlockFailLine :: Int
+  , doBlockFailStartCol :: Int
+  , doBlockFailEndCol :: Int
+  }
+
+-- | See if the exception is from a pattern match fail in a do-block.
+parseDoBlockFail :: SomeException -> Maybe DoBlockFail
+parseDoBlockFail e = do
+  GHC.IOError _ GHC.UserError _ msgStr _ _ <- fromException e
+  let msg = Text.pack msgStr
+  guard $ "Pattern match failure " `Text.isPrefixOf` msg
+  [msgWithoutLoc, locInfo] <- pure $ Text.splitOn " at " msg
+  [file, lineStr, colSpan] <- pure $ Text.splitOn ":" locInfo
+  line <- readT lineStr
+  [startCol, endCol] <- mapM readT $ Text.splitOn "-" colSpan
+  pure
+    DoBlockFail
+      { doBlockFailMessage = msgWithoutLoc
+      , doBlockFailFile = Text.unpack file
+      , doBlockFailLine = line
+      , doBlockFailStartCol = startCol
+      , -- seems like srcLocEndCol is exclusive, while the columns in the fail message are inclusive
+        doBlockFailEndCol = endCol + 1
+      }
+  where
+    readT = readMaybe . Text.unpack
+
+renderDoBlockFail :: DoBlockFail -> IO Text
+renderDoBlockFail DoBlockFail{..} =
+  renderPrettyFailure
+    doBlockFailMessage
+    doBlockFailContext
+    [ (doBlockFailFile, doBlockFailLine, doBlockFailStartCol, doBlockFailEndCol)
+    ]
+  where
+    doBlockFailContext = []
 
 {----- AssertionFail -----}
 
@@ -122,23 +173,42 @@ type FailContext = [Text]
 -- Right 1 ≠ Left 1
 -- @
 renderAssertionFail :: AssertionFail -> IO Text
-renderAssertionFail AssertionFail{..} = do
-  prettyStackTrace <- mapM renderCallLine . reverse $ GHC.getCallStack callStack
+renderAssertionFail AssertionFail{..} =
+  renderPrettyFailure
+    testFailMessage
+    testFailContext
+    [ (srcLocFile, srcLocStartLine, srcLocStartCol, srcLocEndCol)
+    | (_, GHC.SrcLoc{..}) <- GHC.getCallStack callStack
+    ]
+
+-- | Render a test failure like:
+--
+-- @
+-- At test/Skeletest/Internal/TestTargetsSpec.hs:19:
+-- |
+-- |           parseTestTargets input `shouldBe` Right (Just expected)
+-- |                                   ^^^^^^^^
+--
+-- Right 1 ≠ Left 1
+-- @
+renderPrettyFailure ::
+  Text
+  -- ^ Message
+  -> FailContext
+  -> [(FilePath, Int, Int, Int)]
+  -- ^ Call stack (file, line, startCol, endCol)
+  -> IO Text
+renderPrettyFailure msg ctx callstack = do
+  prettyStackTrace <- mapM renderCallLine . reverse $ callstack
   pure . Text.intercalate "\n\n" . concat $
     [ prettyStackTrace
-    , if null testFailContext
+    , if null ctx
         then []
-        else [Text.intercalate "\n" $ reverse testFailContext]
-    , [testFailMessage]
+        else [Text.intercalate "\n" $ reverse ctx]
+    , [msg]
     ]
   where
-    renderCallLine (_, loc) = do
-      let
-        path = GHC.srcLocFile loc
-        lineNum = GHC.srcLocStartLine loc
-        startCol = GHC.srcLocStartCol loc
-        endCol = GHC.srcLocEndCol loc
-
+    renderCallLine (path, lineNum, startCol, endCol) = do
       mLine <-
         try (Text.readFile path) >>= \case
           Right srcFile -> pure $ getLineNum lineNum srcFile

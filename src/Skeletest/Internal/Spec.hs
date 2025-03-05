@@ -192,7 +192,7 @@ runSpecs hooks0 specs =
           Right result -> pure result
           Left e
             | Just e' <- fromException e -> testResultFromAssertionFail e'
-            | otherwise -> pure $ testResultFromError e
+            | otherwise -> testResultFromError e
 
     getIndentLevel testInfo = length (TestInfo.testContexts testInfo) + 1 -- +1 to include the module name
     indent lvl = Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"

@@ -395,6 +395,11 @@ tup predTup =
 --
 -- Record fields that are omitted are not checked at all; i.e.
 -- @P.con Foo{}@ and @P.con Foo{a = P.anything}@ are equivalent.
+--
+-- Positional arguments work also, as well as dollar signs.
+--
+-- >>> let email = P.con $ Email P.anything (P.eq "example.com")
+-- >>> user `shouldSatisfy` P.con User{email = email}
 con :: a -> Predicate m a
 con =
   -- A placeholder that will be replaced with conMatches in the plugin.

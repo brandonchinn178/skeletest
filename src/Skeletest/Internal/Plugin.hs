@@ -139,7 +139,7 @@ replaceConMatch ctx e =
         HsExprCon conName -> convertPrefixCon conName []
         HsExprApps (getExpr -> HsExprCon conName) preds -> convertPrefixCon conName preds
         HsExprRecordCon conName fields -> convertRecordCon conName fields
-        _ -> skeletestPluginError (getLoc con) "P.con must be applied to a constructor"
+        _ -> skeletestPluginError (getLoc e) "P.con must be applied to a constructor"
     convertPrefixCon conName preds =
       let
         exprNames = mkVarNames preds

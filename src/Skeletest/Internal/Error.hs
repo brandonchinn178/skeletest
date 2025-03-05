@@ -10,13 +10,11 @@ module Skeletest.Internal.Error (
 import Data.Text (Text)
 import Data.Text qualified as Text
 import GHC qualified
-import GHC.Utils.Outputable qualified as GHC
-import GHC.Utils.Panic (pgmError)
 import UnliftIO.Exception (Exception (..), impureThrow)
 
 data SkeletestError
   = -- | A user error during compilation, e.g. during the preprocessor or plugin phases.
-    CompilationError Text
+    CompilationError (Maybe GHC.SrcSpan) Text
   | -- | An error in a situation that should never happen, and indicates a bug.
     InvariantViolation Text
   | TestInfoNotFound
@@ -28,7 +26,7 @@ data SkeletestError
 instance Exception SkeletestError where
   displayException =
     Text.unpack . \case
-      CompilationError msg ->
+      CompilationError _ msg ->
         Text.unlines
           [ ""
           , "******************** skeletest failure ********************"
@@ -49,15 +47,7 @@ instance Exception SkeletestError where
         "Snapshot file was corrupted: " <> Text.pack fp
 
 skeletestPluginError :: Maybe GHC.SrcSpan -> String -> a
-skeletestPluginError mloc = pgmError . addLoc . stripEnd . displayException . CompilationError . Text.pack
-  where
-    stripEnd = Text.unpack . Text.stripEnd . Text.pack
-
-    -- https://gitlab.haskell.org/ghc/ghc/-/issues/25816
-    addLoc s =
-      case mloc of
-        Nothing -> s
-        Just loc -> s <> "\n    at " <> (GHC.showSDocUnsafe . GHC.ppr) loc
+skeletestPluginError mloc = impureThrow . CompilationError mloc . Text.pack
 
 invariantViolation :: String -> a
 invariantViolation = impureThrow . InvariantViolation . Text.pack

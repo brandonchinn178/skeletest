@@ -36,6 +36,7 @@ module Skeletest.Internal.GHC (
   hsExprLam,
   hsExprCase,
   getExpr,
+  getLoc,
   renderHsExpr,
 
   -- ** Types
@@ -218,6 +219,14 @@ data HsExprData p
 
 getExpr :: HsExpr p -> HsExprData p
 getExpr HsExprUnsafe{hsExpr} = hsExpr
+
+getLoc :: HsExpr p -> Maybe GHC.SrcSpan
+getLoc HsExprUnsafe{ghcExpr} = getLoc' <$> ghcExpr
+  where
+    getLoc' :: GhcLHsExpr p -> GHC.SrcSpan
+    getLoc' = \case
+      GhcLHsExprPs e -> GHC.getLocA e
+      GhcLHsExprRn e -> GHC.getLocA e
 
 renderHsExpr :: HsExpr GhcRn -> Text
 renderHsExpr = \case

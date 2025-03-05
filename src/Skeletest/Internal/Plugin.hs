@@ -125,11 +125,11 @@ replaceConMatch ctx e =
     -- Check if P.con is by itself
     HsExprVar name
       | isCon name ->
-          skeletestPluginError "P.con must be applied to a constructor"
+          skeletestPluginError (getLoc e) "P.con must be applied to a constructor"
     -- Check if P.con is being applied more than once
     HsExprApps (getExpr -> HsExprVar name) (_ : _ : _)
       | isCon name ->
-          skeletestPluginError "P.con must be applied to exactly one argument"
+          skeletestPluginError (getLoc e) "P.con must be applied to exactly one argument"
     _ -> e
   where
     isCon = matchesName ctx (hsName 'P.con)
@@ -139,7 +139,7 @@ replaceConMatch ctx e =
         HsExprCon conName -> convertPrefixCon conName []
         HsExprApps (getExpr -> HsExprCon conName) preds -> convertPrefixCon conName preds
         HsExprRecordCon conName fields -> convertRecordCon conName fields
-        _ -> skeletestPluginError "P.con must be applied to a constructor"
+        _ -> skeletestPluginError (getLoc con) "P.con must be applied to a constructor"
     convertPrefixCon conName preds =
       let
         exprNames = mkVarNames preds

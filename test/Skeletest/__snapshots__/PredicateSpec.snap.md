@@ -201,6 +201,7 @@ Got:
     
 ******************** skeletest failure ********************
 P.con must be applied to exactly one argument
+    at ExampleSpec.hs:7:22-30
 ```
 
 ## Data types / con / fails to compile when not applied to anything
@@ -210,6 +211,7 @@ P.con must be applied to exactly one argument
     
 ******************** skeletest failure ********************
 P.con must be applied to a constructor
+    at ExampleSpec.hs:7:22-26
 ```
 
 ## Data types / con / fails to compile with non-constructor
@@ -219,6 +221,7 @@ P.con must be applied to a constructor
     
 ******************** skeletest failure ********************
 P.con must be applied to a constructor
+    at ExampleSpec.hs:7:28-29
 ```
 
 ## Data types / con / fails to compile with omitted positional fields

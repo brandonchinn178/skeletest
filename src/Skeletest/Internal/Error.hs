@@ -9,6 +9,8 @@ module Skeletest.Internal.Error (
 
 import Data.Text (Text)
 import Data.Text qualified as Text
+import GHC qualified
+import GHC.Utils.Outputable qualified as GHC
 import GHC.Utils.Panic (pgmError)
 import UnliftIO.Exception (Exception (..), impureThrow)
 
@@ -46,10 +48,16 @@ instance Exception SkeletestError where
       SnapshotFileCorrupted fp ->
         "Snapshot file was corrupted: " <> Text.pack fp
 
-skeletestPluginError :: String -> a
-skeletestPluginError = pgmError . stripEnd . displayException . CompilationError . Text.pack
+skeletestPluginError :: Maybe GHC.SrcSpan -> String -> a
+skeletestPluginError mloc = pgmError . addLoc . stripEnd . displayException . CompilationError . Text.pack
   where
     stripEnd = Text.unpack . Text.stripEnd . Text.pack
+
+    -- https://gitlab.haskell.org/ghc/ghc/-/issues/25816
+    addLoc s =
+      case mloc of
+        Nothing -> s
+        Just loc -> s <> "\n    at " <> (GHC.showSDocUnsafe . GHC.ppr) loc
 
 invariantViolation :: String -> a
 invariantViolation = impureThrow . InvariantViolation . Text.pack

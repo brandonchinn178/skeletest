@@ -1,5 +1,7 @@
 ## Unreleased
 
+* Add location to error messages
+
 ## v0.2.1
 
 * Add `P.list`

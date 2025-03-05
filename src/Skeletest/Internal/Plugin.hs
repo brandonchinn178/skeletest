@@ -95,7 +95,7 @@ transformTestModule ctx =
 --       User x0 x1 -> Just (HCons (pure x0) $ HCons (pure x1) $ HNil)
 --       _ -> Nothing
 --   )
---   (HCons (H.eq "user1") $ HCons (P.contains "@") $ HNil)
+--   (HCons (P.eq "user1") $ HCons (P.contains "@") $ HNil)
 --
 -- P.con User{name = P.eq "user1", email = P.contains "@"}
 -- ====>

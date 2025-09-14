@@ -771,7 +771,7 @@ data IsoChecker a b = IsoChecker (Fun a b) (Fun a b)
 --
 -- @
 -- prop "reverse . reverse === id" $ do
---   let genList = Gen.list (Gen.linear 0 10) $ Gen.int (Gen.linear 0 1000)
+--   let genList = Gen.list (Range.linear 0 10) $ Gen.int (Range.linear 0 1000)
 --   (reverse . reverse) P.=== id \`shouldSatisfy\` P.isoWith genList
 -- @
 (===) :: (a -> b) -> (a -> b) -> IsoChecker a b

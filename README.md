@@ -286,7 +286,7 @@ Property tests consist of two things: generating random data with `forAll` and c
 
 ```haskell
 prop "reverse does not change the length" $ do
-  xs <- forAll $ Gen.list (Gen.range 0 10) Gen.int
+  xs <- forAll $ Gen.list (Range.linear 0 10) $ Gen.int (Range.linear 1 100)
   length (reverse xs) `shouldBe` length xs
 ```
 
@@ -294,7 +294,7 @@ One common usecase is to verify that two functions are isomorphic. This can be t
 
 ```haskell
 prop "decodeUser . encodeUser === pure" $ do
-  let genUser = User <$> Gen.text (Gen.range 0 10) Gen.unicode
+  let genUser = User <$> Gen.text (Range.linear 0 10) Gen.unicode
   (decodeUser . encodeUser) P.=== pure `shouldSatisfy` P.isoWith genUser
 ```
 
@@ -303,7 +303,7 @@ If a test fails, it'll say something like `Rerun with --seed=6430645105429331403
 To ignore certain values, use `discard`:
 
 ```haskell
-x <- Gen.int (Gen.range (-10) 10)
+x <- Gen.int (Range.linear (-10) 10)
 when (x == 0) discard
 ...
 ```

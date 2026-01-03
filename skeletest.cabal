@@ -71,6 +71,9 @@ library
   if impl(ghc >= 9.12) && impl(ghc < 9.14)
     other-modules:
         Skeletest.Internal.GHC.Compat_9_12
+  if impl(ghc >= 9.14) && impl(ghc < 9.16)
+    other-modules:
+        Skeletest.Internal.GHC.Compat_9_14
   build-depends:
       base < 5
     , aeson
@@ -82,7 +85,7 @@ library
     , directory
     , exceptions
     , filepath
-    , ghc ^>= 9.8 || ^>= 9.10 || ^>= 9.12
+    , ghc ^>= 9.8 || ^>= 9.10 || ^>= 9.12 || ^>= 9.14
     , hedgehog >= 1.5
     , megaparsec
     , ordered-containers >= 0.2.4

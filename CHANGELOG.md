@@ -5,6 +5,7 @@
 * Specify order of type variables for `P.anything` so that `P.anything @Int` works
 * Display the path of the test file instead of guessing a module name ([#40](https://github.com/brandonchinn178/skeletest/issues/40))
 * Flush stdout so test name is displayed while test is still running
+* Support GHC 9.14
 
 ## v0.2.1
 

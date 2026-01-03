@@ -58,6 +58,7 @@ import Control.Monad.Trans.State (StateT, evalStateT)
 import Control.Monad.Trans.State qualified as State
 import Data.Data (Data)
 import Data.Data qualified as Data
+import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
@@ -82,17 +83,18 @@ import GHC.Types.Name.Cache qualified as GHC (NameCache)
 import GHC.Types.SourceText qualified as GHC.SourceText
 import GHC.Utils.Error qualified as GHC
 import Language.Haskell.TH.Syntax qualified as TH
+import System.IO.Unsafe (unsafePerformIO)
+
+#if !MIN_VERSION_base(4, 20, 0)
+import Data.Foldable (foldl')
+#endif
+
 import Skeletest.Internal.Error (
   SkeletestError (CompilationError),
   invariantViolation,
  )
 import Skeletest.Internal.GHC.Compat (genLoc)
 import Skeletest.Internal.GHC.Compat qualified as GHC.Compat
-import System.IO.Unsafe (unsafePerformIO)
-
-#if !MIN_VERSION_base(4, 20, 0)
-import Data.Foldable (foldl')
-#endif
 
 -- Has to be exactly GHC's Plugin type, for GHC to register it correctly.
 type Plugin = GHC.Plugin
@@ -279,17 +281,17 @@ parseHsExpr = goExpr
       }
 
   goData = \case
-    L _ (GHC.HsVar _ (L _ name)) ->
-      if (GHC.occNameSpace . GHC.occName) name == GHC.Name.dataName
-        then HsExprCon (hsGhcName name)
-        else HsExprVar (hsGhcName name)
+    L _ (GHC.HsVar _ name) ->
+      if (GHC.occNameSpace . GHC.getOccName) (unLoc name) == GHC.Name.dataName
+        then HsExprCon (hsGhcName . GHC.Compat.unLocWithUserRdr $ name)
+        else HsExprVar (hsGhcName . GHC.Compat.unLocWithUserRdr $ name)
     e@(L _ GHC.HsApp{}) ->
       let (f, xs) = collectApps e
        in HsExprApps (goExpr f) (map goExpr xs)
     L _ (GHC.OpApp _ lhs op rhs) ->
       HsExprOp (goExpr lhs) (goExpr op) (goExpr rhs)
     L _ (GHC.RecordCon _ conName GHC.HsRecFields{rec_flds}) ->
-      HsExprRecordCon (hsGhcName $ unLoc conName) $ map (getRecField . unLoc) rec_flds
+      HsExprRecordCon (hsGhcName . GHC.Compat.unLocWithUserRdr $ conName) $ map (getRecField . unLoc) rec_flds
     L _ par@GHC.HsPar{} -> goData $ GHC.Compat.unHsPar par
     _ -> HsExprOther
 
@@ -435,7 +437,7 @@ compileFunDef funName FunDef{..} = do
                 , m_grhss =
                     GHC.GRHSs
                       { grhssExt = GHC.emptyComments
-                      , grhssGRHSs = [genLoc $ GHC.GRHS GHC.noAnn [] body]
+                      , grhssGRHSs = GHC.Compat.toGrhssGRHSs $ genLoc (GHC.GRHS GHC.noAnn [] body) NonEmpty.:| []
                       , grhssLocalBinds = GHC.EmptyLocalBinds GHC.noExtField
                       }
                 }
@@ -474,7 +476,7 @@ compileHsPat = go
   go = \case
     HsPatCon conName args -> do
       conName' <- fromConName conName
-      con <- GHC.PrefixCon [] <$> mapM go args
+      con <- GHC.Compat.mkPrefixCon <$> mapM go args
       pure . genLoc $
         GHC.ConPat
           (onPsOrRn @p GHC.noAnn GHC.noExtField)
@@ -494,7 +496,7 @@ compileHsPat = go
     HsPatWild -> do
       pure . genLoc $ GHC.WildPat $ onPsOrRn @p GHC.noExtField GHC.noExtField
 
-  fromConName = fmap (onPsOrRn @p genLoc genLoc) . compileHsName
+  fromConName = fmap (genLocConLikeP @p) . compileHsName
 
 compileHsExpr ::
   forall p m.
@@ -550,7 +552,7 @@ compileHsExpr = goExpr
                 , m_grhss =
                     GHC.GRHSs
                       { grhssExt = GHC.emptyComments
-                      , grhssGRHSs = [genLoc $ GHC.GRHS GHC.noAnn [] expr']
+                      , grhssGRHSs = GHC.Compat.toGrhssGRHSs $ genLoc (GHC.GRHS GHC.noAnn [] expr') NonEmpty.:| []
                       , grhssLocalBinds = GHC.EmptyLocalBinds GHC.noExtField
                       }
                 }
@@ -570,7 +572,7 @@ compileHsExpr = goExpr
                   , m_grhss =
                       GHC.GRHSs
                         { grhssExt = GHC.emptyComments
-                        , grhssGRHSs = [genLoc $ GHC.GRHS GHC.noAnn [] body']
+                        , grhssGRHSs = GHC.Compat.toGrhssGRHSs $ genLoc (GHC.GRHS GHC.noAnn [] body') NonEmpty.:| []
                         , grhssLocalBinds = GHC.EmptyLocalBinds GHC.noExtField
                         }
                   }
@@ -685,11 +687,11 @@ genLocConLikeP ::
   (IsPass p) =>
   GHC.IdP (GhcPass p) ->
   GHC.XRec (GhcPass p) (GHC.ConLikeP (GhcPass p))
-genLocConLikeP idp = onPsOrRn @p (genLoc idp) (genLoc idp)
+genLocConLikeP = onPsOrRn @p genLoc (genLoc . GHC.Compat.noUserRdr)
 
 genLocIdP ::
   forall p.
   (IsPass p) =>
   GHC.IdP (GhcPass p) ->
-  GHC.LIdP (GhcPass p)
-genLocIdP idp = onPsOrRn @p (genLoc idp) (genLoc idp)
+  GHC.Compat.LIdOccP (GhcPass p)
+genLocIdP = onPsOrRn @p genLoc (genLoc . GHC.Compat.noUserRdr)

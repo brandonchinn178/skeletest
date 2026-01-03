@@ -2,3 +2,9 @@ packages: .
 
 program-options
   ghc-options: -Werror
+
+-- https://github.com/well-typed/recover-rtti/pull/48
+source-repository-package
+  type: git
+  location: https://github.com/brandonchinn178/recover-rtti
+  tag: 77acda7842bf42efc1b9f72bf235aa5ae60ff13d

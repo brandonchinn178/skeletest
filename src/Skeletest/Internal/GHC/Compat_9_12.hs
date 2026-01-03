@@ -7,6 +7,8 @@ module Skeletest.Internal.GHC.Compat_9_12 (
 ) where
 
 import Data.Data (toConstr)
+import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty qualified as NonEmpty
 import GHC hiding (FieldOcc (..))
 import GHC qualified
 import GHC.Types.Name.Reader (getRdrName)
@@ -66,6 +68,14 @@ fieldOccRn name =
     , GHC.foLabel = genLoc name
     }
 
+type LIdOccP a = GHC.LIdP a
+
+noUserRdr :: Name -> Name
+noUserRdr = id
+
+unLocWithUserRdr :: GenLocated l Name -> Name
+unLocWithUserRdr = unLoc
+
 hsApp :: LHsExpr (GhcPass p) -> LHsExpr (GhcPass p) -> HsExpr (GhcPass p)
 hsApp = HsApp noExtField
 
@@ -74,3 +84,9 @@ genLoc = L noAnn
 
 toMatchArgs :: [LPat p] -> LocatedE [LPat p]
 toMatchArgs = genLoc
+
+toGrhssGRHSs :: NonEmpty (LGRHS p body) -> [LGRHS p body]
+toGrhssGRHSs = NonEmpty.toList
+
+mkPrefixCon :: [arg] -> HsConDetails tyargs arg rec
+mkPrefixCon = PrefixCon []

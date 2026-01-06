@@ -205,7 +205,7 @@ showCtx result = result{predicateShowFailCtx = max ShowFailCtx $ predicateShowFa
 {----- General -----}
 
 -- | A predicate that matches any value
-anything :: (Monad m) => Predicate m a
+anything :: forall a m. (Monad m) => Predicate m a
 anything =
   Predicate
     { predicateFunc = \_ ->

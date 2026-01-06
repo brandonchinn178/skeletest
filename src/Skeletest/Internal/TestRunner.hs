@@ -30,6 +30,7 @@ import GHC.Stack (CallStack)
 import GHC.Stack qualified as GHC
 import Skeletest.Internal.Error (SkeletestError)
 import Skeletest.Internal.TestInfo (TestInfo)
+import Skeletest.Internal.Utils.BoxDrawing (BoxSpec, BoxSpecContent (..))
 import Skeletest.Internal.Utils.Color qualified as Color
 import Text.Read (readMaybe)
 import UnliftIO.Exception (
@@ -64,7 +65,7 @@ data TestResult = TestResult
 data TestResultMessage
   = TestResultMessageNone
   | TestResultMessageInline Text
-  | TestResultMessageSection Text
+  | TestResultMessageSection BoxSpec
 
 testResultPass :: TestResult
 testResultPass =
@@ -81,7 +82,7 @@ testResultFromAssertionFail e = do
     TestResult
       { testResultSuccess = False
       , testResultLabel = Color.red "FAIL"
-      , testResultMessage = TestResultMessageSection msg
+      , testResultMessage = TestResultMessageSection [BoxText msg]
       }
 
 testResultFromError :: SomeException -> IO TestResult
@@ -91,7 +92,7 @@ testResultFromError e = do
     TestResult
       { testResultSuccess = False
       , testResultLabel = Color.red "ERROR"
-      , testResultMessage = TestResultMessageSection msg
+      , testResultMessage = TestResultMessageSection [BoxText msg]
       }
  where
   renderMsg

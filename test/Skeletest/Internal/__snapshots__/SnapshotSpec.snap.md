@@ -5,7 +5,9 @@
 ```
 ./ExampleSpec.hs
     should error: ERROR
-        Snapshot file was corrupted: ./__snapshots__/ExampleSpec.snap.md
+--------------------------------------------------------------------------------
+Snapshot file was corrupted: ./__snapshots__/ExampleSpec.snap.md
+--------------------------------------------------------------------------------
 ```
 
 ## renders JSON values

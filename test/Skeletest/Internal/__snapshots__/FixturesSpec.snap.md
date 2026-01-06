@@ -5,5 +5,7 @@
 ```
 ./ExampleSpec.hs
     should error: ERROR
-        Found circular dependency when resolving fixtures: FixtureA -> FixtureB -> FixtureD -> FixtureA
+--------------------------------------------------------------------------------
+Found circular dependency when resolving fixtures: FixtureA -> FixtureB -> FixtureD -> FixtureA
+--------------------------------------------------------------------------------
 ```

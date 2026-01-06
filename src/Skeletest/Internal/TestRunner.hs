@@ -24,6 +24,7 @@ import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
+import Data.Typeable (typeOf)
 import GHC.IO.Exception qualified as GHC
 import GHC.Stack (CallStack)
 import GHC.Stack qualified as GHC
@@ -33,7 +34,7 @@ import Skeletest.Internal.Utils.Color qualified as Color
 import Text.Read (readMaybe)
 import UnliftIO.Exception (
   Exception,
-  SomeException,
+  SomeException (..),
   displayException,
   fromException,
   try,
@@ -90,19 +91,22 @@ testResultFromError e = do
     TestResult
       { testResultSuccess = False
       , testResultLabel = Color.red "ERROR"
-      , testResultMessage = msg
+      , testResultMessage = TestResultMessageSection msg
       }
  where
   renderMsg
     -- In GHC 9.10+, SomeException shows the callstack, which we don't
     -- want to see for known Skeletest errors
-    | Just (err :: SkeletestError) <- fromException e =
-        pure . TestResultMessageInline . Text.pack $ displayException err
+    | Just (err :: SkeletestError) <- fromException e = do
+        pure $ Text.pack $ displayException err
     -- Handle pattern match fail in a do-block
-    | Just err <- parseDoBlockFail e =
-        TestResultMessageSection <$> renderDoBlockFail err
-    | otherwise =
-        pure . TestResultMessageInline . Text.pack $ displayException e
+    | Just err <- parseDoBlockFail e = do
+        renderDoBlockFail err
+    | SomeException err <- e = do
+        pure . Text.strip . Text.pack . unlines $
+          [ "Got exception of type `" <> (show . typeOf) err <> "`:"
+          , displayException e
+          ]
 
 {----- DoBlockFail -----}
 

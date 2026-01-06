@@ -144,3 +144,14 @@ ExampleSpec.hs:7:
 Pattern match failure in 'do' block
 --------------------------------------------------------------------------------
 ```
+
+## shows unrecognized exceptions
+
+```
+./ExampleSpec.hs
+    should fail: ERROR
+--------------------------------------------------------------------------------
+Got exception of type `IOException`:
+unknown-file.txt: openFile: does not exist (No such file or directory)
+--------------------------------------------------------------------------------
+```

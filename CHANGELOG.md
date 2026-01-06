@@ -1,6 +1,7 @@
 ## Unreleased
 
 * Add location to error messages
+* Specify order of type variables for `P.anything` so that `P.anything @Int` works
 
 ## v0.2.1
 

@@ -27,6 +27,9 @@ import Data.Text.IO qualified as Text
 import GHC.IO.Exception qualified as GHC
 import GHC.Stack (CallStack)
 import GHC.Stack qualified as GHC
+import Skeletest.Internal.Error (SkeletestError)
+import Skeletest.Internal.TestInfo (TestInfo)
+import Skeletest.Internal.Utils.Color qualified as Color
 import Text.Read (readMaybe)
 import UnliftIO.Exception (
   Exception,
@@ -35,10 +38,6 @@ import UnliftIO.Exception (
   fromException,
   try,
  )
-
-import Skeletest.Internal.Error (SkeletestError)
-import Skeletest.Internal.TestInfo (TestInfo)
-import Skeletest.Internal.Utils.Color qualified as Color
 
 {----- Testable -----}
 
@@ -93,17 +92,17 @@ testResultFromError e = do
       , testResultLabel = Color.red "ERROR"
       , testResultMessage = msg
       }
-  where
-    renderMsg
-      -- In GHC 9.10+, SomeException shows the callstack, which we don't
-      -- want to see for known Skeletest errors
-      | Just (err :: SkeletestError) <- fromException e =
-          pure . TestResultMessageInline . Text.pack $ displayException err
-      -- Handle pattern match fail in a do-block
-      | Just err <- parseDoBlockFail e =
-          TestResultMessageSection <$> renderDoBlockFail err
-      | otherwise =
-          pure . TestResultMessageInline . Text.pack $ displayException e
+ where
+  renderMsg
+    -- In GHC 9.10+, SomeException shows the callstack, which we don't
+    -- want to see for known Skeletest errors
+    | Just (err :: SkeletestError) <- fromException e =
+        pure . TestResultMessageInline . Text.pack $ displayException err
+    -- Handle pattern match fail in a do-block
+    | Just err <- parseDoBlockFail e =
+        TestResultMessageSection <$> renderDoBlockFail err
+    | otherwise =
+        pure . TestResultMessageInline . Text.pack $ displayException e
 
 {----- DoBlockFail -----}
 
@@ -134,8 +133,8 @@ parseDoBlockFail e = do
       , -- seems like srcLocEndCol is exclusive, while the columns in the fail message are inclusive
         doBlockFailEndCol = endCol + 1
       }
-  where
-    readT = readMaybe . Text.unpack
+ where
+  readT = readMaybe . Text.unpack
 
 renderDoBlockFail :: DoBlockFail -> IO Text
 renderDoBlockFail DoBlockFail{..} =
@@ -144,8 +143,8 @@ renderDoBlockFail DoBlockFail{..} =
     doBlockFailContext
     [ (doBlockFailFile, doBlockFailLine, doBlockFailStartCol, doBlockFailEndCol)
     ]
-  where
-    doBlockFailContext = []
+ where
+  doBlockFailContext = []
 
 {----- AssertionFail -----}
 
@@ -192,12 +191,12 @@ renderAssertionFail AssertionFail{..} =
 -- Right 1 ≠ Left 1
 -- @
 renderPrettyFailure ::
-  Text
-  -- ^ Message
-  -> FailContext
-  -> [(FilePath, Int, Int, Int)]
-  -- ^ Call stack (file, line, startCol, endCol)
-  -> IO Text
+  -- | Message
+  Text ->
+  FailContext ->
+  -- | Call stack (file, line, startCol, endCol)
+  [(FilePath, Int, Int, Int)] ->
+  IO Text
 renderPrettyFailure msg ctx callstack = do
   prettyStackTrace <- mapM renderCallLine . reverse $ callstack
   pure . Text.intercalate "\n\n" . concat $
@@ -207,28 +206,28 @@ renderPrettyFailure msg ctx callstack = do
         else [Text.intercalate "\n" $ reverse ctx]
     , [msg]
     ]
-  where
-    renderCallLine (path, lineNum, startCol, endCol) = do
-      mLine <-
-        try (Text.readFile path) >>= \case
-          Right srcFile -> pure $ getLineNum lineNum srcFile
-          Left (_ :: SomeException) -> pure Nothing
-      let (srcLine, pointerLine) =
-            case mLine of
-              Just line ->
-                ( line
-                , Text.replicate (startCol - 1) " " <> Text.replicate (endCol - startCol) "^"
-                )
-              Nothing ->
-                ( "<unknown line>"
-                , ""
-                )
+ where
+  renderCallLine (path, lineNum, startCol, endCol) = do
+    mLine <-
+      try (Text.readFile path) >>= \case
+        Right srcFile -> pure $ getLineNum lineNum srcFile
+        Left (_ :: SomeException) -> pure Nothing
+    let (srcLine, pointerLine) =
+          case mLine of
+            Just line ->
+              ( line
+              , Text.replicate (startCol - 1) " " <> Text.replicate (endCol - startCol) "^"
+              )
+            Nothing ->
+              ( "<unknown line>"
+              , ""
+              )
 
-      pure . Text.intercalate "\n" $
-        [ Text.pack path <> ":" <> (Text.pack . show) lineNum <> ":"
-        , "|"
-        , "| " <> srcLine
-        , "| " <> pointerLine
-        ]
+    pure . Text.intercalate "\n" $
+      [ Text.pack path <> ":" <> (Text.pack . show) lineNum <> ":"
+      , "|"
+      , "| " <> srcLine
+      , "| " <> pointerLine
+      ]
 
-    getLineNum n = listToMaybe . take 1 . drop (n - 1) . Text.lines
+  getLineNum n = listToMaybe . take 1 . drop (n - 1) . Text.lines

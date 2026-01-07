@@ -2,7 +2,6 @@ module Skeletest.Internal.FixturesSpec (spec) where
 
 import Skeletest
 import Skeletest.Predicate qualified as P
-
 import Skeletest.TestUtils.Integration
 
 spec :: Spec

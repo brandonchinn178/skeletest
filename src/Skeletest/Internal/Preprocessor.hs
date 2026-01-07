@@ -10,12 +10,11 @@ import Data.List (sort)
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
+import Skeletest.Internal.Error (SkeletestError (..))
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (makeRelative, splitExtensions, takeDirectory, (</>))
 import UnliftIO.Exception (throwIO)
-
-import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
-import Skeletest.Internal.Error (SkeletestError (..))
 
 -- | Preprocess the given Haskell file. See Main.hs
 processFile :: FilePath -> Text -> IO Text
@@ -25,14 +24,14 @@ processFile path file = do
     . addLine pluginPragma
     . addLine linePragma
     $ file'
-  where
-    addLine line f = line <> "\n" <> f
-    quoted s = "\"" <> s <> "\""
+ where
+  addLine line f = line <> "\n" <> f
+  quoted s = "\"" <> s <> "\""
 
-    pluginPragma = "{-# OPTIONS_GHC -fplugin=Skeletest.Internal.Plugin #-}"
-    linePragma =
-      -- this is needed to tell GHC to use original path in error messages
-      "{-# LINE 1 " <> quoted (Text.pack path) <> " #-}"
+  pluginPragma = "{-# OPTIONS_GHC -fplugin=Skeletest.Internal.Plugin #-}"
+  linePragma =
+    -- this is needed to tell GHC to use original path in error messages
+    "{-# LINE 1 " <> quoted (Text.pack path) <> " #-}"
 
 isMain :: Text -> Bool
 isMain file =
@@ -43,11 +42,11 @@ isMain file =
     [] -> True
     -- something else? just silently ignore it
     _ -> False
-  where
-    getModuleName s =
-      case Text.words s of
-        "module" : name : _ -> Just name
-        _ -> Nothing
+ where
+  getModuleName s =
+    case Text.words s of
+      "module" : name : _ -> Just name
+      _ -> Nothing
 
 updateMainFile :: FilePath -> Text -> IO Text
 updateMainFile path file = do
@@ -63,25 +62,25 @@ updateMainFile path file = do
 -- ["My.Module.Test1", "My.Module.Test2", ...]
 findTestModules :: FilePath -> IO [(FilePath, Text)]
 findTestModules path = mapMaybe toTestModule <$> listDirectoryRecursive testDir
-  where
-    testDir = takeDirectory path
+ where
+  testDir = takeDirectory path
 
-    toTestModule fp = do
-      guard (fp /= path)
-      (fpNoExt, ".hs") <- pure $ splitExtensions fp
-      guard ("Spec" `Text.isSuffixOf` Text.pack fpNoExt)
-      name <- moduleNameFromPath $ Text.pack $ makeRelative testDir fpNoExt
-      pure (fp, name)
+  toTestModule fp = do
+    guard (fp /= path)
+    (fpNoExt, ".hs") <- pure $ splitExtensions fp
+    guard ("Spec" `Text.isSuffixOf` Text.pack fpNoExt)
+    name <- moduleNameFromPath $ Text.pack $ makeRelative testDir fpNoExt
+    pure (fp, name)
 
-    moduleNameFromPath = fmap (Text.intercalate ".") . mapM validateModuleName . Text.splitOn "/"
+  moduleNameFromPath = fmap (Text.intercalate ".") . mapM validateModuleName . Text.splitOn "/"
 
-    -- https://www.haskell.org/onlinereport/syntax-iso.html
-    -- large { small | large | digit | ' }
-    validateModuleName name = do
-      (first, rest) <- Text.uncons name
-      guard $ isUpper first
-      guard $ Text.all (\c -> isUpper c || isLower c || isDigit c || c == '\'') rest
-      pure name
+  -- https://www.haskell.org/onlinereport/syntax-iso.html
+  -- large { small | large | digit | ' }
+  validateModuleName name = do
+    (first, rest) <- Text.uncons name
+    guard $ isUpper first
+    guard $ Text.all (\c -> isUpper c || isLower c || isDigit c || c == '\'') rest
+    pure name
 
 addSpecsList :: [(FilePath, Text)] -> Text -> Text
 addSpecsList testModules file =
@@ -90,14 +89,14 @@ addSpecsList testModules file =
     , mainFileSpecsListIdentifier <> " :: [(FilePath, Spec)]"
     , mainFileSpecsListIdentifier <> " = " <> renderSpecList specsList
     ]
-  where
-    specsList =
-      [ (quote $ Text.pack fp, modName <> ".spec")
-      | (fp, modName) <- testModules
-      ]
-    quote s = "\"" <> s <> "\""
-    renderSpecList xs = "[" <> (Text.intercalate ", " . map renderSpecInfo) xs <> "]"
-    renderSpecInfo (fp, spec) = "(" <> fp <> ", " <> spec <> ")"
+ where
+  specsList =
+    [ (quote $ Text.pack fp, modName <> ".spec")
+    | (fp, modName) <- testModules
+    ]
+  quote s = "\"" <> s <> "\""
+  renderSpecList xs = "[" <> (Text.intercalate ", " . map renderSpecInfo) xs <> "]"
+  renderSpecInfo (fp, spec) = "(" <> fp <> ", " <> spec <> ")"
 
 -- | Add imports after the Skeletest.Main import, which should always be present in the Main module.
 insertImports :: [(FilePath, Text)] -> Text -> Either SkeletestError Text
@@ -106,24 +105,24 @@ insertImports testModules file =
    in if null post
         then Left $ CompilationError Nothing "Could not find Skeletest.Main import in Main module"
         else pure . Text.unlines $ pre <> importTests <> post
-  where
-    isSkeletestImport line =
-      case Text.words line of
-        "import" : "Skeletest.Main" : _ -> True
-        _ -> False
+ where
+  isSkeletestImport line =
+    case Text.words line of
+      "import" : "Skeletest.Main" : _ -> True
+      _ -> False
 
-    importTests =
-      [ "import qualified " <> name
-      | (_, name) <- testModules
-      ]
+  importTests =
+    [ "import qualified " <> name
+    | (_, name) <- testModules
+    ]
 
 {----- Helpers -----}
 
 listDirectoryRecursive :: FilePath -> IO [FilePath]
 listDirectoryRecursive fp = fmap (sort . concat) . mapM (go . (fp </>)) =<< listDirectory fp
-  where
-    go child = do
-      isDir <- doesDirectoryExist child
-      if isDir
-        then listDirectoryRecursive child
-        else pure [child]
+ where
+  go child = do
+    isDir <- doesDirectoryExist child
+    if isDir
+      then listDirectoryRecursive child
+      else pure [child]

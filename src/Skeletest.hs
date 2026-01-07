@@ -52,7 +52,6 @@ module Skeletest (
 ) where
 
 import GHC.Stack (HasCallStack)
-
 import Skeletest.Assertions
 import Skeletest.Internal.CLI
 import Skeletest.Internal.Fixtures

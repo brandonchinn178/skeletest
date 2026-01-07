@@ -4,7 +4,6 @@ module ExampleSpec (
 
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Text qualified as Text
-
 import Skeletest
 import Skeletest.Predicate qualified as P
 import Skeletest.Prop qualified as Prop

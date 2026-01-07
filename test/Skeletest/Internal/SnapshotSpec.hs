@@ -7,10 +7,6 @@ import Data.Aeson qualified as Aeson
 import Data.String (fromString)
 import Data.Text qualified as Text
 import Skeletest
-import Skeletest.Predicate qualified as P
-import Skeletest.Prop.Gen qualified as Gen
-import Skeletest.Prop.Range qualified as Range
-
 import Skeletest.Internal.Snapshot (
   SnapshotFile (..),
   SnapshotValue (..),
@@ -18,6 +14,9 @@ import Skeletest.Internal.Snapshot (
   encodeSnapshotFile,
   normalizeSnapshotFile,
  )
+import Skeletest.Predicate qualified as P
+import Skeletest.Prop.Gen qualified as Gen
+import Skeletest.Prop.Range qualified as Range
 import Skeletest.TestUtils.Integration
 
 spec :: Spec
@@ -116,26 +115,26 @@ genSnapshotFileRaw = do
   testFile <- genHsModule
   snapshots <- Gen.map rangeNumTests genSnapshot
   pure SnapshotFile{..}
-  where
-    rangeNumTests = Range.linear 0 10
-    rangeSnapshotsPerTest = Range.linear 0 5
-    rangeSnapshotSize = Range.linear 0 1000
+ where
+  rangeNumTests = Range.linear 0 10
+  rangeSnapshotsPerTest = Range.linear 0 5
+  rangeSnapshotSize = Range.linear 0 1000
 
-    genHsModule = do
-      dirs <- Gen.list (Range.linear 0 10) genHsModuleName
-      file <- genHsModuleName
-      pure $ Text.intercalate "/" dirs <> file <> ".hs"
-    genHsModuleName = Gen.text (Range.linear 0 50) $ Gen.choice [Gen.alphaNum, pure '\'']
+  genHsModule = do
+    dirs <- Gen.list (Range.linear 0 10) genHsModuleName
+    file <- genHsModuleName
+    pure $ Text.intercalate "/" dirs <> file <> ".hs"
+  genHsModuleName = Gen.text (Range.linear 0 50) $ Gen.choice [Gen.alphaNum, pure '\'']
 
-    genSnapshot = do
-      ident <- Gen.list (Range.linear 1 10) (Gen.text (Range.linear 1 100) Gen.unicode)
-      vals <- Gen.list rangeSnapshotsPerTest genSnapshotVal
-      pure (ident, vals)
+  genSnapshot = do
+    ident <- Gen.list (Range.linear 1 10) (Gen.text (Range.linear 1 100) Gen.unicode)
+    vals <- Gen.list rangeSnapshotsPerTest genSnapshotVal
+    pure (ident, vals)
 
-    genSnapshotVal = do
-      snapshotContent <- Gen.text rangeSnapshotSize Gen.unicode
-      snapshotLang <- Gen.maybe $ Gen.text (Range.linear 1 5) Gen.unicode
-      pure SnapshotValue{..}
+  genSnapshotVal = do
+    snapshotContent <- Gen.text rangeSnapshotSize Gen.unicode
+    snapshotLang <- Gen.maybe $ Gen.text (Range.linear 1 5) Gen.unicode
+    pure SnapshotValue{..}
 
 genSnapshotFile :: Gen SnapshotFile
 genSnapshotFile = normalizeSnapshotFile <$> genSnapshotFileRaw

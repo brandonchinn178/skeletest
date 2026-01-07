@@ -44,15 +44,15 @@ data TestAttrs = TestAttrs
 
 matchesTest :: TestTarget -> TestAttrs -> Bool
 matchesTest selection TestAttrs{..} = go selection
-  where
-    go = \case
-      TestTargetEverything -> True
-      TestTargetFile path -> testPath == path
-      TestTargetName s -> s `Text.isInfixOf` Text.unwords testIdentifier
-      TestTargetMarker marker -> marker `elem` testMarkers
-      TestTargetNot e -> not $ go e
-      TestTargetAnd l r -> go l && go r
-      TestTargetOr l r -> go l || go r
+ where
+  go = \case
+    TestTargetEverything -> True
+    TestTargetFile path -> testPath == path
+    TestTargetName s -> s `Text.isInfixOf` Text.unwords testIdentifier
+    TestTargetMarker marker -> marker `elem` testMarkers
+    TestTargetNot e -> not $ go e
+    TestTargetAnd l r -> go l && go r
+    TestTargetOr l r -> go l || go r
 
 {----- Parsing -----}
 
@@ -61,8 +61,8 @@ parseTestTargets args =
   case NonEmpty.nonEmpty args of
     Nothing -> pure Nothing
     Just args' -> Just . Foldable1.foldr1 TestTargetOr <$> mapM parseTestTarget args'
-  where
-    parseTestTarget = first showTestTargetParseError . Parser.parse (testTargetParser <* Parser.eof) ""
+ where
+  parseTestTarget = first showTestTargetParseError . Parser.parse (testTargetParser <* Parser.eof) ""
 
 type Parser = Parsec Void Text
 type ParseErrorBundle = Parser.ParseErrorBundle Text Void
@@ -85,32 +85,32 @@ testTargetParser =
     [ [prefix "not" TestTargetNot]
     , [binary "and" TestTargetAnd, binary "or" TestTargetOr]
     ]
-  where
-    prefix name f = Parser.Prefix (f <$ symbol name)
-    binary name f = Parser.InfixL (f <$ symbol name)
+ where
+  prefix name f = Parser.Prefix (f <$ symbol name)
+  binary name f = Parser.InfixL (f <$ symbol name)
 
-    symbol = Parser.L.symbol Parser.space
-    parens = Parser.between (symbol "(") (symbol ")")
+  symbol = Parser.L.symbol Parser.space
+  parens = Parser.between (symbol "(") (symbol ")")
 
-    everythingParser = TestTargetEverything <$ symbol "*"
+  everythingParser = TestTargetEverything <$ symbol "*"
 
-    nameParser =
-      Parser.label "test name" $
-        fmap TestTargetName . Parser.between (symbol "[") (symbol "]") $
-          Parser.takeWhile1P Nothing (/= ']')
+  nameParser =
+    Parser.label "test name" $
+      fmap TestTargetName . Parser.between (symbol "[") (symbol "]") $
+        Parser.takeWhile1P Nothing (/= ']')
 
-    markerParser =
-      Parser.label "marker" . ignoreSpacesAfter $ do
-        _ <- symbol "@"
-        fmap TestTargetMarker . Parser.takeWhile1P Nothing $
-          (||) <$> isAlphaNum <*> (`elem` ("-_." :: [Char]))
+  markerParser =
+    Parser.label "marker" . ignoreSpacesAfter $ do
+      _ <- symbol "@"
+      fmap TestTargetMarker . Parser.takeWhile1P Nothing $
+        (||) <$> isAlphaNum <*> (`elem` ("-_." :: [Char]))
 
-    fileParser =
-      Parser.label "test file" . ignoreSpacesAfter $
-        fmap (TestTargetFile . Text.unpack) . Parser.takeWhile1P Nothing $
-          (||) <$> isAlphaNum <*> (`elem` ("-_./" :: [Char]))
+  fileParser =
+    Parser.label "test file" . ignoreSpacesAfter $
+      fmap (TestTargetFile . Text.unpack) . Parser.takeWhile1P Nothing $
+        (||) <$> isAlphaNum <*> (`elem` ("-_./" :: [Char]))
 
-    ignoreSpacesAfter m = m <* Parser.space
+  ignoreSpacesAfter m = m <* Parser.space
 
 showTestTargetParseError :: ParseErrorBundle -> Text
 showTestTargetParseError bundle =

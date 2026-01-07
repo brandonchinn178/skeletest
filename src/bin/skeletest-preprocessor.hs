@@ -45,7 +45,7 @@ handleErrors :: IO a -> IO a
 handleErrors = handle $ \(e :: SkeletestError) -> do
   hPutStrLn stderr $ normalizeLines $ displayException e
   exitFailure
-  where
-    normalizeLines
-      | __GLASGOW_HASKELL__ == (908 :: Int) = dropWhileEnd (== '\n')
-      | otherwise = id
+ where
+  normalizeLines
+    | __GLASGOW_HASKELL__ == (908 :: Int) = dropWhileEnd (== '\n')
+    | otherwise = id

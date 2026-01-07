@@ -10,7 +10,6 @@ import Data.Data (toConstr)
 import GHC hiding (FieldOcc (..))
 import GHC qualified
 import GHC.Types.Name.Reader (getRdrName)
-
 import Skeletest.Internal.Error (invariantViolation)
 
 hsLamSingle :: MatchGroup (GhcPass p) (LHsExpr (GhcPass p)) -> HsExpr (GhcPass p)
@@ -44,8 +43,8 @@ xMatch = noExtField
 mkHsRecFields ::
   forall p arg.
   (IsPass p) =>
-  [LHsRecField (GhcPass p) arg]
-  -> HsRecFields (GhcPass p) arg
+  [LHsRecField (GhcPass p) arg] ->
+  HsRecFields (GhcPass p) arg
 mkHsRecFields fields =
   GHC.HsRecFields
     { rec_ext =

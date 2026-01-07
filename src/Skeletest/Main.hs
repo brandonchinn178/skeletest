@@ -21,8 +21,6 @@ module Skeletest.Main (
 ) where
 
 import Control.Monad (unless)
-import System.Exit (exitFailure)
-
 import Skeletest.Internal.CLI (Flag, flag, loadCliArgs)
 import Skeletest.Internal.Snapshot (
   SnapshotRenderer (..),
@@ -40,6 +38,7 @@ import Skeletest.Internal.Spec (
  )
 import Skeletest.Plugin (Plugin (..))
 import Skeletest.Prop.Internal (PropLimitFlag, PropSeedFlag)
+import System.Exit (exitFailure)
 
 runSkeletest :: [Plugin] -> [(FilePath, Spec)] -> IO ()
 runSkeletest = runSkeletest' . mconcat
@@ -52,15 +51,15 @@ runSkeletest' Plugin{..} testModules = do
   let initialSpecs = map mkSpec testModules
   success <- runSpecs hooks . pruneSpec . applyTestSelections selections $ initialSpecs
   unless success exitFailure
-  where
-    builtinFlags =
-      [ flag @SnapshotUpdateFlag
-      , flag @PropSeedFlag
-      , flag @PropLimitFlag
-      ]
+ where
+  builtinFlags =
+    [ flag @SnapshotUpdateFlag
+    , flag @PropSeedFlag
+    , flag @PropLimitFlag
+    ]
 
-    mkSpec (specPath, specSpec) =
-      SpecInfo
-        { specPath
-        , specSpec
-        }
+  mkSpec (specPath, specSpec) =
+    SpecInfo
+      { specPath
+      , specSpec
+      }

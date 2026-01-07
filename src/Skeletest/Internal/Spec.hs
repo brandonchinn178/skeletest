@@ -41,12 +41,6 @@ import Data.Maybe (catMaybes, isJust, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
-import UnliftIO.Exception (
-  finally,
-  fromException,
-  try,
- )
-
 import Skeletest.Assertions (Testable, runTestable)
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.Markers (
@@ -69,6 +63,11 @@ import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Plugin (Hooks (..), defaultHooks)
 import Skeletest.Prop.Internal (Property)
 import System.IO qualified as IO
+import UnliftIO.Exception (
+  finally,
+  fromException,
+  try,
+ )
 
 type Spec = Spec' ()
 
@@ -107,22 +106,22 @@ data SpecTree
 traverseSpecTrees ::
   forall m.
   (Monad m) =>
-  ( (SpecTree -> m SpecTree)
-    -> [SpecTree]
-    -> m [SpecTree]
-  )
-  -> Spec
-  -> m Spec
+  ( (SpecTree -> m SpecTree) ->
+    [SpecTree] ->
+    m [SpecTree]
+  ) ->
+  Spec ->
+  m Spec
 traverseSpecTrees f = withSpecTrees go
-  where
-    go :: [SpecTree] -> m [SpecTree]
-    go = f recurseGroups
+ where
+  go :: [SpecTree] -> m [SpecTree]
+  go = f recurseGroups
 
-    recurseGroups = \case
-      group@SpecGroup{} -> do
-        trees' <- go $ groupTrees group
-        pure group{groupTrees = trees'}
-      stest@SpecTest{} -> pure stest
+  recurseGroups = \case
+    group@SpecGroup{} -> do
+      trees' <- go $ groupTrees group
+      pure group{groupTrees = trees'}
+    stest@SpecTest{} -> pure stest
 
 -- | Map the tree with the given processing function.
 --
@@ -130,12 +129,12 @@ traverseSpecTrees f = withSpecTrees go
 --
 -- >>> mapSpecTrees (\go -> post . map go . pre) spec
 mapSpecTrees ::
-  ( (SpecTree -> SpecTree)
-    -> [SpecTree]
-    -> [SpecTree]
-  )
-  -> Spec
-  -> Spec
+  ( (SpecTree -> SpecTree) ->
+    [SpecTree] ->
+    [SpecTree]
+  ) ->
+  Spec ->
+  Spec
 mapSpecTrees f = runIdentity . traverseSpecTrees (\go -> pure . f (runIdentity . go))
 
 {----- Execute spec -----}
@@ -155,51 +154,51 @@ runSpecs hooks0 specs =
                 }
         Text.putStrLn $ Text.pack specPath
         runTrees emptyTestInfo $ getSpecTrees specSpec
-  where
-    Hooks{..} = builtinHooks <> hooks0
-    builtinHooks = xfailHook <> skipHook
+ where
+  Hooks{..} = builtinHooks <> hooks0
+  builtinHooks = xfailHook <> skipHook
 
-    runTrees baseTestInfo = fmap and . mapM (runTree baseTestInfo)
-    runTree baseTestInfo = \case
-      SpecGroup{..} -> do
-        let lvl = getIndentLevel baseTestInfo
-        Text.putStrLn $ indent lvl groupLabel
-        runTrees baseTestInfo{TestInfo.testContexts = TestInfo.testContexts baseTestInfo <> [groupLabel]} groupTrees
-      SpecTest{..} -> do
-        let lvl = getIndentLevel baseTestInfo
-        Text.putStr $ indent lvl (testName <> ": ")
-        IO.hFlush IO.stdout
+  runTrees baseTestInfo = fmap and . mapM (runTree baseTestInfo)
+  runTree baseTestInfo = \case
+    SpecGroup{..} -> do
+      let lvl = getIndentLevel baseTestInfo
+      Text.putStrLn $ indent lvl groupLabel
+      runTrees baseTestInfo{TestInfo.testContexts = TestInfo.testContexts baseTestInfo <> [groupLabel]} groupTrees
+    SpecTest{..} -> do
+      let lvl = getIndentLevel baseTestInfo
+      Text.putStr $ indent lvl (testName <> ": ")
+      IO.hFlush IO.stdout
 
-        let testInfo =
-              baseTestInfo
-                { TestInfo.testName = testName
-                , TestInfo.testMarkers = testMarkers
-                }
-        TestResult{..} <-
-          withTestInfo testInfo $ do
-            tid <- myThreadId
-            runTest testInfo testAction `finally` cleanupFixtures (PerTestFixtureKey tid)
+      let testInfo =
+            baseTestInfo
+              { TestInfo.testName = testName
+              , TestInfo.testMarkers = testMarkers
+              }
+      TestResult{..} <-
+        withTestInfo testInfo $ do
+          tid <- myThreadId
+          runTest testInfo testAction `finally` cleanupFixtures (PerTestFixtureKey tid)
 
-        Text.putStrLn testResultLabel
-        case testResultMessage of
-          TestResultMessageNone -> pure ()
-          TestResultMessageInline msg -> Text.putStrLn $ indent (lvl + 1) msg
-          TestResultMessageSection msg -> Text.putStrLn $ withBorder msg
-        pure testResultSuccess
+      Text.putStrLn testResultLabel
+      case testResultMessage of
+        TestResultMessageNone -> pure ()
+        TestResultMessageInline msg -> Text.putStrLn $ indent (lvl + 1) msg
+        TestResultMessageSection msg -> Text.putStrLn $ withBorder msg
+      pure testResultSuccess
 
-    runTest info action =
-      hookRunTest info $ do
-        try action >>= \case
-          Right result -> pure result
-          Left e
-            | Just e' <- fromException e -> testResultFromAssertionFail e'
-            | otherwise -> testResultFromError e
+  runTest info action =
+    hookRunTest info $ do
+      try action >>= \case
+        Right result -> pure result
+        Left e
+          | Just e' <- fromException e -> testResultFromAssertionFail e'
+          | otherwise -> testResultFromError e
 
-    getIndentLevel testInfo = length (TestInfo.testContexts testInfo) + 1 -- +1 to include the module name
-    indent lvl = Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"
+  getIndentLevel testInfo = length (TestInfo.testContexts testInfo) + 1 -- +1 to include the module name
+  indent lvl = Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"
 
-    border = Text.replicate 80 "-"
-    withBorder msg = Text.intercalate "\n" [border, msg, border]
+  border = Text.replicate 80 "-"
+  withBorder msg = Text.intercalate "\n" [border, msg, border]
 
 {----- Entrypoint -----}
 
@@ -215,10 +214,10 @@ pruneSpec = mapMaybe $ \info -> do
   let spec = mapSpecTrees (\go -> filter (not . isEmptySpec) . map go) (specSpec info)
   guard $ (not . null . getSpecTrees) spec
   pure info{specSpec = spec}
-  where
-    isEmptySpec = \case
-      SpecGroup _ [] -> True
-      _ -> False
+ where
+  isEmptySpec = \case
+    SpecGroup _ [] -> True
+    _ -> False
 
 -- TODO: make hookable? implement manual tests with hook?
 applyTestSelections :: TestTargets -> SpecRegistry -> SpecRegistry
@@ -226,55 +225,55 @@ applyTestSelections = \case
   Just selections -> map (applyTestSelections' selections)
   -- if no selections are specified, hide manual tests
   Nothing -> map (\info -> info{specSpec = hideManualTests $ specSpec info})
-  where
-    hideManualTests = mapSpecTrees (\go -> filter (not . isManualTest) . map go)
-    isManualTest = \case
-      SpecGroup{} -> False
-      SpecTest{testMarkers} -> isJust $ findMarker @MarkerManual testMarkers
+ where
+  hideManualTests = mapSpecTrees (\go -> filter (not . isManualTest) . map go)
+  isManualTest = \case
+    SpecGroup{} -> False
+    SpecTest{testMarkers} -> isJust $ findMarker @MarkerManual testMarkers
 
 applyTestSelections' :: TestTarget -> SpecInfo -> SpecInfo
 applyTestSelections' selections info = info{specSpec = applySelections $ specSpec info}
-  where
-    applySelections = (`Trans.runReader` []) . traverseSpecTrees apply
+ where
+  applySelections = (`Trans.runReader` []) . traverseSpecTrees apply
 
-    apply go = mapMaybeM $ \case
-      group@SpecGroup{groupLabel} -> Just <$> Trans.local (<> [groupLabel]) (go group)
-      stest@SpecTest{testName, testMarkers} -> do
-        groups <- Trans.ask
-        let attrs =
-              TestTargets.TestAttrs
-                { testPath = specPath info
-                , testIdentifier = groups <> [testName]
-                , testMarkers = [Text.pack $ getMarkerName m | SomeMarker m <- testMarkers]
-                }
-        pure $
-          if matchesTest selections attrs
-            then Just stest
-            else Nothing
+  apply go = mapMaybeM $ \case
+    group@SpecGroup{groupLabel} -> Just <$> Trans.local (<> [groupLabel]) (go group)
+    stest@SpecTest{testName, testMarkers} -> do
+      groups <- Trans.ask
+      let attrs =
+            TestTargets.TestAttrs
+              { testPath = specPath info
+              , testIdentifier = groups <> [testName]
+              , testMarkers = [Text.pack $ getMarkerName m | SomeMarker m <- testMarkers]
+              }
+      pure $
+        if matchesTest selections attrs
+          then Just stest
+          else Nothing
 
-    mapMaybeM f = fmap catMaybes . mapM f
+  mapMaybeM f = fmap catMaybes . mapM f
 
 {----- Defining a Spec -----}
 
 -- | The entity or concept being tested.
 describe :: String -> Spec -> Spec
 describe name = runIdentity . withSpecTrees (pure . (: []) . mkGroup)
-  where
-    mkGroup trees =
-      SpecGroup
-        { groupLabel = Text.pack name
-        , groupTrees = trees
-        }
+ where
+  mkGroup trees =
+    SpecGroup
+      { groupLabel = Text.pack name
+      , groupTrees = trees
+      }
 
 test :: (Testable m) => String -> m () -> Spec
 test name t = Spec $ tell [mkTest]
-  where
-    mkTest =
-      SpecTest
-        { testName = Text.pack name
-        , testMarkers = []
-        , testAction = runTestable t
-        }
+ where
+  mkTest =
+    SpecTest
+      { testName = Text.pack name
+      , testMarkers = []
+      , testAction = runTestable t
+      }
 
 -- | Define an IO-based test.
 --
@@ -317,21 +316,21 @@ xfailHook =
           Just (MarkerXFail reason) -> modify reason <$> runTest
           Nothing -> runTest
     }
-  where
-    modify reason TestResult{..} =
-      if testResultSuccess
-        then
-          TestResult
-            { testResultSuccess = False
-            , testResultLabel = Color.red "XPASS"
-            , testResultMessage = TestResultMessageInline reason
-            }
-        else
-          TestResult
-            { testResultSuccess = True
-            , testResultLabel = Color.yellow "XFAIL"
-            , testResultMessage = TestResultMessageInline reason
-            }
+ where
+  modify reason TestResult{..} =
+    if testResultSuccess
+      then
+        TestResult
+          { testResultSuccess = False
+          , testResultLabel = Color.red "XPASS"
+          , testResultMessage = TestResultMessageInline reason
+          }
+      else
+        TestResult
+          { testResultSuccess = True
+          , testResultLabel = Color.yellow "XFAIL"
+          , testResultMessage = TestResultMessageInline reason
+          }
 
 -- | Skip all tests in the given spec.
 --
@@ -383,11 +382,11 @@ instance IsMarker MarkerManual where
 -- Useful for selecting tests from the command line or identifying tests in hooks
 withMarker :: (IsMarker a) => a -> Spec -> Spec
 withMarker m = mapSpecTrees (\go -> map (addMarker . go))
-  where
-    marker = SomeMarker m
-    addMarker = \case
-      group@SpecGroup{} -> group
-      tree@SpecTest{} -> tree{testMarkers = marker : testMarkers tree}
+ where
+  marker = SomeMarker m
+  addMarker = \case
+    group@SpecGroup{} -> group
+    tree@SpecTest{} -> tree{testMarkers = marker : testMarkers tree}
 
 -- | Adds the given names as plain markers to all tests in the given spec.
 --

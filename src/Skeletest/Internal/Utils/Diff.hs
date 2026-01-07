@@ -13,5 +13,5 @@ showLineDiff (fromName, fromContent) (toName, toContent) =
   Text.pack . PP.render $
     prettyContextDiff (ppText fromName) (ppText toName) (ppText . Diff.unnumber) $
       getContextDiff (Just 5) (Text.lines fromContent) (Text.lines toContent)
-  where
-    ppText = PP.text . Text.unpack
+ where
+  ppText = PP.text . Text.unpack

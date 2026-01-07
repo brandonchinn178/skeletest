@@ -7,11 +7,10 @@ module Skeletest.PredicateSpec (spec) where
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Text qualified as Text
 import Skeletest
-import Skeletest.Predicate qualified as P
-import UnliftIO.Exception (Exception, throwIO)
-
 import Skeletest.Internal.Predicate (PredicateResult (..), runPredicate)
+import Skeletest.Predicate qualified as P
 import Skeletest.TestUtils.Integration
+import UnliftIO.Exception (Exception, throwIO)
 
 data User = User
   { name :: String
@@ -398,67 +397,67 @@ snapshotFailure p x = runPredicate p x `shouldSatisfy` P.returns (P.con $ Predic
 
 normalizeVars :: String -> String
 normalizeVars = go
-  where
-    go = \case
-      [] -> []
-      'x' : '0' : '_' : cs -> "x0" <> go (drop 4 cs)
-      'a' : 'c' : 't' : 'u' : 'a' : 'l' : '_' : cs -> "actual" <> go (drop 4 cs)
-      c : cs -> c : go cs
+ where
+  go = \case
+    [] -> []
+    'x' : '0' : '_' : cs -> "x0" <> go (drop 4 cs)
+    'a' : 'c' : 't' : 'u' : 'a' : 'l' : '_' : cs -> "actual" <> go (drop 4 cs)
+    c : cs -> c : go cs
 
 normalizeConFailure :: String -> String
 normalizeConFailure = Text.unpack . go . Text.pack
-  where
-    go
-      | __GLASGOW_HASKELL__ == (908 :: Int) =
-          let old =
-                Text.pack . unlines $
-                  [ "    • In a stmt of a 'do' block:"
-                  , "        User \"alice\" (Just 1)"
-                  , "          `shouldSatisfy`"
-                  , "            Skeletest.Internal.Predicate.conMatches"
-                  , "              \"User\" Nothing"
-                  , "              \\ actual"
-                  , "                -> case pure actual of"
-                  , "                     Just (User x0)"
-                  , "                       -> Just"
-                  , "                            (Skeletest.Internal.Utils.HList.HCons"
-                  , "                               (pure x0) Skeletest.Internal.Utils.HList.HNil)"
-                  , "                     _ -> Nothing"
-                  , "              (Skeletest.Internal.Utils.HList.HCons"
-                  , "                 (P.eq \"\") Skeletest.Internal.Utils.HList.HNil)"
-                  , "      In the second argument of ‘($)’, namely"
-                  , "        ‘do User \"alice\" (Just 1)"
-                  , "              `shouldSatisfy`"
-                  , "                Skeletest.Internal.Predicate.conMatches"
-                  , "                  \"User\" Nothing"
-                  , "                  \\ actual"
-                  , "                    -> case pure actual of"
-                  , "                         Just (User x0) -> ..."
-                  , "                         _ -> ..."
-                  , "                  (Skeletest.Internal.Utils.HList.HCons"
-                  , "                     (P.eq \"\") Skeletest.Internal.Utils.HList.HNil)’"
-                  , "      In the expression:"
-                  , "        it \"should error\""
-                  , "          $ do User \"alice\" (Just 1)"
-                  , "                 `shouldSatisfy`"
-                  , "                   Skeletest.Internal.Predicate.conMatches"
-                  , "                     \"User\" Nothing"
-                  , "                     \\ actual"
-                  , "                       -> case pure actual of"
-                  , "                            Just (User x0) -> ..."
-                  , "                            _ -> ..."
-                  , "                     (Skeletest.Internal.Utils.HList.HCons"
-                  , "                        (P.eq \"\") Skeletest.Internal.Utils.HList.HNil)"
-                  ]
-              new =
-                Text.pack . unlines $
-                  [ "    • In the pattern: User x0"
-                  , "      In the pattern: Just (User x0)"
-                  , "      In a case alternative:"
-                  , "          Just (User x0)"
-                  , "            -> Just"
-                  , "                 (Skeletest.Internal.Utils.HList.HCons"
-                  , "                    (pure x0) Skeletest.Internal.Utils.HList.HNil)"
-                  ]
-           in Text.replace old new
-      | otherwise = id
+ where
+  go
+    | __GLASGOW_HASKELL__ == (908 :: Int) =
+        let old =
+              Text.pack . unlines $
+                [ "    • In a stmt of a 'do' block:"
+                , "        User \"alice\" (Just 1)"
+                , "          `shouldSatisfy`"
+                , "            Skeletest.Internal.Predicate.conMatches"
+                , "              \"User\" Nothing"
+                , "              \\ actual"
+                , "                -> case pure actual of"
+                , "                     Just (User x0)"
+                , "                       -> Just"
+                , "                            (Skeletest.Internal.Utils.HList.HCons"
+                , "                               (pure x0) Skeletest.Internal.Utils.HList.HNil)"
+                , "                     _ -> Nothing"
+                , "              (Skeletest.Internal.Utils.HList.HCons"
+                , "                 (P.eq \"\") Skeletest.Internal.Utils.HList.HNil)"
+                , "      In the second argument of ‘($)’, namely"
+                , "        ‘do User \"alice\" (Just 1)"
+                , "              `shouldSatisfy`"
+                , "                Skeletest.Internal.Predicate.conMatches"
+                , "                  \"User\" Nothing"
+                , "                  \\ actual"
+                , "                    -> case pure actual of"
+                , "                         Just (User x0) -> ..."
+                , "                         _ -> ..."
+                , "                  (Skeletest.Internal.Utils.HList.HCons"
+                , "                     (P.eq \"\") Skeletest.Internal.Utils.HList.HNil)’"
+                , "      In the expression:"
+                , "        it \"should error\""
+                , "          $ do User \"alice\" (Just 1)"
+                , "                 `shouldSatisfy`"
+                , "                   Skeletest.Internal.Predicate.conMatches"
+                , "                     \"User\" Nothing"
+                , "                     \\ actual"
+                , "                       -> case pure actual of"
+                , "                            Just (User x0) -> ..."
+                , "                            _ -> ..."
+                , "                     (Skeletest.Internal.Utils.HList.HCons"
+                , "                        (P.eq \"\") Skeletest.Internal.Utils.HList.HNil)"
+                ]
+            new =
+              Text.pack . unlines $
+                [ "    • In the pattern: User x0"
+                , "      In the pattern: Just (User x0)"
+                , "      In a case alternative:"
+                , "          Just (User x0)"
+                , "            -> Just"
+                , "                 (Skeletest.Internal.Utils.HList.HCons"
+                , "                    (pure x0) Skeletest.Internal.Utils.HList.HNil)"
+                ]
+         in Text.replace old new
+    | otherwise = id

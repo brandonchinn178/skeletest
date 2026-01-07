@@ -45,14 +45,6 @@ import Hedgehog.Internal.Report qualified as Hedgehog hiding (defaultConfig)
 import Hedgehog.Internal.Runner qualified as Hedgehog
 import Hedgehog.Internal.Seed qualified as Hedgehog.Seed
 import Hedgehog.Internal.Source qualified as Hedgehog
-import Text.Read (readEither, readMaybe)
-import UnliftIO.Exception (throwIO)
-import UnliftIO.IORef (IORef, newIORef, readIORef, writeIORef)
-
-#if !MIN_VERSION_base(4, 20, 0)
-import Data.Foldable (foldl')
-#endif
-
 import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..), getFlag)
 import Skeletest.Internal.TestInfo (getTestInfo)
 import Skeletest.Internal.TestRunner (
@@ -63,6 +55,13 @@ import Skeletest.Internal.TestRunner (
   testResultPass,
  )
 import Skeletest.Internal.Utils.Color qualified as Color
+import Text.Read (readEither, readMaybe)
+import UnliftIO.Exception (throwIO)
+import UnliftIO.IORef (IORef, newIORef, readIORef, writeIORef)
+
+#if !MIN_VERSION_base(4, 20, 0)
+import Data.Foldable (foldl')
+#endif
 
 -- | A property to run, with optional configuration settings specified up front.
 --
@@ -121,44 +120,44 @@ data PropertyConfig
 
 resolveConfig :: [PropertyConfig] -> Hedgehog.PropertyConfig
 resolveConfig = foldl' go defaultConfig
-  where
-    defaultConfig =
-      Hedgehog.PropertyConfig
-        { propertyDiscardLimit = 100
-        , propertyShrinkLimit = 1000
-        , propertyShrinkRetries = 0
-        , propertyTerminationCriteria = Hedgehog.NoConfidenceTermination 100
-        , propertySkip = Nothing
-        }
+ where
+  defaultConfig =
+    Hedgehog.PropertyConfig
+      { propertyDiscardLimit = 100
+      , propertyShrinkLimit = 1000
+      , propertyShrinkRetries = 0
+      , propertyTerminationCriteria = Hedgehog.NoConfidenceTermination 100
+      , propertySkip = Nothing
+      }
 
-    go cfg = \case
-      DiscardLimit x -> cfg{Hedgehog.propertyDiscardLimit = Hedgehog.DiscardLimit x}
-      ShrinkLimit x -> cfg{Hedgehog.propertyShrinkLimit = Hedgehog.ShrinkLimit x}
-      ShrinkRetries x -> cfg{Hedgehog.propertyShrinkRetries = Hedgehog.ShrinkRetries x}
-      SetConfidence x ->
-        cfg
-          { Hedgehog.propertyTerminationCriteria =
-              case Hedgehog.propertyTerminationCriteria cfg of
-                Hedgehog.NoEarlyTermination _ tests -> Hedgehog.NoEarlyTermination (Hedgehog.Confidence $ fromIntegral x) tests
-                Hedgehog.NoConfidenceTermination tests -> Hedgehog.NoEarlyTermination (Hedgehog.Confidence $ fromIntegral x) tests
-                Hedgehog.EarlyTermination _ tests -> Hedgehog.EarlyTermination (Hedgehog.Confidence $ fromIntegral x) tests
-          }
-      SetVerifiedTermination ->
-        cfg
-          { Hedgehog.propertyTerminationCriteria =
-              case Hedgehog.propertyTerminationCriteria cfg of
-                Hedgehog.NoEarlyTermination c tests -> Hedgehog.EarlyTermination c tests
-                Hedgehog.NoConfidenceTermination tests -> Hedgehog.EarlyTermination Hedgehog.defaultConfidence tests
-                Hedgehog.EarlyTermination c tests -> Hedgehog.EarlyTermination c tests
-          }
-      SetTestLimit x ->
-        cfg
-          { Hedgehog.propertyTerminationCriteria =
-              case Hedgehog.propertyTerminationCriteria cfg of
-                Hedgehog.NoEarlyTermination c _ -> Hedgehog.NoEarlyTermination c (Hedgehog.TestLimit x)
-                Hedgehog.NoConfidenceTermination _ -> Hedgehog.NoConfidenceTermination (Hedgehog.TestLimit x)
-                Hedgehog.EarlyTermination c _ -> Hedgehog.EarlyTermination c (Hedgehog.TestLimit x)
-          }
+  go cfg = \case
+    DiscardLimit x -> cfg{Hedgehog.propertyDiscardLimit = Hedgehog.DiscardLimit x}
+    ShrinkLimit x -> cfg{Hedgehog.propertyShrinkLimit = Hedgehog.ShrinkLimit x}
+    ShrinkRetries x -> cfg{Hedgehog.propertyShrinkRetries = Hedgehog.ShrinkRetries x}
+    SetConfidence x ->
+      cfg
+        { Hedgehog.propertyTerminationCriteria =
+            case Hedgehog.propertyTerminationCriteria cfg of
+              Hedgehog.NoEarlyTermination _ tests -> Hedgehog.NoEarlyTermination (Hedgehog.Confidence $ fromIntegral x) tests
+              Hedgehog.NoConfidenceTermination tests -> Hedgehog.NoEarlyTermination (Hedgehog.Confidence $ fromIntegral x) tests
+              Hedgehog.EarlyTermination _ tests -> Hedgehog.EarlyTermination (Hedgehog.Confidence $ fromIntegral x) tests
+        }
+    SetVerifiedTermination ->
+      cfg
+        { Hedgehog.propertyTerminationCriteria =
+            case Hedgehog.propertyTerminationCriteria cfg of
+              Hedgehog.NoEarlyTermination c tests -> Hedgehog.EarlyTermination c tests
+              Hedgehog.NoConfidenceTermination tests -> Hedgehog.EarlyTermination Hedgehog.defaultConfidence tests
+              Hedgehog.EarlyTermination c tests -> Hedgehog.EarlyTermination c tests
+        }
+    SetTestLimit x ->
+      cfg
+        { Hedgehog.propertyTerminationCriteria =
+            case Hedgehog.propertyTerminationCriteria cfg of
+              Hedgehog.NoEarlyTermination c _ -> Hedgehog.NoEarlyTermination c (Hedgehog.TestLimit x)
+              Hedgehog.NoConfidenceTermination _ -> Hedgehog.NoConfidenceTermination (Hedgehog.TestLimit x)
+              Hedgehog.EarlyTermination c _ -> Hedgehog.EarlyTermination c (Hedgehog.TestLimit x)
+        }
 
 runProperty :: Property -> IO TestResult
 runProperty = \case
@@ -242,63 +241,63 @@ runProperty = \case
                     -- N.B. testFailContext is reversed!
                     testFailContext failure <> reverse info
                 }
-  where
-    reportProgress _ = pure ()
-    renderSeed report =
-      let Hedgehog.Seed value gamma = Hedgehog.reportSeed report
-       in show value <> ":" <> show gamma
-    renderCoverage coverage testCount =
-      let columns =
-            [ (name, percentStr, percentBar)
-            | Hedgehog.MkLabel{..} <- List.sortOn Hedgehog.labelLocation $ Map.elems coverage
-            , let
-                Hedgehog.LabelName name = labelName
-                Hedgehog.CoverCount count = labelAnnotation
-                percent = round $ fromIntegral count / fromIntegral testCount * (100 :: Double)
-                percentStr = show percent <> "%"
-                percentBar = renderPercentBar percent
-            ]
-          (maxNameLen, maxPercentLen) =
-            foldr
-              ( \(name, percent, _) (nameAcc, percentAcc) ->
-                  (max (length name) nameAcc, max (length percent) percentAcc)
-              )
-              (0, 0)
-              columns
-       in [ rjust maxNameLen name <> " " <> rjust maxPercentLen percentStr <> " " <> percentBar
-          | (name, percentStr, percentBar) <- columns
+ where
+  reportProgress _ = pure ()
+  renderSeed report =
+    let Hedgehog.Seed value gamma = Hedgehog.reportSeed report
+     in show value <> ":" <> show gamma
+  renderCoverage coverage testCount =
+    let columns =
+          [ (name, percentStr, percentBar)
+          | Hedgehog.MkLabel{..} <- List.sortOn Hedgehog.labelLocation $ Map.elems coverage
+          , let
+              Hedgehog.LabelName name = labelName
+              Hedgehog.CoverCount count = labelAnnotation
+              percent = round $ fromIntegral count / fromIntegral testCount * (100 :: Double)
+              percentStr = show percent <> "%"
+              percentBar = renderPercentBar percent
           ]
-    rjust n s = replicate (n - length s) ' ' <> s
-    renderPercentBar percent =
-      -- render percentage bar 20 characters wide
-      let (n, r) = percent `divMod` 5
-       in concat
-            [ replicate n '█'
-            , case r of
-                0 -> ""
-                1 -> "▏"
-                2 -> "▍"
-                3 -> "▌"
-                4 -> "▊"
-                _ -> "" -- unreachable
-            , replicate (20 - n - (if r == 0 then 0 else 1)) '·'
-            ]
-    toCallStack mSpan =
-      GHC.fromCallSiteList $
-        case mSpan of
-          Nothing -> []
-          Just Hedgehog.Span{..} ->
-            let loc =
-                  GHC.SrcLoc
-                    { srcLocPackage = ""
-                    , srcLocModule = ""
-                    , srcLocFile = spanFile
-                    , srcLocStartLine = Hedgehog.unLineNo spanStartLine
-                    , srcLocStartCol = Hedgehog.unColumnNo spanStartColumn
-                    , srcLocEndLine = Hedgehog.unLineNo spanEndLine
-                    , srcLocEndCol = Hedgehog.unColumnNo spanEndColumn
-                    }
-             in [("<unknown>", loc)]
+        (maxNameLen, maxPercentLen) =
+          foldr
+            ( \(name, percent, _) (nameAcc, percentAcc) ->
+                (max (length name) nameAcc, max (length percent) percentAcc)
+            )
+            (0, 0)
+            columns
+     in [ rjust maxNameLen name <> " " <> rjust maxPercentLen percentStr <> " " <> percentBar
+        | (name, percentStr, percentBar) <- columns
+        ]
+  rjust n s = replicate (n - length s) ' ' <> s
+  renderPercentBar percent =
+    -- render percentage bar 20 characters wide
+    let (n, r) = percent `divMod` 5
+     in concat
+          [ replicate n '█'
+          , case r of
+              0 -> ""
+              1 -> "▏"
+              2 -> "▍"
+              3 -> "▌"
+              4 -> "▊"
+              _ -> "" -- unreachable
+          , replicate (20 - n - (if r == 0 then 0 else 1)) '·'
+          ]
+  toCallStack mSpan =
+    GHC.fromCallSiteList $
+      case mSpan of
+        Nothing -> []
+        Just Hedgehog.Span{..} ->
+          let loc =
+                GHC.SrcLoc
+                  { srcLocPackage = ""
+                  , srcLocModule = ""
+                  , srcLocFile = spanFile
+                  , srcLocStartLine = Hedgehog.unLineNo spanStartLine
+                  , srcLocStartCol = Hedgehog.unColumnNo spanStartColumn
+                  , srcLocEndLine = Hedgehog.unLineNo spanEndLine
+                  , srcLocEndCol = Hedgehog.unColumnNo spanEndColumn
+                  }
+           in [("<unknown>", loc)]
 
 loadPropFlags :: IO (Hedgehog.Seed, [PropertyConfig])
 loadPropFlags = do
@@ -389,12 +388,12 @@ instance IsFlag PropSeedFlag where
       { flagDefault = PropSeedFlag Nothing
       , flagParse = parse
       }
-    where
-      parse s = maybe (Left $ "Invalid seed: " <> s) Right $ do
-        (valS, ':' : gammaS) <- pure $ break (== ':') s
-        val <- readMaybe valS
-        gamma <- readMaybe gammaS
-        pure . PropSeedFlag . Just $ Hedgehog.Seed val gamma
+   where
+    parse s = maybe (Left $ "Invalid seed: " <> s) Right $ do
+      (valS, ':' : gammaS) <- pure $ break (== ':') s
+      val <- readMaybe valS
+      gamma <- readMaybe gammaS
+      pure . PropSeedFlag . Just $ Hedgehog.Seed val gamma
 
 newtype PropLimitFlag = PropLimitFlag (Maybe Int)
 

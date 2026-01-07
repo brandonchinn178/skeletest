@@ -73,7 +73,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     env:
-      FOURMOLU_VERSION: '0.16.2.0'
+      FOURMOLU_VERSION: '0.19.0.1'
     steps:
       -
         uses: actions/checkout@v3

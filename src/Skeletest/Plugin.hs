@@ -11,6 +11,8 @@ module Skeletest.Plugin (
   -- ** TestResult
   TestResult (..),
   TestResultMessage (..),
+  BoxSpec,
+  BoxSpecContent (..),
 
   -- ** TestInfo
   TestInfo (..),
@@ -25,6 +27,7 @@ import Skeletest.Internal.Markers (findMarker, hasMarkerNamed)
 import Skeletest.Internal.Snapshot (SnapshotRenderer)
 import Skeletest.Internal.TestInfo (TestInfo (..))
 import Skeletest.Internal.TestRunner (TestResult (..), TestResultMessage (..))
+import Skeletest.Internal.Utils.BoxDrawing (BoxSpec, BoxSpecContent (..))
 
 data Plugin = Plugin
   { cliFlags :: [Flag]

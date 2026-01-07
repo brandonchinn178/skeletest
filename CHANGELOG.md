@@ -1,3 +1,8 @@
+## Unreleased
+
+API changes:
+* Re-export `BoxSpec` and `BoxContent` from `Skeletest.Plugin`
+
 ## v0.3.0
 
 GHC support:

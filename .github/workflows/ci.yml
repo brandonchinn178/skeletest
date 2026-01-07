@@ -56,7 +56,6 @@ jobs:
           --allow-newer='integer-conversion:*'
           --allow-newer='integer-logarithms:*'
           --allow-newer='ordered-containers:*'
-          --allow-newer='recover-rtti:*'
           --allow-newer='scientific:*'
           --allow-newer='semialign:*'
           --allow-newer='sop-core:*'

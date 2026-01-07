@@ -21,8 +21,6 @@ module Skeletest.Main (
 ) where
 
 import Control.Monad (unless)
-import Data.Maybe (fromMaybe)
-import Data.Text qualified as Text
 import System.Exit (exitFailure)
 
 import Skeletest.Internal.CLI (Flag, flag, loadCliArgs)
@@ -43,10 +41,10 @@ import Skeletest.Internal.Spec (
 import Skeletest.Plugin (Plugin (..))
 import Skeletest.Prop.Internal (PropLimitFlag, PropSeedFlag)
 
-runSkeletest :: [Plugin] -> [(FilePath, String, Spec)] -> IO ()
+runSkeletest :: [Plugin] -> [(FilePath, Spec)] -> IO ()
 runSkeletest = runSkeletest' . mconcat
 
-runSkeletest' :: Plugin -> [(FilePath, String, Spec)] -> IO ()
+runSkeletest' :: Plugin -> [(FilePath, Spec)] -> IO ()
 runSkeletest' Plugin{..} testModules = do
   selections <- loadCliArgs builtinFlags cliFlags
   setSnapshotRenderers (snapshotRenderers <> defaultSnapshotRenderers)
@@ -61,12 +59,8 @@ runSkeletest' Plugin{..} testModules = do
       , flag @PropLimitFlag
       ]
 
-    mkSpec (specPath, name, specSpec) =
+    mkSpec (specPath, specSpec) =
       SpecInfo
         { specPath
-        , specName = stripSuffix "Spec" $ Text.pack name
         , specSpec
         }
-
-    -- same as Text.stripSuffix, except return original string if not match
-    stripSuffix suf s = fromMaybe s $ Text.stripSuffix suf s

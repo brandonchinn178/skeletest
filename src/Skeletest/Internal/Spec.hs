@@ -147,13 +147,12 @@ runSpecs hooks0 specs =
       (`finally` cleanupFixtures (PerFileFixtureKey specPath)) $ do
         let emptyTestInfo =
               TestInfo
-                { testModule = specName
-                , testContexts = []
+                { testContexts = []
                 , testName = ""
                 , testMarkers = []
                 , testFile = specPath
                 }
-        Text.putStrLn specName
+        Text.putStrLn $ Text.pack specPath
         runTrees emptyTestInfo $ getSpecTrees specSpec
   where
     Hooks{..} = builtinHooks <> hooks0
@@ -206,7 +205,6 @@ type SpecRegistry = [SpecInfo]
 
 data SpecInfo = SpecInfo
   { specPath :: FilePath
-  , specName :: Text
   , specSpec :: Spec
   }
 

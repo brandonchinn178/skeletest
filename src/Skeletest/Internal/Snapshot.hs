@@ -144,13 +144,13 @@ updateSnapshot snapshotContext testResult = do
   where
     SnapshotContext
       { snapshotRenderers = renderers
-      , snapshotTestInfo = testInfo@TestInfo{testModule}
+      , snapshotTestInfo = testInfo@TestInfo{testFile}
       , snapshotIndex
       } = snapshotContext
 
     emptySnapshotFile =
       SnapshotFile
-        { moduleName = testModule
+        { testFile = Text.pack testFile
         , snapshots = Map.empty
         }
 
@@ -220,7 +220,7 @@ checkSnapshot snapshotContext testResult =
 {----- Snapshot file -----}
 
 data SnapshotFile = SnapshotFile
-  { moduleName :: Text
+  { testFile :: Text
   , snapshots :: Map TestIdentifier [SnapshotValue]
   -- ^ full test identifier => snapshots
   -- e.g. ["group1", "group2", "returns val1 and val2"] => ["val1", "val2"]
@@ -252,10 +252,10 @@ decodeSnapshotFile = parseFile . Text.lines
   where
     parseFile = \case
       line : rest
-        | Just moduleName <- Text.stripPrefix "# " line -> do
+        | Just testFile <- Text.stripPrefix "# " line -> do
             let snapshotFile =
                   SnapshotFile
-                    { moduleName = Text.strip moduleName
+                    { testFile = Text.strip testFile
                     , snapshots = Map.empty
                     }
             parseSections snapshotFile Nothing rest
@@ -303,7 +303,7 @@ decodeSnapshotFile = parseFile . Text.lines
 encodeSnapshotFile :: SnapshotFile -> Text
 encodeSnapshotFile SnapshotFile{..} =
   Text.intercalate "\n" $
-    h1 moduleName : concatMap toSection (Map.toList snapshots)
+    h1 testFile : concatMap toSection (Map.toList snapshots)
   where
     toSection (testIdentifier, snaps) =
       h2 (Text.intercalate " / " testIdentifier) : map codeBlock snaps

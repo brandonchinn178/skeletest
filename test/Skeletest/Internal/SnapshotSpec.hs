@@ -1,9 +1,11 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Skeletest.Internal.SnapshotSpec (spec) where
 
 import Data.Aeson qualified as Aeson
 import Data.String (fromString)
+import Data.Text qualified as Text
 import Skeletest
 import Skeletest.Predicate qualified as P
 import Skeletest.Prop.Gen qualified as Gen
@@ -111,7 +113,7 @@ spec = do
 
 genSnapshotFileRaw :: Gen SnapshotFile
 genSnapshotFileRaw = do
-  moduleName <- Gen.text (Range.linear 0 100) genHsModuleChar
+  testFile <- genHsModule
   snapshots <- Gen.map rangeNumTests genSnapshot
   pure SnapshotFile{..}
   where
@@ -119,7 +121,11 @@ genSnapshotFileRaw = do
     rangeSnapshotsPerTest = Range.linear 0 5
     rangeSnapshotSize = Range.linear 0 1000
 
-    genHsModuleChar = Gen.choice [Gen.alphaNum, pure '\'']
+    genHsModule = do
+      dirs <- Gen.list (Range.linear 0 10) genHsModuleName
+      file <- genHsModuleName
+      pure $ Text.intercalate "/" dirs <> file <> ".hs"
+    genHsModuleName = Gen.text (Range.linear 0 50) $ Gen.choice [Gen.alphaNum, pure '\'']
 
     genSnapshot = do
       ident <- Gen.list (Range.linear 1 10) (Gen.text (Range.linear 1 100) Gen.unicode)

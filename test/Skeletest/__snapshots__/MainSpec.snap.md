@@ -1,4 +1,4 @@
-# Skeletest.Main
+# test/Skeletest/MainSpec.hs
 
 ## errors if Skeletest.Main not imported
 

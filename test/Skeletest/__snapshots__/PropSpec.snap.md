@@ -1,9 +1,9 @@
-# Skeletest.Prop
+# test/Skeletest/PropSpec.hs
 
 ## === / shows a helpful failure message
 
 ```
-Example
+./ExampleSpec.hs
     is isomorphic: FAIL
 --------------------------------------------------------------------------------
 ./ExampleSpec.hs:10:
@@ -43,7 +43,7 @@ where
 ## setDiscardLimit / sets discard limit
 
 ```
-Example
+./ExampleSpec.hs
     discards: FAIL
 --------------------------------------------------------------------------------
 Gave up after 10 discards.

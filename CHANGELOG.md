@@ -2,6 +2,7 @@
 
 * Add location to error messages
 * Specify order of type variables for `P.anything` so that `P.anything @Int` works
+* Display the path of the test file instead of guessing a module name ([#40](https://github.com/brandonchinn178/skeletest/issues/40))
 
 ## v0.2.1
 

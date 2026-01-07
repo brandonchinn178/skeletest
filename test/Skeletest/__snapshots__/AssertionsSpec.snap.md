@@ -1,9 +1,9 @@
-# Skeletest.Assertions
+# test/Skeletest/AssertionsSpec.hs
 
 ## context / should show failure context
 
 ```
-Example
+./ExampleSpec.hs
     should fail: FAIL
 --------------------------------------------------------------------------------
 ./ExampleSpec.hs:7:
@@ -21,7 +21,7 @@ world
 ## failTest / should show failure
 
 ```
-Example
+./ExampleSpec.hs
     should fail: FAIL
 --------------------------------------------------------------------------------
 ./ExampleSpec.hs:5:
@@ -36,7 +36,7 @@ error message
 ## shouldBe / should show helpful failure
 
 ```
-Example
+./ExampleSpec.hs
     should fail: FAIL
 --------------------------------------------------------------------------------
 ./ExampleSpec.hs:5:
@@ -51,7 +51,7 @@ Example
 ## shouldNotBe / should show helpful failure
 
 ```
-Example
+./ExampleSpec.hs
     should fail: FAIL
 --------------------------------------------------------------------------------
 ./ExampleSpec.hs:5:
@@ -72,7 +72,7 @@ Got:
 ## shouldNotSatisfy / should show helpful failure
 
 ```
-Example
+./ExampleSpec.hs
     should fail: FAIL
 --------------------------------------------------------------------------------
 ./ExampleSpec.hs:6:
@@ -93,7 +93,7 @@ Got:
 ## shouldSatisfy / should show helpful failure
 
 ```
-Example
+./ExampleSpec.hs
     should fail: FAIL
 --------------------------------------------------------------------------------
 ./ExampleSpec.hs:6:
@@ -108,7 +108,7 @@ Example
 ## shows backtrace of failed assertions
 
 ```
-Example
+./ExampleSpec.hs
     should fail: FAIL
 --------------------------------------------------------------------------------
 ./ExampleSpec.hs:6:
@@ -133,7 +133,7 @@ Example
 ## shows helpful error on pattern match fail
 
 ```
-Example
+./ExampleSpec.hs
     should fail: ERROR
 --------------------------------------------------------------------------------
 ExampleSpec.hs:7:

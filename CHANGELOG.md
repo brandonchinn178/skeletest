@@ -6,6 +6,7 @@
 * Display the path of the test file instead of guessing a module name ([#40](https://github.com/brandonchinn178/skeletest/issues/40))
 * Flush stdout so test name is displayed while test is still running
 * Support GHC 9.14
+* Automatically capture stdout/stderr ([#1](https://github.com/brandonchinn178/skeletest/issues/1))
 
 ## v0.2.1
 

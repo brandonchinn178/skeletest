@@ -42,6 +42,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Skeletest.Assertions (Testable, runTestable)
+import Skeletest.Internal.Capture (addCapturedOutput, withCaptureOutput)
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.Markers (
   AnonMarker (..),
@@ -189,11 +190,14 @@ runSpecs hooks0 specs =
 
   runTest info action =
     hookRunTest info $ do
-      try action >>= \case
+      (mCapture, resultOrError) <- withCaptureOutput (try action)
+      case resultOrError of
         Right result -> pure result
-        Left e
-          | Just e' <- fromException e -> testResultFromAssertionFail e'
-          | otherwise -> testResultFromError e
+        Left e ->
+          fmap (addCapturedOutput mCapture) $
+            case fromException e of
+              Just e' -> testResultFromAssertionFail e'
+              Nothing -> testResultFromError e
 
   getIndentLevel testInfo = length (TestInfo.testContexts testInfo) + 1 -- +1 to include the module name
   indent lvl = Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"

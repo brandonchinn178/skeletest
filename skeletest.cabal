@@ -36,6 +36,7 @@ library
     Skeletest
     Skeletest.Assertions
     Skeletest.Internal.CLI
+    Skeletest.Internal.Capture
     Skeletest.Internal.Constants
     Skeletest.Internal.Error
     Skeletest.Internal.Fixtures
@@ -121,6 +122,7 @@ test-suite skeletest-tests
     ExampleSpec
     Skeletest.AssertionsSpec
     Skeletest.Internal.CLISpec
+    Skeletest.Internal.CaptureSpec
     Skeletest.Internal.FixturesSpec
     Skeletest.Internal.SnapshotSpec
     Skeletest.Internal.SpecSpec

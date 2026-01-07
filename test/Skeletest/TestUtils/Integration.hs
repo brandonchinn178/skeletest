@@ -60,12 +60,12 @@ instance Fixture FixtureTestRunner where
         { testRunnerDir = tmpdir
         , testRunnerSettingsRef = settingsRef
         }
-    where
-      defaultSettings =
-        TestRunnerSettings
-          { mainFile = ["import Skeletest.Main"]
-          , testFiles = []
-          }
+   where
+    defaultSettings =
+      TestRunnerSettings
+        { mainFile = ["import Skeletest.Main"]
+        , testFiles = []
+        }
 
 setMainFile :: FixtureTestRunner -> FileContents -> IO ()
 setMainFile FixtureTestRunner{testRunnerSettingsRef} contents =
@@ -93,25 +93,25 @@ runTests FixtureTestRunner{..} args = do
         ]
 
   pure (code, sanitize stdout, sanitize stderr)
-  where
-    addFile fp contents = do
-      let path = testRunnerDir </> fp
-      createDirectoryIfMissing True (takeDirectory path)
-      writeFile path (unlines contents)
+ where
+  addFile fp contents = do
+    let path = testRunnerDir </> fp
+    createDirectoryIfMissing True (takeDirectory path)
+    writeFile path (unlines contents)
 
-    ghcArgs =
-      concat
-        [ ["-hide-all-packages"]
-        , ["-F", "-pgmF=skeletest-preprocessor"]
-        , ["-package skeletest"]
-        ]
-    setCWD dir p = p{cwd = Just dir}
+  ghcArgs =
+    concat
+      [ ["-hide-all-packages"]
+      , ["-F", "-pgmF=skeletest-preprocessor"]
+      , ["-package skeletest"]
+      ]
+  setCWD dir p = p{cwd = Just dir}
 
-    sanitize = Text.unpack . stripControlChars . Text.strip . Text.pack
-    stripControlChars s =
-      case Text.breakOn "\x1b" s of
-        (_, "") -> s
-        (pre, post) -> pre <> stripControlChars (Text.drop 1 . Text.dropWhile (/= 'm') $ post)
+  sanitize = Text.unpack . stripControlChars . Text.strip . Text.pack
+  stripControlChars s =
+    case Text.breakOn "\x1b" s of
+      (_, "") -> s
+      (pre, post) -> pre <> stripControlChars (Text.drop 1 . Text.dropWhile (/= 'm') $ post)
 
 expectSuccess :: (HasCallStack) => IO (ExitCode, String, String) -> IO (String, String)
 expectSuccess m = do

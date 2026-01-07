@@ -257,48 +257,48 @@ lte = mkPredicateOp "≤" "≰" $ \actual expected -> actual < expected Prelude.
 -- >>> Just 1 `shouldSatisfy` P.just (P.gt 0)
 just :: (Monad m) => Predicate m a -> Predicate m (Maybe a)
 just p = conMatches "Just" fieldNames toFields preds
-  where
-    fieldNames = Nothing
-    toFields = \case
-      Just x -> Just . HCons (pure x) $ HNil
-      _ -> Nothing
-    preds = HCons p HNil
+ where
+  fieldNames = Nothing
+  toFields = \case
+    Just x -> Just . HCons (pure x) $ HNil
+    _ -> Nothing
+  preds = HCons p HNil
 
 -- | A predicate checking if the input is Nothing
 --
 -- >>> Nothing `shouldSatisfy` P.nothing
 nothing :: (Monad m) => Predicate m (Maybe a)
 nothing = conMatches "Nothing" fieldNames toFields preds
-  where
-    fieldNames = Nothing
-    toFields = \case
-      Nothing -> Just HNil
-      _ -> Nothing
-    preds = HNil
+ where
+  fieldNames = Nothing
+  toFields = \case
+    Nothing -> Just HNil
+    _ -> Nothing
+  preds = HNil
 
 -- | A predicate checking if the input is Left, wrapping a value matching the given predicate.
 --
 -- >>> Left 1 `shouldSatisfy` P.left (P.gt 0)
 left :: (Monad m) => Predicate m a -> Predicate m (Either a b)
 left p = conMatches "Left" fieldNames toFields preds
-  where
-    fieldNames = Nothing
-    toFields = \case
-      Left x -> Just . HCons (pure x) $ HNil
-      _ -> Nothing
-    preds = HCons p HNil
+ where
+  fieldNames = Nothing
+  toFields = \case
+    Left x -> Just . HCons (pure x) $ HNil
+    _ -> Nothing
+  preds = HCons p HNil
 
 -- | A predicate checking if the input is Right, wrapping a value matching the given predicate.
 --
 -- >>> Right 1 `shouldSatisfy` P.right (P.gt 0)
 right :: (Monad m) => Predicate m b -> Predicate m (Either a b)
 right p = conMatches "Right" fieldNames toFields preds
-  where
-    fieldNames = Nothing
-    toFields = \case
-      Right x -> Just . HCons (pure x) $ HNil
-      _ -> Nothing
-    preds = HCons p HNil
+ where
+  fieldNames = Nothing
+  toFields = \case
+    Right x -> Just . HCons (pure x) $ HNil
+    _ -> Nothing
+  preds = HCons p HNil
 
 -- | A predicate checking if the input is a list matching exactly the given predicates.
 --
@@ -323,10 +323,10 @@ list predList =
     , predicateDisp = disp
     , predicateDispNeg = dispNeg
     }
-  where
-    listify vals = "[" <> Text.intercalate ", " vals <> "]"
-    disp = listify $ map predicateDisp predList
-    dispNeg = "not " <> disp
+ where
+  listify vals = "[" <> Text.intercalate ", " vals <> "]"
+  disp = listify $ map predicateDisp predList
+  dispNeg = "not " <> disp
 
 class IsTuple a where
   type TupleArgs a :: [Type]
@@ -378,11 +378,11 @@ tup predTup =
     , predicateDisp = disp
     , predicateDispNeg = dispNeg
     }
-  where
-    preds = toHListPred (Proxy @a) predTup
-    tupify vals = "(" <> Text.intercalate ", " vals <> ")"
-    disp = tupify $ HList.toListWith predicateDisp preds
-    dispNeg = "not " <> disp
+ where
+  preds = toHListPred (Proxy @a) predTup
+  tupify vals = "(" <> Text.intercalate ", " vals <> ")"
+  disp = tupify $ HList.toListWith predicateDisp preds
+  dispNeg = "not " <> disp
 
 -- | A predicate checking if the input matches the given constructor.
 --
@@ -409,11 +409,11 @@ con =
 -- so it should not be written directly, only generated from `con`.
 conMatches ::
   (Monad m) =>
-  String
-  -> Maybe (HList (Const String) fields)
-  -> (a -> Maybe (HList Identity fields))
-  -> HList (Predicate m) fields
-  -> Predicate m a
+  String ->
+  Maybe (HList (Const String) fields) ->
+  (a -> Maybe (HList Identity fields)) ->
+  HList (Predicate m) fields ->
+  Predicate m a
 conMatches conNameS mFieldNames deconstruct preds =
   Predicate
     { predicateFunc = \actual ->
@@ -429,20 +429,20 @@ conMatches conNameS mFieldNames deconstruct preds =
     , predicateDisp = disp
     , predicateDispNeg = dispNeg
     }
-  where
-    conName = Text.pack conNameS
-    disp = "matches " <> predsDisp
-    dispNeg = "does not match " <> predsDisp
-    predsDisp = consify $ HList.toListWith predicateDisp preds
+ where
+  conName = Text.pack conNameS
+  disp = "matches " <> predsDisp
+  dispNeg = "does not match " <> predsDisp
+  predsDisp = consify $ HList.toListWith predicateDisp preds
 
-    -- consify ["= 1", "anything"] => User{id = (= 1), name = anything}
-    -- consify ["= 1", "anything"] => Foo (= 1) anything
-    consify vals =
-      case HList.uncheck <$> mFieldNames of
-        Nothing -> Text.unwords $ conName : map parens vals
-        Just fieldNames ->
-          let fields = zipWith (\field v -> Text.pack field <> " = " <> parens v) fieldNames vals
-           in conName <> "{" <> Text.intercalate ", " fields <> "}"
+  -- consify ["= 1", "anything"] => User{id = (= 1), name = anything}
+  -- consify ["= 1", "anything"] => Foo (= 1) anything
+  consify vals =
+    case HList.uncheck <$> mFieldNames of
+      Nothing -> Text.unwords $ conName : map parens vals
+      Just fieldNames ->
+        let fields = zipWith (\field v -> Text.pack field <> " = " <> parens v) fieldNames vals
+         in conName <> "{" <> Text.intercalate ", " fields <> "}"
 
 {----- Numeric -----}
 
@@ -461,17 +461,17 @@ approx :: (Fractional a, Ord a, Monad m) => Tolerance -> a -> Predicate m a
 approx Tolerance{..} =
   mkPredicateOp "≈" "≉" $ \actual expected ->
     Prelude.abs (actual - expected) <= getTolerance expected
-  where
-    mRelTol = fromTol <$> rel
-    absTol = fromTol abs
-    getTolerance expected =
-      case mRelTol of
-        Just relTol -> max (relTol * Prelude.abs expected) absTol
-        Nothing -> absTol
+ where
+  mRelTol = fromTol <$> rel
+  absTol = fromTol abs
+  getTolerance expected =
+    case mRelTol of
+      Just relTol -> max (relTol * Prelude.abs expected) absTol
+      Nothing -> absTol
 
-    fromTol x
-      | x < 0 = error $ "tolerance can't be negative: " <> show x
-      | otherwise = fromRational x
+  fromTol x
+    | x < 0 = error $ "tolerance can't be negative: " <> show x
+    | otherwise = fromRational x
 
 -- | The tolerance to use in 'approx'.
 --
@@ -545,9 +545,9 @@ and preds =
     , predicateDisp = andify predList
     , predicateDispNeg = "At least one failure:\n" <> andify predList
     }
-  where
-    andify = Text.intercalate "\nand "
-    predList = map (parens . predicateDisp) preds
+ where
+  andify = Text.intercalate "\nand "
+  predList = map (parens . predicateDisp) preds
 
 -- | A predicate checking if the input matches any of the given predicates
 --
@@ -560,9 +560,9 @@ or preds =
     , predicateDisp = orify predList
     , predicateDispNeg = "All failures:\n" <> orify predList
     }
-  where
-    orify = Text.intercalate "\nor "
-    predList = map (parens . predicateDisp) preds
+ where
+  orify = Text.intercalate "\nor "
+  predList = map (parens . predicateDisp) preds
 
 {----- Containers -----}
 
@@ -633,9 +633,9 @@ hasPrefix prefix =
     , predicateDisp = disp
     , predicateDispNeg = dispNeg
     }
-  where
-    disp = "has prefix " <> render prefix
-    dispNeg = "does not have prefix " <> render prefix
+ where
+  disp = "has prefix " <> render prefix
+  dispNeg = "does not have prefix " <> render prefix
 
 -- | A predicate checking if the input contains the given subsequence
 --
@@ -658,9 +658,9 @@ hasInfix elems =
     , predicateDisp = disp
     , predicateDispNeg = dispNeg
     }
-  where
-    disp = "has infix " <> render elems
-    dispNeg = "does not have infix " <> render elems
+ where
+  disp = "has infix " <> render elems
+  dispNeg = "does not have infix " <> render elems
 
 -- | A predicate checking if the input has the given suffix
 --
@@ -683,9 +683,9 @@ hasSuffix suffix =
     , predicateDisp = disp
     , predicateDispNeg = dispNeg
     }
-  where
-    disp = "has suffix " <> render suffix
-    dispNeg = "does not have suffix " <> render suffix
+ where
+  disp = "has suffix " <> render suffix
+  dispNeg = "does not have suffix " <> render suffix
 
 {----- IO -----}
 
@@ -757,9 +757,9 @@ throws Predicate{..} =
     , predicateDisp = disp
     , predicateDispNeg = dispNeg
     }
-  where
-    disp = "throws (" <> predicateDisp <> ")"
-    dispNeg = "does not throw (" <> predicateDisp <> ")"
+ where
+  disp = "throws (" <> predicateDisp <> ")"
+  dispNeg = "does not throw (" <> predicateDisp <> ")"
 
 {----- Functions -----}
 
@@ -807,9 +807,9 @@ isoWith gen =
     , predicateDisp = disp
     , predicateDispNeg = dispNeg
     }
-  where
-    disp = "isomorphic"
-    dispNeg = "not isomorphic"
+ where
+  disp = "isomorphic"
+  dispNeg = "not isomorphic"
 
 {----- Snapshot -----}
 
@@ -859,15 +859,15 @@ matchesSnapshot =
 
 mkPredicateOp ::
   (Monad m) =>
-  Text
-  -- ^ operator
-  -> Text
-  -- ^ negative operator
-  -> (a -> a -> Bool)
-  -- ^ actual -> expected -> success
-  -> a
-  -- ^ expected
-  -> Predicate m a
+  -- | operator
+  Text ->
+  -- | negative operator
+  Text ->
+  -- | actual -> expected -> success
+  (a -> a -> Bool) ->
+  -- | expected
+  a ->
+  Predicate m a
 mkPredicateOp op negOp f expected =
   Predicate
     { predicateFunc = \actual -> do
@@ -884,15 +884,15 @@ mkPredicateOp op negOp f expected =
     , predicateDisp = disp
     , predicateDispNeg = dispNeg
     }
-  where
-    disp = op <> " " <> render expected
-    dispNeg = negOp <> " " <> render expected
+ where
+  disp = op <> " " <> render expected
+  dispNeg = negOp <> " " <> render expected
 
 runPredicates :: (Monad m) => HList (Predicate m) xs -> HList Identity xs -> m [PredicateFuncResult]
 runPredicates preds = HList.toListWithM run . HList.hzip preds
-  where
-    run :: (Predicate m :*: Identity) a -> m PredicateFuncResult
-    run (p :*: Identity x) = predicateFunc p x
+ where
+  run :: (Predicate m :*: Identity) a -> m PredicateFuncResult
+  run (p :*: Identity x) = predicateFunc p x
 
 verifyAll :: ([Text] -> Text) -> [PredicateFuncResult] -> PredicateFuncResult
 verifyAll mergeMessages results =
@@ -904,8 +904,8 @@ verifyAll mergeMessages results =
           Nothing -> mergeMessages $ map predicateExplain results
     , predicateShowFailCtx = showMergedCtxs results
     }
-  where
-    firstFailure = listToMaybe $ filter (Prelude.not . predicateSuccess) results
+ where
+  firstFailure = listToMaybe $ filter (Prelude.not . predicateSuccess) results
 
 verifyAny :: ([Text] -> Text) -> [PredicateFuncResult] -> PredicateFuncResult
 verifyAny mergeMessages results =
@@ -917,8 +917,8 @@ verifyAny mergeMessages results =
           Nothing -> mergeMessages $ map predicateExplain results
     , predicateShowFailCtx = showMergedCtxs results
     }
-  where
-    firstSuccess = listToMaybe $ filter predicateSuccess results
+ where
+  firstSuccess = listToMaybe $ filter predicateSuccess results
 
 render :: a -> Text
 render = Text.pack . anythingToString

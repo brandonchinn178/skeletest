@@ -140,38 +140,38 @@ updateSnapshot :: (Typeable a, MonadIO m) => SnapshotContext -> a -> m ()
 updateSnapshot snapshotContext testResult = do
   SnapshotFileFixture{snapshotFileRef} <- getFixture
   modifyIORef' snapshotFileRef (Just . setSnapshot . fromMaybe emptySnapshotFile)
-  where
-    SnapshotContext
-      { snapshotRenderers = renderers
-      , snapshotTestInfo = testInfo@TestInfo{testFile}
-      , snapshotIndex
-      } = snapshotContext
+ where
+  SnapshotContext
+    { snapshotRenderers = renderers
+    , snapshotTestInfo = testInfo@TestInfo{testFile}
+    , snapshotIndex
+    } = snapshotContext
 
-    emptySnapshotFile =
-      SnapshotFile
-        { testFile = Text.pack testFile
-        , snapshots = Map.empty
-        }
+  emptySnapshotFile =
+    SnapshotFile
+      { testFile = Text.pack testFile
+      , snapshots = Map.empty
+      }
 
-    testIdentifier = toTestIdentifier testInfo
-    renderedTestResult = renderVal renderers testResult
-    setSnapshot snapshotFile@SnapshotFile{snapshots} =
-      let setForTest = Map.Utils.adjustNested (setAt snapshotIndex renderedTestResult) testIdentifier
-       in snapshotFile{snapshots = setForTest snapshots}
+  testIdentifier = toTestIdentifier testInfo
+  renderedTestResult = renderVal renderers testResult
+  setSnapshot snapshotFile@SnapshotFile{snapshots} =
+    let setForTest = Map.Utils.adjustNested (setAt snapshotIndex renderedTestResult) testIdentifier
+     in snapshotFile{snapshots = setForTest snapshots}
 
-    -- Set the given snapshot at the given index. If the index is too large,
-    -- fill in with empty snapshots.
-    --
-    -- >>> setAt 3 "x" ["a"] == ["a", "", "", "x"]
-    setAt i0 v =
-      let go = \cases
-            i [] -> replicate i emptySnapshotVal <> [v]
-            0 (_ : xs) -> v : xs
-            i (x : xs) -> x : go (i - 1) xs
-       in if i0 < 0
-            then invariantViolation $ "Got negative snapshot index: " <> show i0
-            else go i0
-    emptySnapshotVal = SnapshotValue{snapshotContent = "", snapshotLang = Nothing}
+  -- Set the given snapshot at the given index. If the index is too large,
+  -- fill in with empty snapshots.
+  --
+  -- >>> setAt 3 "x" ["a"] == ["a", "", "", "x"]
+  setAt i0 v =
+    let go = \cases
+          i [] -> replicate i emptySnapshotVal <> [v]
+          0 (_ : xs) -> v : xs
+          i (x : xs) -> x : go (i - 1) xs
+     in if i0 < 0
+          then invariantViolation $ "Got negative snapshot index: " <> show i0
+          else go i0
+  emptySnapshotVal = SnapshotValue{snapshotContent = "", snapshotLang = Nothing}
 
 data SnapshotResult
   = SnapshotMissing
@@ -199,22 +199,22 @@ checkSnapshot snapshotContext testResult =
       if snapshotContent == renderedTestResult
         then SnapshotMatches
         else SnapshotDiff{snapshotContent, renderedTestResult}
-  where
-    SnapshotContext
-      { snapshotRenderers = renderers
-      , snapshotTestInfo = testInfo
-      , snapshotIndex
-      } = snapshotContext
+ where
+  SnapshotContext
+    { snapshotRenderers = renderers
+    , snapshotTestInfo = testInfo
+    , snapshotIndex
+    } = snapshotContext
 
-    returnE = throwE
-    renderedTestResultVal = renderVal renderers testResult
+  returnE = throwE
+  renderedTestResultVal = renderVal renderers testResult
 
-    safeIndex xs0 i0 =
-      let go = \cases
-            _ [] -> Nothing
-            0 (x : _) -> Just x
-            i (_ : xs) -> go (i - 1) xs
-       in if i0 < 0 then Nothing else go i0 xs0
+  safeIndex xs0 i0 =
+    let go = \cases
+          _ [] -> Nothing
+          0 (x : _) -> Just x
+          i (_ : xs) -> go (i - 1) xs
+     in if i0 < 0 then Nothing else go i0 xs0
 
 {----- Snapshot file -----}
 
@@ -239,99 +239,99 @@ type TestIdentifier = [Text]
 
 getSnapshotPath :: FilePath -> FilePath
 getSnapshotPath testFile = testDir </> "__snapshots__" </> snapshotFileName
-  where
-    (testDir, testFileName) = splitFileName testFile
-    snapshotFileName = replaceExtension testFileName ".snap.md"
+ where
+  (testDir, testFileName) = splitFileName testFile
+  snapshotFileName = replaceExtension testFileName ".snap.md"
 
 toTestIdentifier :: TestInfo -> TestIdentifier
 toTestIdentifier TestInfo{testContexts, testName} = testContexts <> [testName]
 
 decodeSnapshotFile :: Text -> Maybe SnapshotFile
 decodeSnapshotFile = parseFile . Text.lines
-  where
-    parseFile = \case
-      line : rest
-        | Just testFile <- Text.stripPrefix "# " line -> do
-            let snapshotFile =
-                  SnapshotFile
-                    { testFile = Text.strip testFile
-                    , snapshots = Map.empty
-                    }
-            parseSections snapshotFile Nothing rest
-      _ -> Nothing
-
-    parseSections ::
-      SnapshotFile
-      -- \^ The parsed snapshot file so far
-      -> Maybe [Text]
-      -- \^ The current test identifier, if one is set
-      -> [Text]
-      -- \^ The rest of the lines to process
-      -> Maybe SnapshotFile
-    parseSections snapshotFile@SnapshotFile{snapshots} mTest = \case
-      [] -> pure snapshotFile
-      line : rest
-        -- ignore empty lines
-        | "" <- Text.strip line -> parseSections snapshotFile mTest rest
-        -- found a test section
-        | Just sectionName <- Text.stripPrefix "## " line -> do
-            let testIdentifier = map Text.strip $ Text.splitOn " / " sectionName
-            let snapshotFile' = snapshotFile{snapshots = Map.insert testIdentifier [] snapshots}
-            parseSections snapshotFile' (Just testIdentifier) rest
-        -- found the beginning of a snapshot
-        | Just lang <- (Text.stripPrefix "```" . Text.strip) line -> do
-            testIdentifier <- mTest
-            (snapshot, rest') <- parseSnapshot [] rest
-            let
-              snapshotVal =
-                SnapshotValue
-                  { snapshotContent = snapshot
-                  , snapshotLang = if Text.null lang then Nothing else Just lang
+ where
+  parseFile = \case
+    line : rest
+      | Just testFile <- Text.stripPrefix "# " line -> do
+          let snapshotFile =
+                SnapshotFile
+                  { testFile = Text.strip testFile
+                  , snapshots = Map.empty
                   }
-              snapshotFile' = snapshotFile{snapshots = Map.adjust (<> [snapshotVal]) testIdentifier snapshots}
-            parseSections snapshotFile' mTest rest'
-        -- anything else is invalid
-        | otherwise -> Nothing
+          parseSections snapshotFile Nothing rest
+    _ -> Nothing
 
-    parseSnapshot snapshot = \case
-      [] -> Nothing
-      line : rest
-        | "```" <- Text.strip line -> pure (Text.unlines snapshot, rest)
-        | otherwise -> parseSnapshot (snapshot <> [line]) rest
+  parseSections ::
+    SnapshotFile ->
+    -- \^ The parsed snapshot file so far
+    Maybe [Text] ->
+    -- \^ The current test identifier, if one is set
+    [Text] ->
+    -- \^ The rest of the lines to process
+    Maybe SnapshotFile
+  parseSections snapshotFile@SnapshotFile{snapshots} mTest = \case
+    [] -> pure snapshotFile
+    line : rest
+      -- ignore empty lines
+      | "" <- Text.strip line -> parseSections snapshotFile mTest rest
+      -- found a test section
+      | Just sectionName <- Text.stripPrefix "## " line -> do
+          let testIdentifier = map Text.strip $ Text.splitOn " / " sectionName
+          let snapshotFile' = snapshotFile{snapshots = Map.insert testIdentifier [] snapshots}
+          parseSections snapshotFile' (Just testIdentifier) rest
+      -- found the beginning of a snapshot
+      | Just lang <- (Text.stripPrefix "```" . Text.strip) line -> do
+          testIdentifier <- mTest
+          (snapshot, rest') <- parseSnapshot [] rest
+          let
+            snapshotVal =
+              SnapshotValue
+                { snapshotContent = snapshot
+                , snapshotLang = if Text.null lang then Nothing else Just lang
+                }
+            snapshotFile' = snapshotFile{snapshots = Map.adjust (<> [snapshotVal]) testIdentifier snapshots}
+          parseSections snapshotFile' mTest rest'
+      -- anything else is invalid
+      | otherwise -> Nothing
+
+  parseSnapshot snapshot = \case
+    [] -> Nothing
+    line : rest
+      | "```" <- Text.strip line -> pure (Text.unlines snapshot, rest)
+      | otherwise -> parseSnapshot (snapshot <> [line]) rest
 
 encodeSnapshotFile :: SnapshotFile -> Text
 encodeSnapshotFile SnapshotFile{..} =
   Text.intercalate "\n" $
     h1 testFile : concatMap toSection (Map.toList snapshots)
-  where
-    toSection (testIdentifier, snaps) =
-      h2 (Text.intercalate " / " testIdentifier) : map codeBlock snaps
+ where
+  toSection (testIdentifier, snaps) =
+    h2 (Text.intercalate " / " testIdentifier) : map codeBlock snaps
 
-    h1 s = "# " <> s <> "\n"
-    h2 s = "## " <> s <> "\n"
-    codeBlock SnapshotValue{..} =
-      Text.concat
-        [ "```" <> fromMaybe "" snapshotLang <> "\n"
-        , snapshotContent
-        , "```\n"
-        ]
+  h1 s = "# " <> s <> "\n"
+  h2 s = "## " <> s <> "\n"
+  codeBlock SnapshotValue{..} =
+    Text.concat
+      [ "```" <> fromMaybe "" snapshotLang <> "\n"
+      , snapshotContent
+      , "```\n"
+      ]
 
 normalizeSnapshotFile :: SnapshotFile -> SnapshotFile
 normalizeSnapshotFile file@SnapshotFile{snapshots} =
   file
     { snapshots = Map.fromList . map normalize . Map.toList $ snapshots
     }
-  where
-    normalize (testIdentifier, vals) =
-      ( map (sanitizeNonPrint . sanitizeSlashes . Text.strip) testIdentifier
-      , map normalizeSnapshotVal vals
-      )
+ where
+  normalize (testIdentifier, vals) =
+    ( map (sanitizeNonPrint . sanitizeSlashes . Text.strip) testIdentifier
+    , map normalizeSnapshotVal vals
+    )
 
-    sanitizeSlashes = Text.replace " /" " \\/"
+  sanitizeSlashes = Text.replace " /" " \\/"
 
-    sanitizeNonPrint = Text.concatMap $ \case
-      c | (not . isPrint) c -> Text.drop 1 . Text.dropEnd 1 . Text.pack . show $ c
-      c -> Text.singleton c
+  sanitizeNonPrint = Text.concatMap $ \case
+    c | (not . isPrint) c -> Text.drop 1 . Text.dropEnd 1 . Text.pack . show $ c
+    c -> Text.singleton c
 
 {----- Renderers -----}
 
@@ -359,12 +359,12 @@ defaultSnapshotRenderers =
   , plainRenderer @Text id
   , jsonRenderer
   ]
-  where
-    jsonRenderer =
-      SnapshotRenderer
-        { render = TextL.toStrict . TextL.decodeUtf8 . Aeson.encodePretty @Aeson.Value
-        , snapshotLang = Just "json"
-        }
+ where
+  jsonRenderer =
+    SnapshotRenderer
+      { render = TextL.toStrict . TextL.decodeUtf8 . Aeson.encodePretty @Aeson.Value
+      , snapshotLang = Just "json"
+      }
 
 renderVal :: (Typeable a) => [SnapshotRenderer] -> a -> SnapshotValue
 renderVal renderers a =
@@ -376,10 +376,10 @@ renderVal renderers a =
           , snapshotLang = Nothing
           }
       rendered : _ -> rendered
-  where
-    tryRender SnapshotRenderer{..} =
-      let toValue v = SnapshotValue{snapshotContent = render v, snapshotLang}
-       in toValue <$> Typeable.cast a
+ where
+  tryRender SnapshotRenderer{..} =
+    let toValue v = SnapshotValue{snapshotContent = render v, snapshotLang}
+     in toValue <$> Typeable.cast a
 
 normalizeSnapshotVal :: SnapshotValue -> SnapshotValue
 normalizeSnapshotVal SnapshotValue{..} =
@@ -387,13 +387,13 @@ normalizeSnapshotVal SnapshotValue{..} =
     { snapshotContent = normalizeTrailingNewlines snapshotContent
     , snapshotLang = collapse $ Text.filter isAlpha <$> snapshotLang
     }
-  where
-    collapse = \case
-      Just "" -> Nothing
-      m -> m
+ where
+  collapse = \case
+    Just "" -> Nothing
+    m -> m
 
-    -- Ensure there's exactly one trailing newline.
-    normalizeTrailingNewlines s = Text.dropWhileEnd (== '\n') s <> "\n"
+  -- Ensure there's exactly one trailing newline.
+  normalizeTrailingNewlines s = Text.dropWhileEnd (== '\n') s <> "\n"
 
 snapshotRenderersRef :: IORef [SnapshotRenderer]
 snapshotRenderersRef = unsafePerformIO $ newIORef []

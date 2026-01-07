@@ -58,16 +58,16 @@ minimalTest name =
 
 normalizePluginError :: String -> String
 normalizePluginError = Text.unpack . go . Text.pack
-  where
-    replace old new = Text.replace (Text.pack old) (Text.pack new)
-    go
-      | __GLASGOW_HASKELL__ == (908 :: Int) = replace "*** Exception: ExitFailure 1" "\n*** Exception: ExitFailure 1"
-      | otherwise = id
+ where
+  replace old new = Text.replace (Text.pack old) (Text.pack new)
+  go
+    | __GLASGOW_HASKELL__ == (908 :: Int) = replace "*** Exception: ExitFailure 1" "\n*** Exception: ExitFailure 1"
+    | otherwise = id
 
 normalizeGhc29916 :: String -> String
 normalizeGhc29916 = Text.unpack . go . Text.pack
-  where
-    replace old new = Text.replace (Text.pack old) (Text.pack new)
-    go
-      | __GLASGOW_HASKELL__ == (908 :: Int) = replace "<generated>" "<no location info>"
-      | otherwise = id
+ where
+  replace old new = Text.replace (Text.pack old) (Text.pack new)
+  go
+    | __GLASGOW_HASKELL__ == (908 :: Int) = replace "<generated>" "<no location info>"
+    | otherwise = id

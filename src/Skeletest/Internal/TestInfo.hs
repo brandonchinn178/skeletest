@@ -38,9 +38,9 @@ withTestInfo :: (MonadUnliftIO m) => TestInfo -> m a -> m a
 withTestInfo info m = do
   tid <- myThreadId
   bracket_ (set tid) (unset tid) m
-  where
-    set tid = modifyIORef testInfoMapRef $ Map.insert tid info
-    unset tid = modifyIORef testInfoMapRef $ Map.delete tid
+ where
+  set tid = modifyIORef testInfoMapRef $ Map.insert tid info
+  unset tid = modifyIORef testInfoMapRef $ Map.delete tid
 
 lookupTestInfo :: (MonadIO m) => m (Maybe TestInfo)
 lookupTestInfo = do

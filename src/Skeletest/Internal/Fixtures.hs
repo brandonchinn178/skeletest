@@ -114,11 +114,11 @@ getFixture = liftIO $ do
       result@(fixture, _) <- fixtureAction @a
       modifyFixtureRegistry $ \registry -> (insertFixture (FixtureLoaded result) registry, ())
       pure fixture
-  where
-    rep = typeRep (Proxy @a)
-    isInProgress = \case
-      FixtureInProgress -> True
-      _ -> False
+ where
+  rep = typeRep (Proxy @a)
+  isInProgress = \case
+    FixtureInProgress -> True
+    _ -> False
 
 -- | Clean up fixtures in the given scope.
 --
@@ -143,11 +143,11 @@ cleanupFixtures scopeKey = do
   case catMaybes errors of
     e : _ -> throwIO e
     [] -> pure ()
-  where
-    (getScopedFixtures, updateScopedFixtures) = getScopedAccessors scopeKey
-    fromLeft = \case
-      Left x -> Just x
-      Right _ -> Nothing
+ where
+  (getScopedFixtures, updateScopedFixtures) = getScopedAccessors scopeKey
+  fromLeft = \case
+    Left x -> Just x
+    Right _ -> Nothing
 
 {----- Fixtures registry -----}
 
@@ -166,23 +166,23 @@ data FixtureStatus
 
 fixtureRegistryRef :: IORef FixtureRegistry
 fixtureRegistryRef = unsafePerformIO $ newIORef emptyFixtureRegistry
-  where
-    emptyFixtureRegistry =
-      FixtureRegistry
-        { sessionFixtures = OMap.empty
-        , fileFixtures = Map.empty
-        , testFixtures = Map.empty
-        }
+ where
+  emptyFixtureRegistry =
+    FixtureRegistry
+      { sessionFixtures = OMap.empty
+      , fileFixtures = Map.empty
+      , testFixtures = Map.empty
+      }
 {-# NOINLINE fixtureRegistryRef #-}
 
 modifyFixtureRegistry :: (FixtureRegistry -> (FixtureRegistry, a)) -> IO a
 modifyFixtureRegistry = atomicModifyIORef fixtureRegistryRef
 
 getScopedAccessors ::
-  FixtureScopeKey
-  -> ( FixtureRegistry -> FixtureMap
-     , (FixtureMap -> FixtureMap) -> FixtureRegistry -> FixtureRegistry
-     )
+  FixtureScopeKey ->
+  ( FixtureRegistry -> FixtureMap
+  , (FixtureMap -> FixtureMap) -> FixtureRegistry -> FixtureRegistry
+  )
 getScopedAccessors scopeKey =
   case scopeKey of
     PerTestFixtureKey tid ->

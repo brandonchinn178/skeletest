@@ -43,8 +43,8 @@ xMatch = noExtField
 mkHsRecFields ::
   forall p arg.
   (IsPass p) =>
-  [LHsRecField (GhcPass p) arg]
-  -> HsRecFields (GhcPass p) arg
+  [LHsRecField (GhcPass p) arg] ->
+  HsRecFields (GhcPass p) arg
 mkHsRecFields fields =
   GHC.HsRecFields
     { rec_ext =

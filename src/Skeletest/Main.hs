@@ -51,15 +51,15 @@ runSkeletest' Plugin{..} testModules = do
   let initialSpecs = map mkSpec testModules
   success <- runSpecs hooks . pruneSpec . applyTestSelections selections $ initialSpecs
   unless success exitFailure
-  where
-    builtinFlags =
-      [ flag @SnapshotUpdateFlag
-      , flag @PropSeedFlag
-      , flag @PropLimitFlag
-      ]
+ where
+  builtinFlags =
+    [ flag @SnapshotUpdateFlag
+    , flag @PropSeedFlag
+    , flag @PropLimitFlag
+    ]
 
-    mkSpec (specPath, specSpec) =
-      SpecInfo
-        { specPath
-        , specSpec
-        }
+  mkSpec (specPath, specSpec) =
+    SpecInfo
+      { specPath
+      , specSpec
+      }

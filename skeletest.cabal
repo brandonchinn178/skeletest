@@ -50,6 +50,7 @@ library
     Skeletest.Internal.TestInfo
     Skeletest.Internal.TestRunner
     Skeletest.Internal.TestTargets
+    Skeletest.Internal.Utils.BoxDrawing
     Skeletest.Internal.Utils.Color
     Skeletest.Internal.Utils.Diff
     Skeletest.Internal.Utils.HList
@@ -89,6 +90,7 @@ library
     , pretty
     , recover-rtti
     , template-haskell
+    , terminal-size >= 0.2.0
     , text
     , transformers
     , unliftio >= 0.2.17

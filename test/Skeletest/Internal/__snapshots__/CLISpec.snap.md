@@ -5,5 +5,8 @@
 ```
 ./ExampleSpec.hs
     should error: ERROR
-        CLI flag 'my-flag' was not registered. Did you add it to cliFlags in Main.hs?
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ CLI flag 'my-flag' was not registered. Did you add it to cliFlags in Main.hs ║
+║ ?                                                                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 ```

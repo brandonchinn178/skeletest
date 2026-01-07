@@ -59,6 +59,7 @@ import Skeletest.Internal.TestRunner (
  )
 import Skeletest.Internal.TestTargets (TestTarget, TestTargets, matchesTest)
 import Skeletest.Internal.TestTargets qualified as TestTargets
+import Skeletest.Internal.Utils.BoxDrawing (drawBox)
 import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Plugin (Hooks (..), defaultHooks)
 import Skeletest.Prop.Internal (Property)
@@ -183,7 +184,7 @@ runSpecs hooks0 specs =
       case testResultMessage of
         TestResultMessageNone -> pure ()
         TestResultMessageInline msg -> Text.putStrLn $ indent (lvl + 1) msg
-        TestResultMessageSection msg -> Text.putStrLn $ withBorder msg
+        TestResultMessageSection box -> drawBox box >>= Text.putStrLn
       pure testResultSuccess
 
   runTest info action =
@@ -196,9 +197,6 @@ runSpecs hooks0 specs =
 
   getIndentLevel testInfo = length (TestInfo.testContexts testInfo) + 1 -- +1 to include the module name
   indent lvl = Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"
-
-  border = Text.replicate 80 "-"
-  withBorder msg = Text.intercalate "\n" [border, msg, border]
 
 {----- Entrypoint -----}
 

@@ -1,6 +1,7 @@
 ## Unreleased
 
 * Add location to error messages
+* Render test failures/errors in more visible box
 * Specify order of type variables for `P.anything` so that `P.anything @Int` works
 * Display the path of the test file instead of guessing a module name ([#40](https://github.com/brandonchinn178/skeletest/issues/40))
 * Flush stdout so test name is displayed while test is still running

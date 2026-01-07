@@ -5,7 +5,9 @@
 ```
 ./ExampleSpec.hs
     should error: ERROR
-        Snapshot file was corrupted: ./__snapshots__/ExampleSpec.snap.md
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ Snapshot file was corrupted: ./__snapshots__/ExampleSpec.snap.md             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
 ## renders JSON values
@@ -24,22 +26,22 @@
 ```
 ./ExampleSpec.hs
     fails: FAIL
---------------------------------------------------------------------------------
-./ExampleSpec.hs:7:
-|
-|   unlines ["new1", "same1", "same2", "new2"] `shouldSatisfy` P.matchesSnapshot
-|                                              ^^^^^^^^^^^^^^^
-
-Result differed from snapshot. Update snapshot with --update.
---- expected
-+++ actual
-@@ -1,4 +1,4 @@
-+new1
- same1
--old1
- same2
--old2
-+new2
-
---------------------------------------------------------------------------------
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ ./ExampleSpec.hs:7:                                                          ║
+║ |                                                                            ║
+║ |   unlines ["new1", "same1", "same2", "new2"] `shouldSatisfy` P.matchesSnap ║
+║ shot                                                                         ║
+║ |                                              ^^^^^^^^^^^^^^^               ║
+║                                                                              ║
+║ Result differed from snapshot. Update snapshot with --update.                ║
+║ --- expected                                                                 ║
+║ +++ actual                                                                   ║
+║ @@ -1,4 +1,4 @@                                                              ║
+║ +new1                                                                        ║
+║  same1                                                                       ║
+║ -old1                                                                        ║
+║  same2                                                                       ║
+║ -old2                                                                        ║
+║ +new2                                                                        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 ```

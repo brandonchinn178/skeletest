@@ -1,8 +1,14 @@
+{-# LANGUAGE CPP #-}
+
 module Skeletest.AssertionsSpec (spec) where
 
 import Skeletest
 import Skeletest.Predicate qualified as P
 import Skeletest.TestUtils.Integration
+
+#if __GLASGOW_HASKELL__ == 910
+import Data.Text qualified as Text
+#endif
 
 spec :: Spec
 spec = do
@@ -157,3 +163,33 @@ spec = do
     code `shouldBe` ExitFailure 1
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
+
+  integration . it "shows unrecognized exceptions" $ do
+    runner <- getFixture
+    addTestFile runner "ExampleSpec.hs" $
+      [ "module ExampleSpec (spec) where"
+      , ""
+      , "import Skeletest"
+      , "import qualified Skeletest.Predicate as P"
+      , ""
+      , "spec = it \"should fail\" $ do"
+      , "  _ <- readFile \"unknown-file.txt\""
+      , "  pure ()"
+      ]
+
+    (code, stdout, stderr) <- runTests runner []
+    code `shouldBe` ExitFailure 1
+    stderr `shouldBe` ""
+    sanitizeTraceback stdout `shouldSatisfy` P.matchesSnapshot
+
+-- GHC 9.10 specifically added a backtrace to SomeException, which was reverted in 9.12
+-- https://github.com/haskell/core-libraries-committee/issues/285
+sanitizeTraceback :: String -> String
+#if __GLASGOW_HASKELL__ == 910
+sanitizeTraceback s =
+  let (pre, post) = break (Text.pack "HasCallStack backtrace:" `Text.isInfixOf`) $ Text.lines $ Text.pack s
+      (_, post2) = break (Text.pack "╚" `Text.isPrefixOf`) $ drop 1 post
+   in Text.unpack . Text.unlines $ pre ++ post2
+#else
+sanitizeTraceback = id
+#endif

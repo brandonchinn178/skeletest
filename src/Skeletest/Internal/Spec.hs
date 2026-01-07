@@ -68,6 +68,7 @@ import Skeletest.Internal.TestTargets qualified as TestTargets
 import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Plugin (Hooks (..), defaultHooks)
 import Skeletest.Prop.Internal (Property)
+import System.IO qualified as IO
 
 type Spec = Spec' ()
 
@@ -167,6 +168,7 @@ runSpecs hooks0 specs =
       SpecTest{..} -> do
         let lvl = getIndentLevel baseTestInfo
         Text.putStr $ indent lvl (testName <> ": ")
+        IO.hFlush IO.stdout
 
         let testInfo =
               baseTestInfo

@@ -2,18 +2,47 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Skeletest.Internal.Spec.Output (
+  reportGroup,
+  reportTestInProgress,
+  reportTestResultInline,
+  reportTestResultBox,
   renderPrettyFailure,
   BoxSpec,
   BoxSpecContent (..),
   drawBox,
+  IndentLevel,
+  indent,
 ) where
 
 import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
-import System.Console.Terminal.Size qualified as Term
+import System.IO qualified as IO
 import UnliftIO.Exception (SomeException, try)
+
+reportGroup :: IndentLevel -> Text -> IO ()
+reportGroup lvl name = do
+  Text.putStrLn $ indent lvl name
+
+reportTestInProgress :: IndentLevel -> Text -> IO ()
+reportTestInProgress lvl testName = do
+  Text.putStr $ indent lvl (testName <> ": ")
+  IO.hFlush IO.stdout
+
+reportTestResultInline :: IndentLevel -> Text -> IO ()
+reportTestResultInline lvl testResultMessage = do
+  Text.putStrLn $ indent (lvl + 1) testResultMessage
+
+reportTestResultBox :: Int -> Text -> BoxSpec -> IO ()
+reportTestResultBox width testResultLabel box = do
+  Text.putStrLn testResultLabel
+  Text.putStrLn $ drawBox width box
+
+type IndentLevel = Int
+
+indent :: IndentLevel -> Text -> Text
+indent lvl = Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"
 
 -- | Render a test failure like:
 --
@@ -75,13 +104,8 @@ data BoxSpecContent
   | BoxHeader Text
   deriving (Show, Eq)
 
-drawBox :: BoxSpec -> IO Text
-drawBox box = do
-  width <- maybe 80 (max 40 . Term.width) <$> Term.size
-  pure $ drawBox' width box
-
-drawBox' :: Int -> BoxSpec -> Text
-drawBox' width boxContents = Text.intercalate "\n" $ [header] <> concatMap draw boxContents <> [footer]
+drawBox :: Int -> BoxSpec -> Text
+drawBox width boxContents = Text.intercalate "\n" $ [header] <> concatMap draw boxContents <> [footer]
  where
   header = "╔" <> Text.replicate (width - 2) "═" <> "╗"
   footer = "╚" <> Text.replicate (width - 2) "═" <> "╝"

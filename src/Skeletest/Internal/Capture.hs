@@ -85,7 +85,7 @@ addCapturedOutput = maybe id updateResult
   updateResult output result =
     result
       { testResultMessage =
-          TestResultMessageSection . concat $
+          TestResultMessageBox . concat $
             [ toBoxContents (testResultMessage result)
             , renderOutput output
             ]
@@ -93,7 +93,7 @@ addCapturedOutput = maybe id updateResult
   toBoxContents = \case
     TestResultMessageNone -> []
     TestResultMessageInline msg -> [BoxText msg]
-    TestResultMessageSection box -> box
+    TestResultMessageBox box -> box
   renderOutput (stdout, stderr) =
     concat
       [ if Text.null stdout then [] else [BoxHeader "Captured stdout", BoxText stdout]

@@ -50,7 +50,12 @@ import Skeletest.Internal.Markers (
   SomeMarker (..),
   findMarker,
  )
-import Skeletest.Internal.Spec.Output (drawBox)
+import Skeletest.Internal.Spec.Output (
+  reportGroup,
+  reportTestInProgress,
+  reportTestResultBox,
+  reportTestResultInline,
+ )
 import Skeletest.Internal.TestInfo (TestInfo (TestInfo), withTestInfo)
 import Skeletest.Internal.TestInfo qualified as TestInfo
 import Skeletest.Internal.TestRunner (
@@ -64,7 +69,7 @@ import Skeletest.Internal.TestTargets qualified as TestTargets
 import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Plugin (Hooks (..), defaultHooks)
 import Skeletest.Prop.Internal (Property)
-import System.IO qualified as IO
+import System.Console.Terminal.Size qualified as Term
 import UnliftIO.Exception (
   finally,
   fromException,
@@ -164,12 +169,11 @@ runSpecs hooks0 specs =
   runTree baseTestInfo = \case
     SpecGroup{..} -> do
       let lvl = getIndentLevel baseTestInfo
-      Text.putStrLn $ indent lvl groupLabel
+      reportGroup lvl groupLabel
       runTrees baseTestInfo{TestInfo.testContexts = TestInfo.testContexts baseTestInfo <> [groupLabel]} groupTrees
     SpecTest{..} -> do
       let lvl = getIndentLevel baseTestInfo
-      Text.putStr $ indent lvl (testName <> ": ")
-      IO.hFlush IO.stdout
+      reportTestInProgress lvl testName
 
       let testInfo =
             baseTestInfo
@@ -181,11 +185,11 @@ runSpecs hooks0 specs =
           tid <- myThreadId
           runTest testInfo testAction `finally` cleanupFixtures (PerTestFixtureKey tid)
 
-      Text.putStrLn testResultLabel
+      width <- maybe 80 (max 40 . Term.width) <$> Term.size
       case testResultMessage of
         TestResultMessageNone -> pure ()
-        TestResultMessageInline msg -> Text.putStrLn $ indent (lvl + 1) msg
-        TestResultMessageSection box -> drawBox box >>= Text.putStrLn
+        TestResultMessageInline msg -> reportTestResultInline lvl msg
+        TestResultMessageBox box -> reportTestResultBox width testResultLabel box
       pure testResultSuccess
 
   runTest info action =
@@ -200,7 +204,6 @@ runSpecs hooks0 specs =
               Nothing -> testResultFromError e
 
   getIndentLevel testInfo = length (TestInfo.testContexts testInfo) + 1 -- +1 to include the module name
-  indent lvl = Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"
 
 {----- Entrypoint -----}
 

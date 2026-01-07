@@ -66,7 +66,7 @@ data TestResult = TestResult
 data TestResultMessage
   = TestResultMessageNone
   | TestResultMessageInline Text
-  | TestResultMessageSection BoxSpec
+  | TestResultMessageBox BoxSpec
 
 testResultPass :: TestResult
 testResultPass =
@@ -83,7 +83,7 @@ testResultFromAssertionFail e = do
     TestResult
       { testResultSuccess = False
       , testResultLabel = Color.red "FAIL"
-      , testResultMessage = TestResultMessageSection [BoxText msg]
+      , testResultMessage = TestResultMessageBox [BoxText msg]
       }
 
 testResultFromError :: SomeException -> IO TestResult
@@ -93,7 +93,7 @@ testResultFromError e = do
     TestResult
       { testResultSuccess = False
       , testResultLabel = Color.red "ERROR"
-      , testResultMessage = TestResultMessageSection [BoxText msg]
+      , testResultMessage = TestResultMessageBox [BoxText msg]
       }
  where
   renderMsg

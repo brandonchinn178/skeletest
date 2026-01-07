@@ -1,16 +1,18 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Skeletest.Internal.GHC.Compat_9_10 (
-  module Skeletest.Internal.GHC.Compat_9_10,
+module Skeletest.Internal.GHC.Compat_9_14 (
+  module Skeletest.Internal.GHC.Compat_9_14,
+  mkPrefixFunRhs,
 ) where
 
 import Data.Data (toConstr)
 import Data.List.NonEmpty (NonEmpty)
-import Data.List.NonEmpty qualified as NonEmpty
-import GHC hiding (FieldOcc (..), mkPrefixFunRhs)
+import GHC hiding (FieldOcc (..))
 import GHC qualified
 import GHC.Types.Name.Reader (getRdrName)
+import GHC.Types.Name.Reader qualified as GHC
+
 import Skeletest.Internal.Error (invariantViolation)
 
 hsLamSingle :: MatchGroup (GhcPass p) (LHsExpr (GhcPass p)) -> HsExpr (GhcPass p)
@@ -39,32 +41,41 @@ hsTupPresent :: LHsExpr (GhcPass p) -> HsTupArg (GhcPass p)
 hsTupPresent = Present noExtField
 
 xMatch :: XCMatch (GhcPass p) b
-xMatch = noAnn
+xMatch = noExtField
 
-mkHsRecFields :: [LHsRecField (GhcPass p) arg] -> HsRecFields (GhcPass p) arg
+mkHsRecFields ::
+  forall p arg.
+  (IsPass p) =>
+  [LHsRecField (GhcPass p) arg] ->
+  HsRecFields (GhcPass p) arg
 mkHsRecFields fields =
   GHC.HsRecFields
-    { rec_flds = fields
+    { rec_ext =
+        case ghcPass @p of
+          GhcPs -> noExtField
+          GhcRn -> noExtField
+          GhcTc -> invariantViolation "mkHsRecFields called in GhcTc"
+    , rec_flds = fields
     , rec_dotdot = Nothing
     }
 
 foLabel :: GHC.FieldOcc GhcRn -> LIdP GhcRn
-foLabel = genLoc . GHC.foExt
+foLabel = GHC.foLabel
 
 fieldOccRn :: Name -> GHC.FieldOcc GhcRn
 fieldOccRn name =
   GHC.FieldOcc
-    { GHC.foExt = name
-    , GHC.foLabel = genLoc $ getRdrName name
+    { GHC.foExt = getRdrName name
+    , GHC.foLabel = genLoc name
     }
 
-type LIdOccP a = GHC.LIdP a
+type LIdOccP a = GHC.LIdOccP a
 
-noUserRdr :: Name -> Name
-noUserRdr = id
+noUserRdr :: Name -> GHC.WithUserRdr Name
+noUserRdr = GHC.noUserRdr
 
-unLocWithUserRdr :: GenLocated l Name -> Name
-unLocWithUserRdr = unLoc
+unLocWithUserRdr :: GenLocated l (GHC.WithUserRdr a) -> a
+unLocWithUserRdr = GHC.unLocWithUserRdr
 
 hsApp :: LHsExpr (GhcPass p) -> LHsExpr (GhcPass p) -> HsExpr (GhcPass p)
 hsApp = HsApp noExtField
@@ -72,14 +83,11 @@ hsApp = HsApp noExtField
 genLoc :: (NoAnn ann) => e -> GenLocated ann e
 genLoc = L noAnn
 
-mkPrefixFunRhs :: fn -> [ann] -> HsMatchContext fn
-mkPrefixFunRhs fn _ = GHC.mkPrefixFunRhs fn
+toMatchArgs :: [LPat p] -> LocatedE [LPat p]
+toMatchArgs = genLoc
 
-toMatchArgs :: [LPat p] -> [LPat p]
-toMatchArgs = id
+toGrhssGRHSs :: NonEmpty (LGRHS p body) -> NonEmpty (LGRHS p body)
+toGrhssGRHSs = id
 
-toGrhssGRHSs :: NonEmpty (LGRHS p body) -> [LGRHS p body]
-toGrhssGRHSs = NonEmpty.toList
-
-mkPrefixCon :: [arg] -> HsConDetails tyargs arg rec
-mkPrefixCon = PrefixCon []
+mkPrefixCon :: [arg] -> HsConDetails arg rec
+mkPrefixCon = PrefixCon

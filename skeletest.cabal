@@ -82,7 +82,7 @@ library
     , exceptions
     , filepath
     , ghc ^>= 9.8 || ^>= 9.10 || ^>= 9.12
-    , hedgehog
+    , hedgehog >= 1.5
     , megaparsec
     , ordered-containers >= 0.2.4
     , parser-combinators

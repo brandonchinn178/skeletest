@@ -1,11 +1,20 @@
 # Development
 
 ```shell
-cabal build --ghc-options -Werror
+cabal build
 
-# Note: must use the default GHC executable; integration tests
-# will not work with --with-compiler set differently
-cabal exec -- cabal test --test-option '*'
+# Run all unit tests
+cabal exec -- cabal test
+
+# Run all integration tests
+cabal exec -- cabal test --test-options '@integration'
+
+# Run all unit + integration tests
+cabal exec -- cabal test --test-options '*'
+
+# Run tests on specific GHC version
+# Note: --with-compiler does not work with integration tests
+ghcup run --ghc=9.X -- cabal exec -- cabal test --test-options '*'
 ```
 
 # Release

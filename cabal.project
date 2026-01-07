@@ -1,1 +1,4 @@
 packages: .
+
+program-options
+  ghc-options: -Werror

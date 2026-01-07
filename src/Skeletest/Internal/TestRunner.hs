@@ -20,16 +20,18 @@ module Skeletest.Internal.TestRunner (
 
 import Control.Monad (guard)
 import Control.Monad.IO.Class (MonadIO)
-import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Text.IO qualified as Text
 import Data.Typeable (typeOf)
 import GHC.IO.Exception qualified as GHC
 import GHC.Stack (CallStack)
 import GHC.Stack qualified as GHC
 import Skeletest.Internal.Error (SkeletestError)
-import Skeletest.Internal.Spec.Output (BoxSpec, BoxSpecContent (..))
+import Skeletest.Internal.Spec.Output (
+  BoxSpec,
+  BoxSpecContent (..),
+  renderPrettyFailure,
+ )
 import Skeletest.Internal.TestInfo (TestInfo)
 import Skeletest.Internal.Utils.Color qualified as Color
 import Text.Read (readMaybe)
@@ -38,7 +40,6 @@ import UnliftIO.Exception (
   SomeException (..),
   displayException,
   fromException,
-  try,
  )
 
 {----- Testable -----}
@@ -184,55 +185,3 @@ renderAssertionFail AssertionFail{..} =
     [ (srcLocFile, srcLocStartLine, srcLocStartCol, srcLocEndCol)
     | (_, GHC.SrcLoc{..}) <- GHC.getCallStack callStack
     ]
-
--- | Render a test failure like:
---
--- @
--- At test/Skeletest/Internal/TestTargetsSpec.hs:19:
--- |
--- |           parseTestTargets input `shouldBe` Right (Just expected)
--- |                                   ^^^^^^^^
---
--- Right 1 ≠ Left 1
--- @
-renderPrettyFailure ::
-  -- | Message
-  Text ->
-  FailContext ->
-  -- | Call stack (file, line, startCol, endCol)
-  [(FilePath, Int, Int, Int)] ->
-  IO Text
-renderPrettyFailure msg ctx callstack = do
-  prettyStackTrace <- mapM renderCallLine . reverse $ callstack
-  pure . Text.intercalate "\n\n" . concat $
-    [ prettyStackTrace
-    , if null ctx
-        then []
-        else [Text.intercalate "\n" $ reverse ctx]
-    , [msg]
-    ]
- where
-  renderCallLine (path, lineNum, startCol, endCol) = do
-    mLine <-
-      try (Text.readFile path) >>= \case
-        Right srcFile -> pure $ getLineNum lineNum srcFile
-        Left (_ :: SomeException) -> pure Nothing
-    let (srcLine, pointerLine) =
-          case mLine of
-            Just line ->
-              ( line
-              , Text.replicate (startCol - 1) " " <> Text.replicate (endCol - startCol) "^"
-              )
-            Nothing ->
-              ( "<unknown line>"
-              , ""
-              )
-
-    pure . Text.intercalate "\n" $
-      [ Text.pack path <> ":" <> (Text.pack . show) lineNum <> ":"
-      , "|"
-      , "| " <> srcLine
-      , "| " <> pointerLine
-      ]
-
-  getLineNum n = listToMaybe . take 1 . drop (n - 1) . Text.lines

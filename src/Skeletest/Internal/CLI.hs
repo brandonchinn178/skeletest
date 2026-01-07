@@ -35,14 +35,13 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Data.Typeable (TypeRep, Typeable, typeOf, typeRep)
+import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
+import Skeletest.Internal.TestTargets (TestTargets, parseTestTargets)
 import System.Environment (getArgs)
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (stderr)
 import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.Exception (throwIO)
-
-import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
-import Skeletest.Internal.TestTargets (TestTargets, parseTestTargets)
 
 -- | Register a CLI flag.
 --

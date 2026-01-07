@@ -41,12 +41,6 @@ import Data.Maybe (catMaybes, isJust, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
-import UnliftIO.Exception (
-  finally,
-  fromException,
-  try,
- )
-
 import Skeletest.Assertions (Testable, runTestable)
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.Markers (
@@ -69,6 +63,11 @@ import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Plugin (Hooks (..), defaultHooks)
 import Skeletest.Prop.Internal (Property)
 import System.IO qualified as IO
+import UnliftIO.Exception (
+  finally,
+  fromException,
+  try,
+ )
 
 type Spec = Spec' ()
 

@@ -30,17 +30,16 @@ import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy (..))
 import Data.Text qualified as Text
 import Data.Typeable (TypeRep, Typeable, eqT, typeOf, typeRep, (:~:) (Refl))
-import System.Directory (createDirectory, getTemporaryDirectory, removePathForcibly)
-import System.FilePath ((</>))
-import System.IO.Unsafe (unsafePerformIO)
-import UnliftIO.Exception (throwIO, tryAny)
-
 import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
 import Skeletest.Internal.TestInfo (
   TestInfo (testFile),
   getTestInfo,
  )
 import Skeletest.Internal.Utils.Map qualified as Map.Utils
+import System.Directory (createDirectory, getTemporaryDirectory, removePathForcibly)
+import System.FilePath ((</>))
+import System.IO.Unsafe (unsafePerformIO)
+import UnliftIO.Exception (throwIO, tryAny)
 
 class (Typeable a) => Fixture a where
   -- | The scope of the fixture, defaults to per-test

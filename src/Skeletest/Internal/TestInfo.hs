@@ -11,14 +11,13 @@ import Control.Monad.IO.Class (MonadIO)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Text (Text)
+import Skeletest.Internal.Error (invariantViolation)
+import Skeletest.Internal.Markers (SomeMarker)
 import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO (MonadUnliftIO)
 import UnliftIO.Concurrent (ThreadId, myThreadId)
 import UnliftIO.Exception (bracket_)
 import UnliftIO.IORef (IORef, modifyIORef, newIORef, readIORef)
-
-import Skeletest.Internal.Error (invariantViolation)
-import Skeletest.Internal.Markers (SomeMarker)
 
 data TestInfo = TestInfo
   { testContexts :: [Text]

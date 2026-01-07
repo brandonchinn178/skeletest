@@ -49,6 +49,17 @@ import Data.Typeable (Typeable)
 import Data.Typeable qualified as Typeable
 import Data.Void (absurd)
 import Debug.RecoverRTTI (anythingToString)
+import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..))
+import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
+import Skeletest.Internal.Fixtures (
+  Fixture (..),
+  FixtureScope (..),
+  getFixture,
+  noCleanup,
+  withCleanup,
+ )
+import Skeletest.Internal.TestInfo (TestInfo (..), getTestInfo)
+import Skeletest.Internal.Utils.Map qualified as Map.Utils
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (replaceExtension, splitFileName, takeDirectory, (</>))
 import System.IO.Error (isDoesNotExistError)
@@ -62,18 +73,6 @@ import UnliftIO.IORef (
   readIORef,
   writeIORef,
  )
-
-import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..))
-import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
-import Skeletest.Internal.Fixtures (
-  Fixture (..),
-  FixtureScope (..),
-  getFixture,
-  noCleanup,
-  withCleanup,
- )
-import Skeletest.Internal.TestInfo (TestInfo (..), getTestInfo)
-import Skeletest.Internal.Utils.Map qualified as Map.Utils
 
 {----- Infrastructure -----}
 

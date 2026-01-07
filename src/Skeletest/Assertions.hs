@@ -20,10 +20,6 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import GHC.Stack (HasCallStack)
 import GHC.Stack qualified as GHC
-import System.IO.Unsafe (unsafePerformIO)
-import UnliftIO.Exception (bracket_, throwIO)
-import UnliftIO.IORef (IORef, modifyIORef, newIORef, readIORef)
-
 import Skeletest.Internal.Predicate (
   Predicate,
   PredicateResult (..),
@@ -37,6 +33,9 @@ import Skeletest.Internal.TestRunner (
   Testable (..),
   testResultPass,
  )
+import System.IO.Unsafe (unsafePerformIO)
+import UnliftIO.Exception (bracket_, throwIO)
+import UnliftIO.IORef (IORef, modifyIORef, newIORef, readIORef)
 
 instance Testable IO where
   runTestable m = m >> pure testResultPass

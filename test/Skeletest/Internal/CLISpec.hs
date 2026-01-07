@@ -5,14 +5,13 @@ import Data.Dynamic (fromDynamic)
 import Data.Map qualified as Map
 import Data.Typeable (Typeable, typeOf)
 import Skeletest
-import Skeletest.Predicate qualified as P
-
 import Skeletest.Internal.CLI (
   CLIFlagStore,
   CLIParseResult (..),
   flag,
   parseCliArgs,
  )
+import Skeletest.Predicate qualified as P
 import Skeletest.TestUtils.Integration
 
 newtype FooFlag = FooFlag String

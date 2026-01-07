@@ -45,14 +45,6 @@ import Hedgehog.Internal.Report qualified as Hedgehog hiding (defaultConfig)
 import Hedgehog.Internal.Runner qualified as Hedgehog
 import Hedgehog.Internal.Seed qualified as Hedgehog.Seed
 import Hedgehog.Internal.Source qualified as Hedgehog
-import Text.Read (readEither, readMaybe)
-import UnliftIO.Exception (throwIO)
-import UnliftIO.IORef (IORef, newIORef, readIORef, writeIORef)
-
-#if !MIN_VERSION_base(4, 20, 0)
-import Data.Foldable (foldl')
-#endif
-
 import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..), getFlag)
 import Skeletest.Internal.TestInfo (getTestInfo)
 import Skeletest.Internal.TestRunner (
@@ -63,6 +55,13 @@ import Skeletest.Internal.TestRunner (
   testResultPass,
  )
 import Skeletest.Internal.Utils.Color qualified as Color
+import Text.Read (readEither, readMaybe)
+import UnliftIO.Exception (throwIO)
+import UnliftIO.IORef (IORef, newIORef, readIORef, writeIORef)
+
+#if !MIN_VERSION_base(4, 20, 0)
+import Data.Foldable (foldl')
+#endif
 
 -- | A property to run, with optional configuration settings specified up front.
 --

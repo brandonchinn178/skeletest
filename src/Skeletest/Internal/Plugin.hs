@@ -11,11 +11,6 @@ module Skeletest.Internal.Plugin (
 import Data.Functor.Const (Const (..))
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Text qualified as Text
-
-#if !MIN_VERSION_base(4, 20, 0)
-import Data.Foldable (foldl')
-#endif
-
 import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
 import Skeletest.Internal.Error (skeletestPluginError)
 import Skeletest.Internal.GHC
@@ -23,6 +18,10 @@ import Skeletest.Internal.Predicate qualified as P
 import Skeletest.Internal.Utils.HList (HList (..))
 import Skeletest.Main qualified as Main
 import Skeletest.Plugin qualified as Plugin
+
+#if !MIN_VERSION_base(4, 20, 0)
+import Data.Foldable (foldl')
+#endif
 
 -- | The plugin to convert a module in the tests directory.
 -- Injected by the preprocessor.

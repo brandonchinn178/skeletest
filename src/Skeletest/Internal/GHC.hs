@@ -82,18 +82,17 @@ import GHC.Types.Name.Cache qualified as GHC (NameCache)
 import GHC.Types.SourceText qualified as GHC.SourceText
 import GHC.Utils.Error qualified as GHC
 import Language.Haskell.TH.Syntax qualified as TH
-import System.IO.Unsafe (unsafePerformIO)
-
-#if !MIN_VERSION_base(4, 20, 0)
-import Data.Foldable (foldl')
-#endif
-
 import Skeletest.Internal.Error (
   SkeletestError (CompilationError),
   invariantViolation,
  )
 import Skeletest.Internal.GHC.Compat (genLoc)
 import Skeletest.Internal.GHC.Compat qualified as GHC.Compat
+import System.IO.Unsafe (unsafePerformIO)
+
+#if !MIN_VERSION_base(4, 20, 0)
+import Data.Foldable (foldl')
+#endif
 
 -- Has to be exactly GHC's Plugin type, for GHC to register it correctly.
 type Plugin = GHC.Plugin

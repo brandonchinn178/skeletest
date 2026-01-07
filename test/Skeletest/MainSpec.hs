@@ -5,7 +5,6 @@ module Skeletest.MainSpec (spec) where
 import Data.Text qualified as Text
 import Skeletest
 import Skeletest.Predicate qualified as P
-
 import Skeletest.TestUtils.Integration
 
 spec :: Spec

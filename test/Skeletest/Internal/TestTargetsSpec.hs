@@ -3,9 +3,8 @@
 module Skeletest.Internal.TestTargetsSpec (spec) where
 
 import Skeletest
-import Skeletest.Predicate qualified as P
-
 import Skeletest.Internal.TestTargets
+import Skeletest.Predicate qualified as P
 
 spec :: Spec
 spec = do

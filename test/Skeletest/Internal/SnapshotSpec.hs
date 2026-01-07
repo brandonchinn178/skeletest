@@ -7,10 +7,6 @@ import Data.Aeson qualified as Aeson
 import Data.String (fromString)
 import Data.Text qualified as Text
 import Skeletest
-import Skeletest.Predicate qualified as P
-import Skeletest.Prop.Gen qualified as Gen
-import Skeletest.Prop.Range qualified as Range
-
 import Skeletest.Internal.Snapshot (
   SnapshotFile (..),
   SnapshotValue (..),
@@ -18,6 +14,9 @@ import Skeletest.Internal.Snapshot (
   encodeSnapshotFile,
   normalizeSnapshotFile,
  )
+import Skeletest.Predicate qualified as P
+import Skeletest.Prop.Gen qualified as Gen
+import Skeletest.Prop.Range qualified as Range
 import Skeletest.TestUtils.Integration
 
 spec :: Spec

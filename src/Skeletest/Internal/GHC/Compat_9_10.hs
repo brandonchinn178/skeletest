@@ -9,7 +9,6 @@ import Data.Data (toConstr)
 import GHC hiding (FieldOcc (..), mkPrefixFunRhs)
 import GHC qualified
 import GHC.Types.Name.Reader (getRdrName)
-
 import Skeletest.Internal.Error (invariantViolation)
 
 hsLamSingle :: MatchGroup (GhcPass p) (LHsExpr (GhcPass p)) -> HsExpr (GhcPass p)

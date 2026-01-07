@@ -10,12 +10,11 @@ import Data.List (sort)
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
+import Skeletest.Internal.Error (SkeletestError (..))
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (makeRelative, splitExtensions, takeDirectory, (</>))
 import UnliftIO.Exception (throwIO)
-
-import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
-import Skeletest.Internal.Error (SkeletestError (..))
 
 -- | Preprocess the given Haskell file. See Main.hs
 processFile :: FilePath -> Text -> IO Text

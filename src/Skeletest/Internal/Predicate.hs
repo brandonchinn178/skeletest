@@ -88,11 +88,6 @@ import Data.Typeable (Typeable)
 import Debug.RecoverRTTI (anythingToString)
 import GHC.Generics ((:*:) (..))
 import GHC.Stack qualified as GHC
-import UnliftIO (MonadUnliftIO)
-import UnliftIO.Exception (Exception, displayException, try)
-import Prelude hiding (abs, all, and, any, elem, not, or, (&&), (||))
-import Prelude qualified
-
 import Skeletest.Internal.CLI (getFlag)
 import Skeletest.Internal.Error (invariantViolation)
 import Skeletest.Internal.Snapshot (
@@ -110,6 +105,10 @@ import Skeletest.Internal.Utils.HList (HList (..))
 import Skeletest.Internal.Utils.HList qualified as HList
 import Skeletest.Prop.Gen (Gen)
 import Skeletest.Prop.Internal (PropertyM, forAll)
+import UnliftIO (MonadUnliftIO)
+import UnliftIO.Exception (Exception, displayException, try)
+import Prelude hiding (abs, all, and, any, elem, not, or, (&&), (||))
+import Prelude qualified
 
 data Predicate m a = Predicate
   { predicateFunc :: a -> m PredicateFuncResult

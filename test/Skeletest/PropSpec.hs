@@ -4,7 +4,6 @@ import Skeletest
 import Skeletest.Predicate qualified as P
 import Skeletest.Prop.Gen qualified as Gen
 import Skeletest.Prop.Range qualified as Range
-
 import Skeletest.TestUtils.Integration
 
 spec :: Spec

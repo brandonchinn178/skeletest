@@ -27,6 +27,9 @@ import Data.Text.IO qualified as Text
 import GHC.IO.Exception qualified as GHC
 import GHC.Stack (CallStack)
 import GHC.Stack qualified as GHC
+import Skeletest.Internal.Error (SkeletestError)
+import Skeletest.Internal.TestInfo (TestInfo)
+import Skeletest.Internal.Utils.Color qualified as Color
 import Text.Read (readMaybe)
 import UnliftIO.Exception (
   Exception,
@@ -35,10 +38,6 @@ import UnliftIO.Exception (
   fromException,
   try,
  )
-
-import Skeletest.Internal.Error (SkeletestError)
-import Skeletest.Internal.TestInfo (TestInfo)
-import Skeletest.Internal.Utils.Color qualified as Color
 
 {----- Testable -----}
 

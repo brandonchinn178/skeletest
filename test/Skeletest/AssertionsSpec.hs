@@ -6,6 +6,10 @@ import Skeletest
 import Skeletest.Predicate qualified as P
 import Skeletest.TestUtils.Integration
 
+#if __GLASGOW_HASKELL__ == 910
+import Data.Text qualified as Text
+#endif
+
 spec :: Spec
 spec = do
   describe "shouldBe" $ do
@@ -183,12 +187,9 @@ spec = do
 sanitizeTraceback :: String -> String
 #if __GLASGOW_HASKELL__ == 910
 sanitizeTraceback s =
-  let (pre, post) = span (/= "HasCallStack backtrace:") $ lines s
-      (_, post2) = break isEnd post
-   in unlines $ pre ++ post2
-  where
-    isEnd ('-' : _) = True
-    isEnd _ = False
+  let (pre, post) = break (Text.pack "HasCallStack backtrace:" `Text.isInfixOf`) $ Text.lines $ Text.pack s
+      (_, post2) = break (Text.pack "╚" `Text.isPrefixOf`) $ drop 1 post
+   in Text.unpack . Text.unlines $ pre ++ post2
 #else
 sanitizeTraceback = id
 #endif

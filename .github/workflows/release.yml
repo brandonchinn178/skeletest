@@ -13,6 +13,8 @@ jobs:
     steps:
       -
         uses: actions/checkout@v3
+        with:
+          ref: main
       -
         uses: actions/download-artifact@v4
         with:

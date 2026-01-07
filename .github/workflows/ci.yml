@@ -115,7 +115,7 @@ jobs:
       -
         name: Install fourmolu
         run: |
-          curl -sSL \
+          curl -fsSL \
             "https://github.com/fourmolu/fourmolu/releases/download/v${FOURMOLU_VERSION}/fourmolu-${FOURMOLU_VERSION}-linux-x86_64" \
             -o /usr/local/bin/fourmolu
           chmod +x /usr/local/bin/fourmolu

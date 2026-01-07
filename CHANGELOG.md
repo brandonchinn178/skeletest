@@ -1,12 +1,19 @@
-## Unreleased
+## v0.3.0
 
+GHC support:
+* Support GHC 9.14
+
+New features:
+* Automatically capture stdout/stderr ([#1](https://github.com/brandonchinn178/skeletest/issues/1))
+
+API changes:
+* Specify order of type variables for `P.anything` so that `P.anything @Int` works
+
+Runtime changes:
 * Add location to error messages
 * Render test failures/errors in more visible box
-* Specify order of type variables for `P.anything` so that `P.anything @Int` works
 * Display the path of the test file instead of guessing a module name ([#40](https://github.com/brandonchinn178/skeletest/issues/40))
 * Flush stdout so test name is displayed while test is still running
-* Support GHC 9.14
-* Automatically capture stdout/stderr ([#1](https://github.com/brandonchinn178/skeletest/issues/1))
 
 ## v0.2.1
 

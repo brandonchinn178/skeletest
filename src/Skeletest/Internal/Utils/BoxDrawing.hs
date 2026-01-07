@@ -24,18 +24,26 @@ drawBox box = do
   pure $ drawBox' width box
 
 drawBox' :: Int -> BoxSpec -> Text
-drawBox' width boxContents = Text.intercalate "\n" $ [header] <> map go boxContents <> [footer]
+drawBox' width boxContents = Text.intercalate "\n" $ [header] <> concatMap draw boxContents <> [footer]
  where
   header = "╔" <> Text.replicate (width - 2) "═" <> "╗"
   footer = "╚" <> Text.replicate (width - 2) "═" <> "╝"
 
-  go = \case
-    BoxHeader s -> rpad (width - 2) "─" ("╟─[ " <> s <> " ]") <> "─╢"
+  draw = \case
+    BoxHeader s ->
+      [ drawLine ""
+      , "╟─" <> cpad (width - 4) "─" ("⟨ " <> s <> " ⟩") <> "─╢"
+      ]
     BoxText s ->
-      Text.intercalate "\n" $
-        [ rpad (width - 2) " " ("║ " <> line) <> " ║"
-        | rawLine <- Text.lines s
-        , line <- if Text.null rawLine then [""] else Text.chunksOf (width - 4) rawLine
-        ]
+      [ drawLine line
+      | rawLine <- Text.lines s
+      , line <- if Text.null rawLine then [""] else Text.chunksOf (width - 4) rawLine
+      ]
+  drawLine s = "║ " <> rpad (width - 4) " " s <> " ║"
 
   rpad n fill s = s <> Text.replicate (n - Text.length s) fill
+  cpad n fill s =
+    let total = n - Text.length s
+        left = total `div` 2
+        right = total - left
+     in Text.replicate left fill <> s <> Text.replicate right fill

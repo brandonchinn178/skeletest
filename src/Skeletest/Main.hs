@@ -22,6 +22,7 @@ module Skeletest.Main (
 
 import Control.Monad (unless)
 import Skeletest.Internal.CLI (Flag, flag, loadCliArgs)
+import Skeletest.Internal.Capture (CaptureOutputFlag)
 import Skeletest.Internal.Snapshot (
   SnapshotRenderer (..),
   SnapshotUpdateFlag,
@@ -56,6 +57,7 @@ runSkeletest' Plugin{..} testModules = do
     [ flag @SnapshotUpdateFlag
     , flag @PropSeedFlag
     , flag @PropLimitFlag
+    , flag @CaptureOutputFlag
     ]
 
   mkSpec (specPath, specSpec) =

@@ -43,6 +43,7 @@ module Skeletest (
 
   -- ** Built-in fixtures
   FixtureTmpDir (..),
+  FixtureCapturedOutput (..),
 
   -- * CLI flags
   Flag (..),
@@ -54,6 +55,7 @@ module Skeletest (
 import GHC.Stack (HasCallStack)
 import Skeletest.Assertions
 import Skeletest.Internal.CLI
+import Skeletest.Internal.Capture
 import Skeletest.Internal.Fixtures
 import Skeletest.Internal.Spec
 import Skeletest.Predicate

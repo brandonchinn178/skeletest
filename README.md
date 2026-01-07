@@ -402,6 +402,10 @@ Markers are a useful way to mark tests for selection (see "Test selection"). The
 
     All tests in the given section will be marked with the given marker, which can be selected with `@my-marker`. You can see if a test has a marker with `findMarkers` (see the "Hooks" section).
 
+### Output capturing
+
+By default, Skeletest will capture all output to stdout/stderr that occurs during a test and will only display it if the test fails. To disable this, pass `--capture-output=off`.
+
 ### Custom CLI flags
 
 To register and use your own CLI flags, do the following:

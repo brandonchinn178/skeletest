@@ -43,8 +43,7 @@ spec = do
       ]
     addTestFile runner "__snapshots__/ExampleSpec.snap.md" ["asdf"]
 
-    (code, stdout, stderr) <- runTests runner []
-    code `shouldBe` ExitFailure 1
+    (stdout, stderr) <- expectFailure $ runTests runner []
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -105,8 +104,7 @@ spec = do
       , "```"
       ]
 
-    (code, stdout, stderr) <- runTests runner []
-    code `shouldBe` ExitFailure 1
+    (stdout, stderr) <- expectFailure $ runTests runner []
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
 

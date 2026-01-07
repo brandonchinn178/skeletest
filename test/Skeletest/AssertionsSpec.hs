@@ -26,8 +26,7 @@ spec = do
         , "spec = it \"should fail\" $ 1 `shouldBe` (2 :: Int)"
         ]
 
-      (code, stdout, stderr) <- runTests runner []
-      code `shouldBe` ExitFailure 1
+      (stdout, stderr) <- expectFailure $ runTests runner []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -45,8 +44,7 @@ spec = do
         , "spec = it \"should fail\" $ 1 `shouldNotBe` (1 :: Int)"
         ]
 
-      (code, stdout, stderr) <- runTests runner []
-      code `shouldBe` ExitFailure 1
+      (stdout, stderr) <- expectFailure $ runTests runner []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -65,8 +63,7 @@ spec = do
         , "spec = it \"should fail\" $ (-1) `shouldSatisfy` P.gt (0 :: Int)"
         ]
 
-      (code, stdout, stderr) <- runTests runner []
-      code `shouldBe` ExitFailure 1
+      (stdout, stderr) <- expectFailure $ runTests runner []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -85,8 +82,7 @@ spec = do
         , "spec = it \"should fail\" $ 1 `shouldNotSatisfy` P.gt (0 :: Int)"
         ]
 
-      (code, stdout, stderr) <- runTests runner []
-      code `shouldBe` ExitFailure 1
+      (stdout, stderr) <- expectFailure $ runTests runner []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -103,8 +99,7 @@ spec = do
         , "    1 `shouldBe` (2 :: Int)"
         ]
 
-      (code, stdout, stderr) <- runTests runner []
-      code `shouldBe` ExitFailure 1
+      (stdout, stderr) <- expectFailure $ runTests runner []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -119,8 +114,7 @@ spec = do
         , "spec = it \"should fail\" $ failTest \"error message\""
         ]
 
-      (code, stdout, stderr) <- runTests runner []
-      code `shouldBe` ExitFailure 1
+      (stdout, stderr) <- expectFailure $ runTests runner []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -141,8 +135,7 @@ spec = do
       , "expectGT x actual = actual `shouldSatisfy` P.gt x"
       ]
 
-    (code, stdout, stderr) <- runTests runner []
-    code `shouldBe` ExitFailure 1
+    (stdout, stderr) <- expectFailure $ runTests runner []
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -159,8 +152,7 @@ spec = do
       , "  x `shouldBe` True"
       ]
 
-    (code, stdout, stderr) <- runTests runner []
-    code `shouldBe` ExitFailure 1
+    (stdout, stderr) <- expectFailure $ runTests runner []
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -177,8 +169,7 @@ spec = do
       , "  pure ()"
       ]
 
-    (code, stdout, stderr) <- runTests runner []
-    code `shouldBe` ExitFailure 1
+    (stdout, stderr) <- expectFailure $ runTests runner []
     stderr `shouldBe` ""
     sanitizeTraceback stdout `shouldSatisfy` P.matchesSnapshot
 

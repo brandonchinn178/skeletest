@@ -22,8 +22,7 @@ spec = do
         , "  discard"
         ]
 
-      (code, stdout, stderr) <- runTests runner []
-      code `shouldBe` ExitFailure 1
+      (stdout, stderr) <- expectFailure $ runTests runner []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -49,7 +48,6 @@ spec = do
         , "    (read . show) P.=== id `shouldNotSatisfy` P.isoWith (Gen.int $ Range.linear 0 10)"
         ]
 
-      (code, stdout, stderr) <- runTests runner ["--seed=0:0"]
-      code `shouldBe` ExitFailure 1
+      (stdout, stderr) <- expectFailure $ runTests runner ["--seed=0:0"]
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot

@@ -64,10 +64,9 @@ runtimeSpec handle = do
         , "    " <> render_hPutStrLn handle "line2"
         , "    1 `shouldBe` 2"
         ]
-      (code, stdout, stderr) <- runTests runner []
+      (stdout, stderr) <- expectFailure $ runTests runner []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
-      code `shouldBe` ExitFailure 1
 
     integration . it "is rendered on test error" $ do
       runner <- getFixture
@@ -88,10 +87,9 @@ runtimeSpec handle = do
         , "    Just _ <- pure Nothing"
         , "    pure ()"
         ]
-      (code, stdout, stderr) <- runTests runner []
+      (stdout, stderr) <- expectFailure $ runTests runner []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
-      code `shouldBe` ExitFailure 1
 
     integration . it "is not captured with --capture-output=off" $ do
       runner <- getFixture
@@ -141,10 +139,8 @@ fixtureGetSpec (handle, func) =
         , "    s <- output." <> func
         , "    s `shouldBe` " <> show "test1\ntest2\n"
         ]
-      (code, stdout, stderr) <- runTests runner []
-      stderr `shouldBe` ""
-      context stdout $
-        code `shouldBe` ExitSuccess
+      _ <- expectSuccess $ runTests runner []
+      pure ()
 
 fixtureReadSpec :: (String, String) -> Spec
 fixtureReadSpec (handle, func) =
@@ -173,10 +169,8 @@ fixtureReadSpec (handle, func) =
         , "    s <- output." <> func
         , "    s `shouldBe` " <> show "test2\n"
         ]
-      (code, stdout, stderr) <- runTests runner []
-      stderr `shouldBe` ""
-      context stdout $
-        code `shouldBe` ExitSuccess
+      _ <- expectSuccess $ runTests runner []
+      pure ()
 
 render_hPutStrLn :: String -> String -> String
 render_hPutStrLn handle s = "IO.hPutStrLn IO." <> handle <> " " <> show s

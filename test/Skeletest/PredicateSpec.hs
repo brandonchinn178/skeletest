@@ -143,8 +143,7 @@ spec = do
           , "  User \"alice\" `shouldSatisfy` P.con User{name = P.eq \"\"}"
           ]
 
-        (code, stdout, stderr) <- runTests runner []
-        code `shouldBe` ExitFailure 1
+        (stdout, stderr) <- expectFailure $ runTests runner []
         stderr `shouldBe` ""
         stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -162,8 +161,7 @@ spec = do
           , "  User \"alice\" `shouldSatisfy` P.con User{foo = P.eq \"\"}"
           ]
 
-        (code, stdout, stderr) <- runTests runner []
-        code `shouldBe` ExitFailure 1
+        (stdout, stderr) <- expectFailure $ runTests runner []
         stdout `shouldBe` ""
         stderr `shouldSatisfy` P.matchesSnapshot
 
@@ -181,8 +179,7 @@ spec = do
           , "  User \"alice\" (Just 1) `shouldSatisfy` P.con (User (P.eq \"\"))"
           ]
 
-        (code, stdout, stderr) <- runTests runner []
-        code `shouldBe` ExitFailure 1
+        (stdout, stderr) <- expectFailure $ runTests runner []
         stdout `shouldBe` ""
         (normalizeConFailure . normalizeVars) stderr `shouldSatisfy` P.matchesSnapshot
 
@@ -198,8 +195,7 @@ spec = do
           , "  \"\" `shouldSatisfy` P.con \"\""
           ]
 
-        (code, stdout, stderr) <- runTests runner []
-        code `shouldBe` ExitFailure 1
+        (stdout, stderr) <- expectFailure $ runTests runner []
         stdout `shouldBe` ""
         stderr `shouldSatisfy` P.matchesSnapshot
 
@@ -215,8 +211,7 @@ spec = do
           , "  \"\" `shouldSatisfy` P.con"
           ]
 
-        (code, stdout, stderr) <- runTests runner []
-        code `shouldBe` ExitFailure 1
+        (stdout, stderr) <- expectFailure $ runTests runner []
         stdout `shouldBe` ""
         stderr `shouldSatisfy` P.matchesSnapshot
 
@@ -232,8 +227,7 @@ spec = do
           , "  \"\" `shouldSatisfy` P.con 1 2"
           ]
 
-        (code, stdout, stderr) <- runTests runner []
-        code `shouldBe` ExitFailure 1
+        (stdout, stderr) <- expectFailure $ runTests runner []
         stdout `shouldBe` ""
         stderr `shouldSatisfy` P.matchesSnapshot
 

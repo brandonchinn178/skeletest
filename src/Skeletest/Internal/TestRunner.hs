@@ -29,8 +29,8 @@ import GHC.IO.Exception qualified as GHC
 import GHC.Stack (CallStack)
 import GHC.Stack qualified as GHC
 import Skeletest.Internal.Error (SkeletestError)
+import Skeletest.Internal.Spec.Output (BoxSpec, BoxSpecContent (..))
 import Skeletest.Internal.TestInfo (TestInfo)
-import Skeletest.Internal.Utils.BoxDrawing (BoxSpec, BoxSpecContent (..))
 import Skeletest.Internal.Utils.Color qualified as Color
 import Text.Read (readMaybe)
 import UnliftIO.Exception (

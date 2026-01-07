@@ -25,9 +25,9 @@ module Skeletest.Plugin (
 import Skeletest.Internal.CLI (Flag)
 import Skeletest.Internal.Markers (findMarker, hasMarkerNamed)
 import Skeletest.Internal.Snapshot (SnapshotRenderer)
+import Skeletest.Internal.Spec.Output (BoxSpec, BoxSpecContent (..))
 import Skeletest.Internal.TestInfo (TestInfo (..))
 import Skeletest.Internal.TestRunner (TestResult (..), TestResultMessage (..))
-import Skeletest.Internal.Utils.BoxDrawing (BoxSpec, BoxSpecContent (..))
 
 data Plugin = Plugin
   { cliFlags :: [Flag]

@@ -50,6 +50,7 @@ import Skeletest.Internal.Markers (
   SomeMarker (..),
   findMarker,
  )
+import Skeletest.Internal.Spec.Output (drawBox)
 import Skeletest.Internal.TestInfo (TestInfo (TestInfo), withTestInfo)
 import Skeletest.Internal.TestInfo qualified as TestInfo
 import Skeletest.Internal.TestRunner (
@@ -60,7 +61,6 @@ import Skeletest.Internal.TestRunner (
  )
 import Skeletest.Internal.TestTargets (TestTarget, TestTargets, matchesTest)
 import Skeletest.Internal.TestTargets qualified as TestTargets
-import Skeletest.Internal.Utils.BoxDrawing (drawBox)
 import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Plugin (Hooks (..), defaultHooks)
 import Skeletest.Prop.Internal (Property)

@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Skeletest.Internal.Utils.BoxDrawing (
+module Skeletest.Internal.Spec.Output (
   BoxSpec,
   BoxSpecContent (..),
   drawBox,

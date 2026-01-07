@@ -28,11 +28,11 @@ import Skeletest.Internal.Fixtures (
   noCleanup,
   withCleanup,
  )
+import Skeletest.Internal.Spec.Output (BoxSpecContent (..))
 import Skeletest.Internal.TestRunner (
   TestResult (..),
   TestResultMessage (..),
  )
-import Skeletest.Internal.Utils.BoxDrawing (BoxSpecContent (..))
 import System.Directory (removePathForcibly)
 import System.IO qualified as IO
 import UnliftIO.Exception (finally)

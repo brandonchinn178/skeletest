@@ -61,9 +61,9 @@ renderPrettyFailure msg ctx callstack = do
 
     pure . Text.intercalate "\n" $
       [ Text.pack path <> ":" <> (Text.pack . show) lineNum <> ":"
-      , "|"
-      , "| " <> srcLine
-      , "| " <> pointerLine
+      , "│"
+      , "│ " <> srcLine
+      , "│ " <> pointerLine
       ]
 
   getLineNum n = listToMaybe . take 1 . drop (n - 1) . Text.lines

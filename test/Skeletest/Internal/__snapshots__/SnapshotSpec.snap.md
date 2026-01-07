@@ -1,9 +1,9 @@
-# Skeletest.Internal.Snapshot
+# test/Skeletest/Internal/SnapshotSpec.hs
 
 ## detects corrupted snapshot files
 
 ```
-Example
+./ExampleSpec.hs
     should error: ERROR
         Snapshot file was corrupted: ./__snapshots__/ExampleSpec.snap.md
 ```
@@ -22,7 +22,7 @@ Example
 ## shows helpful failure messages
 
 ```
-Example
+./ExampleSpec.hs
     fails: FAIL
 --------------------------------------------------------------------------------
 ./ExampleSpec.hs:7:

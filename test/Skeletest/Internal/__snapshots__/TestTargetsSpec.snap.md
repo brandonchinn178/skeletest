@@ -1,4 +1,4 @@
-# Skeletest.Internal.TestTargets
+# test/Skeletest/Internal/TestTargetsSpec.hs
 
 ## parseTestTargets / fails with a helpful error message
 

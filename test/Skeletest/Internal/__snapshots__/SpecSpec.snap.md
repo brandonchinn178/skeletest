@@ -1,9 +1,9 @@
-# Skeletest.Internal.Spec
+# test/Skeletest/Internal/SpecSpec.hs
 
 ## skip / skips tests completely
 
 ```
-Example
+./ExampleSpec.hs
     should not run: SKIP
         broken tests
     should not run either: SKIP
@@ -13,7 +13,7 @@ Example
 ## xfail / checks for expected failures
 
 ```
-Example
+./ExampleSpec.hs
     should fail: XFAIL
         broken tests
     should fail too: XFAIL
@@ -23,7 +23,7 @@ Example
 ## xfail / errors on unexpected passes
 
 ```
-Example
+./ExampleSpec.hs
     should fail: XPASS
         broken tests
     should fail too: XPASS

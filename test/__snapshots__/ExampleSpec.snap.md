@@ -1,4 +1,4 @@
-# Example
+# test/ExampleSpec.hs
 
 ## predicates / matches snapshots
 

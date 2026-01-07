@@ -1,4 +1,4 @@
-# Skeletest.Internal.Predicate
+# test/Skeletest/PredicateSpec.hs
 
 ## Combinators / && / shows helpful failure messages
 
@@ -251,7 +251,7 @@ ExampleSpec.hs:9:43: error: [GHC-76037] Not in scope: ‘foo’
 ## Data types / con / shows a helpful failure message
 
 ```
-Example
+./ExampleSpec.hs
     should error: FAIL
 --------------------------------------------------------------------------------
 ./ExampleSpec.hs:9:

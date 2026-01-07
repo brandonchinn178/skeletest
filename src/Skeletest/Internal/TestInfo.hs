@@ -21,8 +21,7 @@ import Skeletest.Internal.Error (invariantViolation)
 import Skeletest.Internal.Markers (SomeMarker)
 
 data TestInfo = TestInfo
-  { testModule :: Text
-  , testContexts :: [Text]
+  { testContexts :: [Text]
   , testName :: Text
   , testMarkers :: [SomeMarker]
   , testFile :: FilePath

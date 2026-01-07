@@ -87,17 +87,17 @@ addSpecsList :: [(FilePath, Text)] -> Text -> Text
 addSpecsList testModules file =
   Text.unlines
     [ file
-    , mainFileSpecsListIdentifier <> " :: [(FilePath, String, Spec)]"
+    , mainFileSpecsListIdentifier <> " :: [(FilePath, Spec)]"
     , mainFileSpecsListIdentifier <> " = " <> renderSpecList specsList
     ]
   where
     specsList =
-      [ (quote $ Text.pack fp, quote modName, modName <> ".spec")
+      [ (quote $ Text.pack fp, modName <> ".spec")
       | (fp, modName) <- testModules
       ]
     quote s = "\"" <> s <> "\""
     renderSpecList xs = "[" <> (Text.intercalate ", " . map renderSpecInfo) xs <> "]"
-    renderSpecInfo (fp, name, spec) = "(" <> fp <> ", " <> name <> ", " <> spec <> ")"
+    renderSpecInfo (fp, spec) = "(" <> fp <> ", " <> spec <> ")"
 
 -- | Add imports after the Skeletest.Main import, which should always be present in the Main module.
 insertImports :: [(FilePath, Text)] -> Text -> Either SkeletestError Text

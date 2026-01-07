@@ -11,6 +11,8 @@ module Skeletest.Plugin (
   -- ** TestResult
   TestResult (..),
   TestResultMessage (..),
+  BoxSpec,
+  BoxSpecContent (..),
 
   -- ** TestInfo
   TestInfo (..),
@@ -23,6 +25,7 @@ module Skeletest.Plugin (
 import Skeletest.Internal.CLI (Flag)
 import Skeletest.Internal.Markers (findMarker, hasMarkerNamed)
 import Skeletest.Internal.Snapshot (SnapshotRenderer)
+import Skeletest.Internal.Spec.Output (BoxSpec, BoxSpecContent (..))
 import Skeletest.Internal.TestInfo (TestInfo (..))
 import Skeletest.Internal.TestRunner (TestResult (..), TestResultMessage (..))
 

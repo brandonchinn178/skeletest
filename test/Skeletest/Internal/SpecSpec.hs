@@ -52,8 +52,7 @@ spec = do
         , "  it \"should fail too\" $ pure ()"
         ]
 
-      (code, stdout, stderr) <- runTests runner []
-      code `shouldBe` ExitFailure 1
+      (stdout, stderr) <- expectFailure $ runTests runner []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 

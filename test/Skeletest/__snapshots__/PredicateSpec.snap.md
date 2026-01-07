@@ -252,21 +252,20 @@ ExampleSpec.hs:9:43: error: [GHC-76037] Not in scope: ‘foo’
 
 ```
 ./ExampleSpec.hs
-    should error: FAIL
-╔══════════════════════════════════════════════════════════════════════════════╗
-║ ./ExampleSpec.hs:9:                                                          ║
-║ |                                                                            ║
-║ |   User "alice" `shouldSatisfy` P.con User{name = P.eq ""}                  ║
-║ |                ^^^^^^^^^^^^^^^                                             ║
-║                                                                              ║
-║ "alice" ≠ []                                                                 ║
-║                                                                              ║
-║ Expected:                                                                    ║
-║   matches User{name = (= [])}                                                ║
-║                                                                              ║
-║ Got:                                                                         ║
-║   User "alice"                                                               ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+╭── should error: FAIL
+│ ./ExampleSpec.hs:9:
+│ │
+│ │   User "alice" `shouldSatisfy` P.con User{name = P.eq ""}
+│ │                ^^^^^^^^^^^^^^^
+│ 
+│ "alice" ≠ []
+│ 
+│ Expected:
+│   matches User{name = (= [])}
+│ 
+│ Got:
+│   User "alice"
+╰───────────────────────────────────────────────────────────────────────────────
 ```
 
 ## Data types / list / shows helpful failure messages

@@ -4,9 +4,7 @@
 
 ```
 ./ExampleSpec.hs
-    should error: ERROR
-╔══════════════════════════════════════════════════════════════════════════════╗
-║ Found circular dependency when resolving fixtures: FixtureA -> FixtureB -> F ║
-║ ixtureD -> FixtureA                                                          ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+╭── should error: ERROR
+│ Found circular dependency when resolving fixtures: FixtureA -> FixtureB -> FixtureD -> FixtureA
+╰────────────────────────────────────────────────────────────────────────────────────────────────
 ```

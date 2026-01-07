@@ -14,8 +14,7 @@ spec = do
     setMainFile runner []
     addTestFile runner "ExampleSpec.hs" (minimalTest "ExampleSpec")
 
-    (code, stdout, stderr) <- runTests runner []
-    code `shouldBe` ExitFailure 1
+    (stdout, stderr) <- expectFailure $ runTests runner []
     stdout `shouldBe` ""
     normalizePluginError stderr `shouldSatisfy` P.matchesSnapshot
 
@@ -44,8 +43,7 @@ spec = do
       ]
     addTestFile runner "ExampleSpec.hs" (minimalTest "ExampleSpec")
 
-    (code, stdout, stderr) <- runTests runner []
-    code `shouldBe` ExitFailure 1
+    (stdout, stderr) <- expectFailure $ runTests runner []
     stdout `shouldBe` ""
     normalizeGhc29916 stderr `shouldSatisfy` P.matchesSnapshot
 

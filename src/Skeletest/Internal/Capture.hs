@@ -28,11 +28,11 @@ import Skeletest.Internal.Fixtures (
   noCleanup,
   withCleanup,
  )
+import Skeletest.Internal.Spec.Output (BoxSpecContent (..))
 import Skeletest.Internal.TestRunner (
   TestResult (..),
   TestResultMessage (..),
  )
-import Skeletest.Internal.Utils.BoxDrawing (BoxSpecContent (..))
 import System.Directory (removePathForcibly)
 import System.IO qualified as IO
 import UnliftIO.Exception (finally)
@@ -85,7 +85,7 @@ addCapturedOutput = maybe id updateResult
   updateResult output result =
     result
       { testResultMessage =
-          TestResultMessageSection . concat $
+          TestResultMessageBox . concat $
             [ toBoxContents (testResultMessage result)
             , renderOutput output
             ]
@@ -93,7 +93,7 @@ addCapturedOutput = maybe id updateResult
   toBoxContents = \case
     TestResultMessageNone -> []
     TestResultMessageInline msg -> [BoxText msg]
-    TestResultMessageSection box -> box
+    TestResultMessageBox box -> box
   renderOutput (stdout, stderr) =
     concat
       [ if Text.null stdout then [] else [BoxHeader "Captured stdout", BoxText stdout]

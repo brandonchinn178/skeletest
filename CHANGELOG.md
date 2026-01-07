@@ -3,6 +3,9 @@
 API changes:
 * Re-export `BoxSpec` and `BoxContent` from `Skeletest.Plugin`
 
+Runtime changes:
+* Tweak formatting of test failures/errors
+
 ## v0.3.0
 
 GHC support:

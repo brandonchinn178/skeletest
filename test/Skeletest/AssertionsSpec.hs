@@ -188,8 +188,12 @@ sanitizeTraceback :: String -> String
 #if __GLASGOW_HASKELL__ == 910
 sanitizeTraceback s =
   let (pre, post) = break (Text.pack "HasCallStack backtrace:" `Text.isInfixOf`) $ Text.lines $ Text.pack s
-      (_, post2) = break (Text.pack "╚" `Text.isPrefixOf`) $ drop 1 post
-   in Text.unpack . Text.unlines $ pre ++ post2
+      (_, post2) = break (Text.pack "╰" `Text.isPrefixOf`) $ drop 1 post
+      post2' =
+        case post2 of
+          [] -> []
+          l : ls -> Text.take 80 l : ls
+   in Text.unpack . Text.unlines $ pre ++ post2'
 #else
 sanitizeTraceback = id
 #endif

@@ -53,8 +53,9 @@ import Skeletest.Internal.Markers (
 import Skeletest.Internal.Spec.Output (
   reportGroup,
   reportTestInProgress,
-  reportTestResultBox,
-  reportTestResultInline,
+  reportTestResultWithBoxMessage,
+  reportTestResultWithInlineMessage,
+  reportTestResultWithoutMessage,
  )
 import Skeletest.Internal.TestInfo (TestInfo (TestInfo), withTestInfo)
 import Skeletest.Internal.TestInfo qualified as TestInfo
@@ -185,11 +186,14 @@ runSpecs hooks0 specs =
           tid <- myThreadId
           runTest testInfo testAction `finally` cleanupFixtures (PerTestFixtureKey tid)
 
-      width <- maybe 80 (max 40 . Term.width) <$> Term.size
       case testResultMessage of
-        TestResultMessageNone -> pure ()
-        TestResultMessageInline msg -> reportTestResultInline lvl msg
-        TestResultMessageBox box -> reportTestResultBox width testResultLabel box
+        TestResultMessageNone -> do
+          reportTestResultWithoutMessage testResultLabel
+        TestResultMessageInline msg -> do
+          reportTestResultWithInlineMessage lvl testResultLabel msg
+        TestResultMessageBox box -> do
+          termSize <- Term.size
+          reportTestResultWithBoxMessage termSize lvl testName testResultLabel box
       pure testResultSuccess
 
   runTest info action =

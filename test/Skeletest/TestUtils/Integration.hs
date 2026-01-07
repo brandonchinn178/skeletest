@@ -107,7 +107,11 @@ runTests FixtureTestRunner{..} args = do
       ]
   setCWD dir p = p{cwd = Just dir}
 
-  sanitize = Text.unpack . stripControlChars . Text.strip . Text.pack
+  sanitize = Text.unpack . stripOverwrites . stripControlChars . Text.strip . Text.pack
+  stripOverwrites s =
+    case Text.breakOn "\r" s of
+      (_, "") -> s
+      (pre, post) -> Text.dropWhileEnd (/= '\n') pre <> stripOverwrites (Text.drop 1 post)
   stripControlChars s =
     case Text.breakOn "\x1b" s of
       (_, "") -> s

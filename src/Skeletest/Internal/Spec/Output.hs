@@ -4,12 +4,12 @@
 module Skeletest.Internal.Spec.Output (
   reportGroup,
   reportTestInProgress,
-  reportTestResultInline,
-  reportTestResultBox,
+  reportTestResultWithoutMessage,
+  reportTestResultWithInlineMessage,
+  reportTestResultWithBoxMessage,
   renderPrettyFailure,
   BoxSpec,
   BoxSpecContent (..),
-  drawBox,
   IndentLevel,
   indent,
 ) where
@@ -18,6 +18,7 @@ import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
+import System.Console.Terminal.Size qualified as Term
 import System.IO qualified as IO
 import UnliftIO.Exception (SomeException, try)
 
@@ -30,19 +31,35 @@ reportTestInProgress lvl testName = do
   Text.putStr $ indent lvl (testName <> ": ")
   IO.hFlush IO.stdout
 
-reportTestResultInline :: IndentLevel -> Text -> IO ()
-reportTestResultInline lvl testResultMessage = do
+reportTestResultWithoutMessage :: Text -> IO ()
+reportTestResultWithoutMessage testResultLabel = do
+  Text.putStrLn testResultLabel
+
+reportTestResultWithInlineMessage :: IndentLevel -> Text -> Text -> IO ()
+reportTestResultWithInlineMessage lvl testResultLabel testResultMessage = do
+  Text.putStrLn testResultLabel
   Text.putStrLn $ indent (lvl + 1) testResultMessage
 
-reportTestResultBox :: Int -> Text -> BoxSpec -> IO ()
-reportTestResultBox width testResultLabel box = do
-  Text.putStrLn testResultLabel
-  Text.putStrLn $ drawBox width box
+reportTestResultWithBoxMessage :: Maybe (Term.Window Int) -> IndentLevel -> Text -> Text -> BoxSpec -> IO ()
+reportTestResultWithBoxMessage termSize lvl testName testResultLabel box = do
+  if null box
+    then do
+      Text.putStrLn testResultLabel
+    else do
+      Text.putStr "\r"
+      Text.putStrLn $ drawBoxHeader lvl testName <> ": " <> testResultLabel
+      Text.putStrLn $ drawBoxBody termSize box
 
 type IndentLevel = Int
 
+indentSize :: Int
+indentSize = 4
+
+indentWith :: Text -> IndentLevel -> Text -> Text
+indentWith fill lvl = Text.intercalate "\n" . map (Text.replicate (lvl * indentSize) fill <>) . Text.splitOn "\n"
+
 indent :: IndentLevel -> Text -> Text
-indent lvl = Text.intercalate "\n" . map (Text.replicate (lvl * 4) " " <>) . Text.splitOn "\n"
+indent = indentWith " "
 
 -- | Render a test failure like:
 --
@@ -104,27 +121,24 @@ data BoxSpecContent
   | BoxHeader Text
   deriving (Show, Eq)
 
-drawBox :: Int -> BoxSpec -> Text
-drawBox width boxContents = Text.intercalate "\n" $ [header] <> concatMap draw boxContents <> [footer]
+drawBoxHeader :: IndentLevel -> Text -> Text
+drawBoxHeader lvl testName = "╭" <> Text.drop 2 (indentWith "─" lvl "") <> " " <> testName
+
+drawBoxBody :: Maybe (Term.Window Int) -> BoxSpec -> Text
+drawBoxBody termSize boxContents = Text.intercalate "\n" $ concatMap draw boxContents <> [footer]
  where
-  header = "╔" <> Text.replicate (width - 2) "═" <> "╗"
-  footer = "╚" <> Text.replicate (width - 2) "═" <> "╝"
+  termWidth = maybe 80 Term.width termSize
+  width =
+    maximum . (termWidth :) . flip concatMap boxContents $ \case
+      BoxHeader s -> [Text.length s + indentSize + 2]
+      BoxText s -> [Text.length line + 2 | line <- Text.lines s]
+
+  footer = "╰" <> Text.replicate (width - 1) "─"
 
   draw = \case
     BoxHeader s ->
       [ drawLine ""
-      , "╟─" <> cpad (width - 4) "─" ("⟨ " <> s <> " ⟩") <> "─╢"
+      , "╞═══ " <> s
       ]
-    BoxText s ->
-      [ drawLine line
-      | rawLine <- Text.lines s
-      , line <- if Text.null rawLine then [""] else Text.chunksOf (width - 4) rawLine
-      ]
-  drawLine s = "║ " <> rpad (width - 4) " " s <> " ║"
-
-  rpad n fill s = s <> Text.replicate (n - Text.length s) fill
-  cpad n fill s =
-    let total = n - Text.length s
-        left = total `div` 2
-        right = total - left
-     in Text.replicate left fill <> s <> Text.replicate right fill
+    BoxText s -> map drawLine $ Text.lines s
+  drawLine s = "│ " <> s

@@ -91,6 +91,7 @@ library
     , ordered-containers >= 0.2.4
     , parser-combinators
     , pretty
+    , process
     , recover-rtti
     , template-haskell
     , terminal-size >= 0.2.0

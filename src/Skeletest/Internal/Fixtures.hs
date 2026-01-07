@@ -15,6 +15,7 @@ module Skeletest.Internal.Fixtures (
   cleanupFixtures,
 
   -- * Built-in fixtures
+  FixtureSkeletestTmpDir (..),
   FixtureTmpDir (..),
 ) where
 
@@ -36,9 +37,15 @@ import Skeletest.Internal.TestInfo (
   getTestInfo,
  )
 import Skeletest.Internal.Utils.Map qualified as Map.Utils
-import System.Directory (createDirectory, getTemporaryDirectory, removePathForcibly)
+import System.Directory (
+  createDirectory,
+  createDirectoryIfMissing,
+  getTemporaryDirectory,
+  removePathForcibly,
+ )
 import System.FilePath ((</>))
 import System.IO.Unsafe (unsafePerformIO)
+import System.Process (getCurrentPid)
 import UnliftIO.Exception (throwIO, tryAny)
 
 class (Typeable a) => Fixture a where
@@ -200,13 +207,27 @@ getScopedAccessors scopeKey =
 
 {----- Built-in fixtures -----}
 
+-- | A fixture that provides a global temporary directory for internal Skeletest use.
+newtype FixtureSkeletestTmpDir = FixtureSkeletestTmpDir FilePath
+
+instance Fixture FixtureSkeletestTmpDir where
+  fixtureScope = PerSessionFixture
+  fixtureAction = do
+    tmpdir <- getTemporaryDirectory
+    pid <- getCurrentPid
+    let dir = tmpdir </> ("skeletest-tmp-dir." <> show pid)
+    removePathForcibly dir
+    createDirectoryIfMissing True dir
+    pure . withCleanup (FixtureSkeletestTmpDir dir) $
+      removePathForcibly dir
+
 -- | A fixture that provides a temporary directory that can be used in a test.
 newtype FixtureTmpDir = FixtureTmpDir FilePath
 
 instance Fixture FixtureTmpDir where
   fixtureAction = do
-    tmpdir <- getTemporaryDirectory
-    let dir = tmpdir </> "skeletest-tmp-dir"
+    FixtureSkeletestTmpDir tmpdir <- getFixture
+    let dir = tmpdir </> "test-tmp-dir"
     removePathForcibly dir
     createDirectory dir
     pure . withCleanup (FixtureTmpDir dir) $

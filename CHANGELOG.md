@@ -1,5 +1,7 @@
 ## Unreleased
 
+## v0.3.1
+
 API changes:
 * Re-export `BoxSpec` and `BoxContent` from `Skeletest.Plugin`
 

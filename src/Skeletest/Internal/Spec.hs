@@ -57,6 +57,7 @@ import Skeletest.Internal.Spec.Output (
   reportTestResultWithInlineMessage,
   reportTestResultWithoutMessage,
  )
+import Skeletest.Internal.Spec.Tree (SpecTree (..))
 import Skeletest.Internal.TestInfo (TestInfo (TestInfo), withTestInfo)
 import Skeletest.Internal.TestInfo qualified as TestInfo
 import Skeletest.Internal.TestRunner (
@@ -87,24 +88,6 @@ getSpecTrees (Spec spec) = execWriter spec
 
 withSpecTrees :: (Monad m) => ([SpecTree] -> m [SpecTree]) -> Spec -> m Spec
 withSpecTrees f = fmap (Spec . tell) . f . getSpecTrees
-
-data SpecTree
-  = SpecGroup
-      { groupLabel :: Text
-      , groupTrees :: [SpecTree]
-      }
-  | SpecTest
-      { testName :: Text
-      , testMarkers :: [SomeMarker]
-      -- ^ Markers, in order from least to most recently applied.
-      --
-      -- >>> withMarker MarkerA . withMarker MarkerB $ test ...
-      --
-      -- will contain
-      --
-      -- >>> SpecTest { testMarkers = [MarkerA, MarkerB] }
-      , testAction :: IO TestResult
-      }
 
 -- | Traverse the tree with the given processing function.
 --
@@ -161,7 +144,8 @@ runSpecs hooks0 specs =
                 , testFile = specPath
                 }
         Text.putStrLn $ Text.pack specPath
-        runTrees emptyTestInfo $ getSpecTrees specSpec
+        specTrees <- hookModifyFileSpecs $ getSpecTrees specSpec
+        runTrees emptyTestInfo specTrees
  where
   Hooks{..} = builtinHooks <> hooks0
   builtinHooks = xfailHook <> skipHook

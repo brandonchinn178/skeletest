@@ -1,5 +1,8 @@
 ## Unreleased
 
+API changes:
+* Added `hookModifyFileSpecs` to `Hooks` ([#59](https://github.com/brandonchinn178/skeletest/issues/59))
+
 ## v0.3.1
 
 API changes:

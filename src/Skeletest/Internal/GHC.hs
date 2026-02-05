@@ -102,8 +102,8 @@ type Plugin = GHC.Plugin
 -- | Our pure definition of PluginDef, agnostic of GHC version.
 data PluginDef = PluginDef
   { isPure :: Bool
-  , modifyParsed :: ModuleName -> ParsedModule -> ParsedModule
-  , onRename :: Ctx -> ModuleName -> HsExpr GhcRn -> HsExpr GhcRn
+  , modifyParsed :: [GHC.CommandLineOption] -> ModuleName -> ParsedModule -> ParsedModule
+  , onRename :: [GHC.CommandLineOption] -> Ctx -> ModuleName -> HsExpr GhcRn -> HsExpr GhcRn
   }
 
 data Ctx = Ctx
@@ -116,11 +116,11 @@ mkPlugin :: PluginDef -> Plugin
 mkPlugin PluginDef{..} =
   GHC.defaultPlugin
     { GHC.pluginRecompile = if isPure then GHC.purePlugin else GHC.impurePlugin
-    , GHC.parsedResultAction = \_ modInfo result -> do
+    , GHC.parsedResultAction = \opts modInfo result -> do
         let
           moduleName = getModuleName $ GHC.ms_mod modInfo
           parsedModule = initParsedModule . GHC.hpm_module . GHC.parsedResultModule $ result
-          ParsedModule{moduleFuncs} = modifyParsed moduleName parsedModule
+          ParsedModule{moduleFuncs} = modifyParsed opts moduleName parsedModule
         newDecls <-
           runCompilePs . fmap concat . sequence $
             [ compileFunDef funName funDef
@@ -129,7 +129,7 @@ mkPlugin PluginDef{..} =
         pure
           . (modifyParsedResultModule . modifyHpmModule . fmap . modifyModDecls) (newDecls <>)
           $ result
-    , GHC.renamedResultAction = \_ gblEnv group -> do
+    , GHC.renamedResultAction = \opts gblEnv group -> do
         nameCache <- GHC.hsc_NC . GHC.env_top <$> GHC.getEnv
         let
           moduleName = getModuleName $ GHC.tcg_mod gblEnv
@@ -137,7 +137,7 @@ mkPlugin PluginDef{..} =
             Ctx
               { matchesName = matchesNameImpl nameCache
               }
-        group' <- runCompileRn $ modifyModuleExprs (onRename ctx moduleName) group
+        group' <- runCompileRn $ modifyModuleExprs (onRename opts ctx moduleName) group
         pure (gblEnv, group')
     }
  where

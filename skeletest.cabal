@@ -81,7 +81,6 @@ library
     , aeson
     , aeson-pretty
     , ansi-terminal >= 0.7.0
-    , colour
     , containers
     , Diff >= 1.0
     , directory

@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 {-| A preprocessor that registers skeletest in a test suite.
 
@@ -19,6 +20,8 @@ the code. So what we'll do here is:
 -}
 module Main where
 
+import Data.Char (isUpper)
+import Data.Foldable (foldlM)
 import Data.List (dropWhileEnd)
 import Data.Text.IO qualified as Text
 import GHC.IO.Encoding (setLocaleEncoding, utf8)
@@ -27,8 +30,10 @@ import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
 import UnliftIO.Exception (displayException, handle)
 
+import Data.Text qualified as Text
 import Skeletest.Internal.Error (SkeletestError)
 import Skeletest.Internal.Preprocessor (processFile)
+import Skeletest.Internal.Preprocessor qualified as Preprocessor
 
 main :: IO ()
 main = handleErrors $ do
@@ -37,8 +42,10 @@ main = handleErrors $ do
 
   getArgs >>= \case
     -- https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/phases.html#options-affecting-a-haskell-pre-processor
-    [fp, input, output] -> Text.readFile input >>= processFile fp >>= Text.writeFile output
-    _ -> error "The skeletest preprocessor does not accept any additional arguments."
+    fp : input : output : args -> do
+      options <- either error pure $ foldlM parseOpts Preprocessor.defaultOptions args
+      Text.readFile input >>= processFile options fp >>= Text.writeFile output
+    _ -> error "The skeletest preprocessor expects at least three arguments."
 
 -- | Output SkeletestError
 handleErrors :: IO a -> IO a
@@ -49,3 +56,24 @@ handleErrors = handle $ \(e :: SkeletestError) -> do
   normalizeLines
     | __GLASGOW_HASKELL__ == (908 :: Int) = dropWhileEnd (== '\n')
     | otherwise = id
+
+parseOpts :: Preprocessor.Options -> String -> Either String Preprocessor.Options
+parseOpts opts argStr
+  | Just (mMainMod, mMainFunc) <- Text.stripPrefix "main:" arg >>= parseMain =
+      Right
+        . maybe id (\s o -> o{Preprocessor.mainModuleName = s}) mMainMod
+        . maybe id (\s o -> o{Preprocessor.mainFuncName = s}) mMainFunc
+        $ opts
+  | otherwise = Left $ "Unknown option: " <> argStr
+ where
+  arg = Text.pack argStr
+  parseMain s =
+    case Text.splitOn "." s of
+      [modName, modFunc] -> Just (Just modName, Just modFunc)
+      [_] -> do
+        (c, _) <- Text.uncons s
+        Just $
+          if isUpper c
+            then (Just s, Nothing)
+            else (Nothing, Just s)
+      _ -> Nothing

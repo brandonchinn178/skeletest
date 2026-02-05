@@ -1,7 +1,12 @@
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 module Skeletest.Internal.Preprocessor (
   processFile,
+  Options (..),
+  defaultOptions,
+  decodeOptions,
 ) where
 
 import Control.Monad (guard)
@@ -14,12 +19,44 @@ import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
 import Skeletest.Internal.Error (SkeletestError (..))
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (makeRelative, splitExtensions, takeDirectory, (</>))
+import Text.Read (readMaybe)
 import UnliftIO.Exception (throwIO)
 
+data Options = Options
+  { mainModuleName :: Text
+  , mainFuncName :: Text
+  }
+  deriving (Show, Read)
+
+defaultOptions :: Options
+defaultOptions =
+  Options
+    { mainModuleName = "Main"
+    , mainFuncName = "main"
+    }
+
+encodeOptions :: Options -> Text
+encodeOptions = Text.pack . show
+
+decodeOptions :: Text -> Either Text Options
+decodeOptions =
+  maybe (Left "Could not decode skeletest-preprocessor options") Right
+    . readMaybe
+    . Text.unpack
+    . unquote
+ where
+  unquote s =
+    case Text.stripPrefix "\"" s >>= Text.stripSuffix "\"" of
+      Just s' -> Text.replace "\\\"" "\"" s'
+      Nothing -> s
+
 -- | Preprocess the given Haskell file. See Main.hs
-processFile :: FilePath -> Text -> IO Text
-processFile path file = do
-  file' <- if isMain file then updateMainFile path file else pure file
+processFile :: Options -> FilePath -> Text -> IO Text
+processFile options path file = do
+  file' <-
+    if getModuleName file == options.mainModuleName
+      then updateMainFile path file
+      else pure file
   pure
     . addLine pluginPragma
     . addLine linePragma
@@ -28,22 +65,30 @@ processFile path file = do
   addLine line f = line <> "\n" <> f
   quoted s = "\"" <> s <> "\""
 
-  pluginPragma = "{-# OPTIONS_GHC -fplugin=Skeletest.Internal.Plugin #-}"
+  pluginMod = "Skeletest.Internal.Plugin"
+  quote s = "\"" <> Text.replace "\"" "\\\"" s <> "\""
+  pluginPragma =
+    Text.unwords
+      [ "{-# OPTIONS_GHC"
+      , "-fplugin=" <> pluginMod
+      , "-fplugin-opt=" <> pluginMod <> ":" <> (quote . encodeOptions) options
+      , "#-}"
+      ]
   linePragma =
     -- this is needed to tell GHC to use original path in error messages
     "{-# LINE 1 " <> quoted (Text.pack path) <> " #-}"
 
-isMain :: Text -> Bool
-isMain file =
-  case mapMaybe getModuleName $ Text.lines file of
+getModuleName :: Text -> Text
+getModuleName file =
+  case mapMaybe parseModuleLine $ Text.lines file of
     -- there was a module line
-    [name] -> name == "Main"
-    -- there were no module lines, it's the main module
-    [] -> True
+    [name] -> name
+    -- there were no module lines, it's the Main module
+    [] -> "Main"
     -- something else? just silently ignore it
-    _ -> False
+    _ -> ""
  where
-  getModuleName s =
+  parseModuleLine s =
     case Text.words s of
       "module" : name : _ -> Just name
       _ -> Nothing

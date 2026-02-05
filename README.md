@@ -88,6 +88,8 @@ instance Fixture DbConnFixture where
       build-tool-depends: skeletest:skeletest-preprocessor
     ```
 
+    Options may be specified as `-optF=<name>:<value>`. See [Options](#options).
+
 1. Add `Main.hs`:
 
     ```haskell
@@ -428,6 +430,12 @@ To register and use your own CLI flags, do the following:
     ```haskell
     MyFlag flagVal <- getFlag
     ```
+
+### Options
+
+Skeletest accepts the following options, which may be added as `-optF=<name>:<value>`:
+
+* `main`: Specify the main module/function, as either `OtherMain.otherMainFunc`, `OtherMain` (equivalent to `OtherMain.main`), or `otherMainFunc` (equivalent to `Main.otherMainFunc`). Generally only useful with the `-main-is` GHC option.
 
 ### Hooks
 

@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskellQuotes #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -15,6 +16,7 @@ import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
 import Skeletest.Internal.Error (skeletestPluginError)
 import Skeletest.Internal.GHC
 import Skeletest.Internal.Predicate qualified as P
+import Skeletest.Internal.Preprocessor qualified as Preprocessor
 import Skeletest.Internal.Utils.HList (HList (..))
 import Skeletest.Main qualified as Main
 import Skeletest.Plugin qualified as Plugin
@@ -30,19 +32,28 @@ plugin =
   mkPlugin
     PluginDef
       { isPure = True
-      , modifyParsed = \modName modl ->
-          if modName == "Main"
-            then transformMainModule modl
-            else modl
-      , onRename = \ctx modName expr ->
+      , modifyParsed = \opts modName modl ->
+          let options = decodeOptions opts
+           in if modName == options.mainModuleName
+                then transformMainModule options modl
+                else modl
+      , onRename = \_ ctx modName expr ->
           if "Spec" `Text.isSuffixOf` modName
             then transformTestModule ctx expr
             else expr
       }
+ where
+  decodeOptions =
+    either (error . Text.unpack) id . \case
+      [opts] -> Preprocessor.decodeOptions (Text.pack opts)
+      _ -> Left ""
 
 -- | Add 'main' function.
-transformMainModule :: ParsedModule -> ParsedModule
-transformMainModule modl = modl{moduleFuncs = (hsVarName "main", Just mainFun) : moduleFuncs modl}
+transformMainModule :: Preprocessor.Options -> ParsedModule -> ParsedModule
+transformMainModule options modl =
+  modl
+    { moduleFuncs = (hsVarName options.mainFuncName, Just mainFun) : moduleFuncs modl
+    }
  where
   findVar name =
     fmap hsExprVar . listToMaybe $

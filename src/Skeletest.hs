@@ -20,6 +20,7 @@ module Skeletest (
   shouldNotBe,
   shouldSatisfy,
   shouldNotSatisfy,
+  shouldReturn,
   context,
   failTest,
   HasCallStack,

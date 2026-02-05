@@ -1,5 +1,8 @@
 ## Unreleased
 
+API changes:
+* Added `shouldReturn`
+
 Runtime changes:
 * Fix gray text output, using standard ANSI codes instead of a hardcoded RGB value
 

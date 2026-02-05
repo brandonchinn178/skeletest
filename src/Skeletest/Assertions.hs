@@ -7,6 +7,7 @@ module Skeletest.Assertions (
   shouldNotBe,
   shouldSatisfy,
   shouldNotSatisfy,
+  shouldReturn,
   context,
   failTest,
   AssertionFail (..),
@@ -42,7 +43,7 @@ instance Testable IO where
   context = contextIO
   throwFailure = throwIO
 
-infix 1 `shouldBe`, `shouldNotBe`, `shouldSatisfy`, `shouldNotSatisfy`
+infix 1 `shouldBe`, `shouldNotBe`, `shouldSatisfy`, `shouldNotSatisfy`, `shouldReturn`
 
 -- | Assert that the given input should match the given value.
 -- Equivalent to @actual `shouldSatisfy` P.eq expected@
@@ -65,6 +66,11 @@ actual `shouldSatisfy` p =
 -- | Assert that the given input should not satisfy the given predicate.
 shouldNotSatisfy :: (HasCallStack, Testable m) => a -> Predicate m a -> m ()
 actual `shouldNotSatisfy` p = GHC.withFrozenCallStack $ actual `shouldSatisfy` P.not p
+
+-- | Assert that the given input should return the given value.
+-- Equivalent to @actual `shouldSatisfy` (P.returns . P.eq) expected@
+shouldReturn :: (HasCallStack, Testable m, Eq a) => m a -> a -> m ()
+actual `shouldReturn` expected = GHC.withFrozenCallStack $ actual `shouldSatisfy` (P.returns . P.eq) expected
 
 contextIO :: String -> IO a -> IO a
 contextIO msg =

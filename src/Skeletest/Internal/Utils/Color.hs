@@ -5,7 +5,6 @@ module Skeletest.Internal.Utils.Color (
   gray,
 ) where
 
-import Data.Colour.Names qualified as Color
 import Data.Text (Text)
 import Data.Text qualified as Text
 import System.Console.ANSI qualified as ANSI
@@ -23,4 +22,4 @@ yellow :: Text -> Text
 yellow = withANSI [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Yellow]
 
 gray :: Text -> Text
-gray = withANSI [ANSI.SetRGBColor ANSI.Foreground Color.gray]
+gray = withANSI [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Black]

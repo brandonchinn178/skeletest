@@ -85,6 +85,20 @@
 ╰───────────────────────────────────────────────────────────────────────────────
 ```
 
+## shouldReturn / should show helpful failure
+
+```
+./ExampleSpec.hs
+╭── should fail: FAIL
+│ ./ExampleSpec.hs:5:
+│ │
+│ │ spec = it "should fail" $ pure 1 `shouldReturn` (2 :: Int)
+│ │                                  ^^^^^^^^^^^^^^
+│ 
+│ 1 ≠ 2
+╰───────────────────────────────────────────────────────────────────────────────
+```
+
 ## shouldSatisfy / should show helpful failure
 
 ```

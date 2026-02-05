@@ -86,6 +86,24 @@ spec = do
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
+  describe "shouldReturn" $ do
+    it "should pass" $
+      pure 1 `shouldReturn` (1 :: Int)
+
+    integration . it "should show helpful failure" $ do
+      runner <- getFixture
+      addTestFile runner "ExampleSpec.hs" $
+        [ "module ExampleSpec (spec) where"
+        , ""
+        , "import Skeletest"
+        , ""
+        , "spec = it \"should fail\" $ pure 1 `shouldReturn` (2 :: Int)"
+        ]
+
+      (stdout, stderr) <- expectFailure $ runTests runner []
+      stderr `shouldBe` ""
+      stdout `shouldSatisfy` P.matchesSnapshot
+
   describe "context" $ do
     integration . it "should show failure context" $ do
       runner <- getFixture

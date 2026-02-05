@@ -190,6 +190,7 @@ All assertions in Skeletest use the following functions:
 * `shouldNotSatisfy` - equivalent to `shouldSatisfy` with `P.not`
 * `shouldBe` - equivalent to `shouldSatisfy` with `P.eq`
 * `shouldNotBe` - equivalent to `shouldNotSatisfy` with `P.eq`
+* `shouldReturn` - equivalent to `shouldSatisfy` with `P.returns . P.eq`
 
 `shouldSatisfy` is the most general function, but the others are provided for convenience. `shouldSatisfy` takes in the value being tested on the left, and a predicate on the right. Predicates should be imported from `Skeletest.Predicate`, qualified as `P`.
 

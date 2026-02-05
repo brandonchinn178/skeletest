@@ -1,5 +1,7 @@
 ## Unreleased
 
+## v0.3.3
+
 Configuration:
 * Add `-optF=main:_` option for configuring the name of the main module/function ([#64](https://github.com/brandonchinn178/skeletest/issues/64))
 

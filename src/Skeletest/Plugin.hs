@@ -68,6 +68,7 @@ defaultPlugin =
 data Hooks = Hooks
   { hookModifyFileSpecs :: [SpecTree] -> IO [SpecTree]
   -- ^ Modify the specs in a file
+  -- @since 0.3.2
   , hookRunTest :: TestInfo -> IO TestResult -> IO TestResult
   -- ^ Modify how a test is executed
   }

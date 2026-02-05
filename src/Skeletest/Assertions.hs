@@ -69,6 +69,7 @@ actual `shouldNotSatisfy` p = GHC.withFrozenCallStack $ actual `shouldSatisfy` P
 
 -- | Assert that the given input should return the given value.
 -- Equivalent to @actual `shouldSatisfy` (P.returns . P.eq) expected@
+-- @since 0.3.3
 shouldReturn :: (HasCallStack, Testable m, Eq a) => m a -> a -> m ()
 actual `shouldReturn` expected = GHC.withFrozenCallStack $ actual `shouldSatisfy` (P.returns . P.eq) expected
 

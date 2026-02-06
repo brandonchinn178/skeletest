@@ -1,3 +1,4 @@
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE NoFieldSelectors #-}
 
@@ -29,7 +30,7 @@ module Skeletest.Plugin (
   X.SpecRegistry,
   X.Spec,
   X.SpecInfo (..),
-  X.SpecTree,
+  X.SpecTree (..),
   X.mapSpecTrees,
   X.traverseSpecTrees,
   X.mapSpecs,

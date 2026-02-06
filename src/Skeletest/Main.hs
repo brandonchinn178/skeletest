@@ -34,6 +34,8 @@ import Skeletest.Internal.Spec (
   Spec,
   SpecInfo (..),
   runSpecs,
+  skipHook,
+  xfailHook,
  )
 import Skeletest.Internal.Spec.Tree (
   applyTestSelections,
@@ -46,7 +48,7 @@ runSkeletest :: [Plugin] -> [(FilePath, Spec)] -> IO ()
 runSkeletest = runSkeletest' . mconcat
 
 runSkeletest' :: Plugin -> [(FilePath, Spec)] -> IO ()
-runSkeletest' Plugin{..} testModules = do
+runSkeletest' Plugin{hooks = hooks0, ..} testModules = do
   selections <- loadCliArgs builtinFlags cliFlags
   setSnapshotRenderers (snapshotRenderers <> defaultSnapshotRenderers)
 
@@ -54,6 +56,13 @@ runSkeletest' Plugin{..} testModules = do
   success <- runSpecs hooks . applyTestSelections selections $ initialSpecs
   unless success exitFailure
  where
+  hooks = mconcat builtinHooks <> hooks0
+
+  builtinHooks =
+    [ xfailHook
+    , skipHook
+    ]
+
   builtinFlags =
     [ flag @SnapshotUpdateFlag
     , flag @PropSeedFlag

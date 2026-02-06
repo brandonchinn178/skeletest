@@ -30,6 +30,10 @@ module Skeletest.Internal.Spec (
   X.IsMarker (..),
   X.withMarkers,
   X.withMarker,
+
+  -- ** Built-in hooks
+  xfailHook,
+  skipHook,
 ) where
 
 import Control.Concurrent (myThreadId)
@@ -79,7 +83,7 @@ import UnliftIO.Exception (
 
 -- | Run the given Specs and return whether all of the tests passed.
 runSpecs :: Hooks -> SpecRegistry -> IO Bool
-runSpecs hooks0 specs =
+runSpecs Hooks{..} specs =
   (`finally` cleanupFixtures PerSessionFixtureKey) $
     fmap and . forM (pruneSpec specs) $ \SpecInfo{..} ->
       (`finally` cleanupFixtures (PerFileFixtureKey specPath)) $ do
@@ -94,9 +98,6 @@ runSpecs hooks0 specs =
         specTrees <- hookModifyFileSpecs $ getSpecTrees specSpec
         runTrees emptyTestInfo specTrees
  where
-  Hooks{..} = builtinHooks <> hooks0
-  builtinHooks = xfailHook <> skipHook
-
   runTrees baseTestInfo = fmap and . mapM (runTree baseTestInfo)
   runTree baseTestInfo = \case
     SpecGroup{..} -> do

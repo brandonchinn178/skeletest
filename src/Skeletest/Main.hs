@@ -20,7 +20,7 @@ module Skeletest.Main (
   Spec,
 ) where
 
-import Control.Monad (unless)
+import Control.Monad (unless, (<=<))
 import Skeletest.Internal.CLI (Flag, flag, loadCliArgs)
 import Skeletest.Internal.Capture (CaptureOutputFlag)
 import Skeletest.Internal.Snapshot (
@@ -40,7 +40,7 @@ import Skeletest.Internal.Spec (
 import Skeletest.Internal.Spec.Tree (
   applyTestSelections,
  )
-import Skeletest.Plugin (Plugin (..))
+import Skeletest.Plugin (Hooks (..), Plugin (..))
 import Skeletest.Prop.Internal (PropLimitFlag, PropSeedFlag)
 import System.Exit (exitFailure)
 
@@ -53,7 +53,7 @@ runSkeletest' Plugin{hooks = hooks0, ..} testModules = do
   setSnapshotRenderers (snapshotRenderers <> defaultSnapshotRenderers)
 
   let initialSpecs = map mkSpec testModules
-  success <- runSpecs hooks . applyTestSelections selections $ initialSpecs
+  success <- runSpecs hooks <=< hookModifySpecRegistry hooks selections (pure . applyTestSelections selections) $ initialSpecs
   unless success exitFailure
  where
   hooks = mconcat builtinHooks <> hooks0

@@ -33,6 +33,8 @@ module Skeletest.Internal.Spec.Tree (
 
   -- ** Internal API
   getSpecTrees,
+  mapSpecTrees,
+  traverseSpecTrees,
 ) where
 
 import Control.Monad (guard)

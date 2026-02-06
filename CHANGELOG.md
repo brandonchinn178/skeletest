@@ -1,5 +1,8 @@
 ## Unreleased
 
+API changes:
+* Replace `hookModifyFileSpecs` with `hookModifySpecRegistry`
+
 ## v0.3.3
 
 Configuration:

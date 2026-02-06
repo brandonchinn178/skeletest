@@ -10,27 +10,38 @@ module Skeletest.Plugin (
   -- * Re-exports
 
   -- ** TestResult
-  TestResult (..),
-  TestResultMessage (..),
-  BoxSpec,
-  BoxSpecContent (..),
+  X.TestResult (..),
+  X.TestResultMessage (..),
+  X.BoxSpec,
+  X.BoxSpecContent (..),
 
   -- ** TestInfo
-  TestInfo (..),
+  X.TestInfo (..),
 
   -- ** Markers
-  findMarker,
-  hasMarkerNamed,
+  X.findMarker,
+  X.hasMarkerNamed,
+
+  -- ** SpecRegistry
+  X.SpecRegistry,
+  X.Spec,
+  X.SpecInfo (..),
+  X.SpecTree,
+  X.mapSpecTrees,
+  X.traverseSpecTrees,
 ) where
 
-import Control.Monad ((>=>))
 import Skeletest.Internal.CLI (Flag)
-import Skeletest.Internal.Markers (findMarker, hasMarkerNamed)
+import Skeletest.Internal.Markers qualified as X
 import Skeletest.Internal.Snapshot (SnapshotRenderer)
-import Skeletest.Internal.Spec.Output (BoxSpec, BoxSpecContent (..))
-import Skeletest.Internal.Spec.Tree (SpecTree)
+import Skeletest.Internal.Spec.Output qualified as X
+import Skeletest.Internal.Spec.Tree (SpecRegistry)
+import Skeletest.Internal.Spec.Tree qualified as X
 import Skeletest.Internal.TestInfo (TestInfo (..))
-import Skeletest.Internal.TestRunner (TestResult (..), TestResultMessage (..))
+import Skeletest.Internal.TestInfo qualified as X
+import Skeletest.Internal.TestRunner (TestResult (..))
+import Skeletest.Internal.TestRunner qualified as X
+import Skeletest.Internal.TestTargets (TestTargets)
 
 -- | A plugin for extending Skeletest.
 --
@@ -66,9 +77,14 @@ defaultPlugin =
 -- Use 'defaultHooks' instead of using v'Hooks' directly, to minimize
 -- breaking changes.
 data Hooks = Hooks
-  { hookModifyFileSpecs :: [SpecTree] -> IO [SpecTree]
-  -- ^ Modify the specs in a file
-  -- @since 0.3.2
+  { hookModifySpecRegistry :: TestTargets -> (SpecRegistry -> IO SpecRegistry) -> (SpecRegistry -> IO SpecRegistry)
+  -- ^ Modify all the specs in the test suite, being able to modify before/after
+  -- previously registered hooks.
+  --
+  -- For example:
+  -- @
+  -- \_ modify -> pre >=> modify >=> post
+  -- @
   , hookRunTest :: TestInfo -> IO TestResult -> IO TestResult
   -- ^ Modify how a test is executed
   }
@@ -76,7 +92,7 @@ data Hooks = Hooks
 instance Semigroup Hooks where
   hooks1 <> hooks2 =
     Hooks
-      { hookModifyFileSpecs = hookModifyFileSpecs hooks1 >=> hookModifyFileSpecs hooks2
+      { hookModifySpecRegistry = \targets -> hookModifySpecRegistry hooks2 targets . hookModifySpecRegistry hooks1 targets
       , hookRunTest = \testInfo -> hookRunTest hooks2 testInfo . hookRunTest hooks1 testInfo
       }
 
@@ -86,6 +102,6 @@ instance Monoid Hooks where
 defaultHooks :: Hooks
 defaultHooks =
   Hooks
-    { hookModifyFileSpecs = pure
+    { hookModifySpecRegistry = \_ -> id
     , hookRunTest = \_ -> id
     }

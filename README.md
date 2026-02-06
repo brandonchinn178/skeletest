@@ -441,7 +441,7 @@ Skeletest accepts the following options, which may be added as `-optF=<name>:<va
 
 Skeletest lets you hook into specific parts of test execution. Skeletest currently supports the following hooks:
 
-* `hookModifyFileSpecs` - Modify the specs in each file. Runs once per file, taking in the `[SpecTree]` containing all the specs in the file. This can be used to do your own test selection, test transformations, etc.
+* `hookModifySpecRegistry` - Modify all the specs in the test suite. This can be used to do your own test selection, test transformations, etc.
 * `hookRunTest` - Modify how/if a test is run. Takes the `TestInfo` of the currently running test. `TestInfo` contains `testInfoMarkers`, which you can query with `findMarker` or `hasMarkerNamed`.
 
 ### Plugins

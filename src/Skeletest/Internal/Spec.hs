@@ -95,7 +95,7 @@ runSpecs Hooks{..} specs =
                 , testFile = specPath
                 }
         Text.putStrLn $ Text.pack specPath
-        specTrees <- hookModifyFileSpecs $ getSpecTrees specSpec
+        let specTrees = getSpecTrees specSpec
         runTrees emptyTestInfo specTrees
  where
   runTrees baseTestInfo = fmap and . mapM (runTree baseTestInfo)

@@ -33,9 +33,11 @@ import Skeletest.Internal.Snapshot (
 import Skeletest.Internal.Spec (
   Spec,
   SpecInfo (..),
+  runSpecs,
+ )
+import Skeletest.Internal.Spec.Tree (
   applyTestSelections,
   pruneSpec,
-  runSpecs,
  )
 import Skeletest.Plugin (Plugin (..))
 import Skeletest.Prop.Internal (PropLimitFlag, PropSeedFlag)

@@ -4,50 +4,41 @@
 
 module Skeletest.Internal.Spec (
   -- * Spec interface
-  Spec,
-  SpecTree (..),
+  X.Spec,
+  X.SpecTree (..),
+
+  -- ** Execution
   runSpecs,
 
   -- ** Entrypoint
-  SpecRegistry,
-  SpecInfo (..),
-  pruneSpec,
-  applyTestSelections,
+  X.SpecRegistry,
+  X.SpecInfo (..),
 
   -- ** Defining a Spec
-  describe,
-  Testable (..),
-  test,
-  it,
-  prop,
+  X.describe,
+  X.Testable (..),
+  X.test,
+  X.it,
+  X.prop,
 
   -- ** Modifiers
-  xfail,
-  skip,
-  markManual,
+  X.xfail,
+  X.skip,
+  X.markManual,
 
   -- ** Markers
-  IsMarker (..),
-  withMarkers,
-  withMarker,
+  X.IsMarker (..),
+  X.withMarkers,
+  X.withMarker,
 ) where
 
 import Control.Concurrent (myThreadId)
-import Control.Monad (forM, guard)
-import Control.Monad.Trans.Reader qualified as Trans
-import Control.Monad.Trans.Writer (Writer, execWriter, tell)
-import Data.Functor.Identity (runIdentity)
-import Data.Maybe (catMaybes, isJust, mapMaybe)
-import Data.Text (Text)
+import Control.Monad (forM)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
-import Skeletest.Assertions (Testable, runTestable)
 import Skeletest.Internal.Capture (addCapturedOutput, withCaptureOutput)
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.Markers (
-  AnonMarker (..),
-  IsMarker (..),
-  SomeMarker (..),
   findMarker,
  )
 import Skeletest.Internal.Spec.Output (
@@ -57,7 +48,15 @@ import Skeletest.Internal.Spec.Output (
   reportTestResultWithInlineMessage,
   reportTestResultWithoutMessage,
  )
-import Skeletest.Internal.Spec.Tree (SpecTree (..))
+import Skeletest.Internal.Spec.Tree (
+  MarkerSkip (..),
+  MarkerXFail (..),
+  SpecInfo (..),
+  SpecRegistry,
+  SpecTree (..),
+  getSpecTrees,
+ )
+import Skeletest.Internal.Spec.Tree qualified as X
 import Skeletest.Internal.TestInfo (TestInfo (TestInfo), withTestInfo)
 import Skeletest.Internal.TestInfo qualified as TestInfo
 import Skeletest.Internal.TestRunner (
@@ -66,67 +65,14 @@ import Skeletest.Internal.TestRunner (
   testResultFromAssertionFail,
   testResultFromError,
  )
-import Skeletest.Internal.TestTargets (TestTarget, TestTargets, matchesTest)
-import Skeletest.Internal.TestTargets qualified as TestTargets
 import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Plugin (Hooks (..), defaultHooks)
-import Skeletest.Prop.Internal (Property)
 import System.Console.Terminal.Size qualified as Term
 import UnliftIO.Exception (
   finally,
   fromException,
   try,
  )
-
-type Spec = Spec' ()
-
-newtype Spec' a = Spec (Writer [SpecTree] a)
-  deriving (Functor, Applicative, Monad)
-
-getSpecTrees :: Spec -> [SpecTree]
-getSpecTrees (Spec spec) = execWriter spec
-
-withSpecTrees :: (Monad m) => ([SpecTree] -> m [SpecTree]) -> Spec -> m Spec
-withSpecTrees f = fmap (Spec . tell) . f . getSpecTrees
-
--- | Traverse the tree with the given processing function.
---
--- To preprocess trees with @pre@ and postprocess with @post@:
---
--- >>> traverseSpecTrees (\go -> post <=< mapM go <=< pre) spec
-traverseSpecTrees ::
-  forall m.
-  (Monad m) =>
-  ( (SpecTree -> m SpecTree) ->
-    [SpecTree] ->
-    m [SpecTree]
-  ) ->
-  Spec ->
-  m Spec
-traverseSpecTrees f = withSpecTrees go
- where
-  go :: [SpecTree] -> m [SpecTree]
-  go = f recurseGroups
-
-  recurseGroups = \case
-    group@SpecGroup{} -> do
-      trees' <- go $ groupTrees group
-      pure group{groupTrees = trees'}
-    stest@SpecTest{} -> pure stest
-
--- | Map the tree with the given processing function.
---
--- To preprocess trees with @pre@ and postprocess with @post@:
---
--- >>> mapSpecTrees (\go -> post . map go . pre) spec
-mapSpecTrees ::
-  ( (SpecTree -> SpecTree) ->
-    [SpecTree] ->
-    [SpecTree]
-  ) ->
-  Spec ->
-  Spec
-mapSpecTrees f = runIdentity . traverseSpecTrees (\go -> pure . f (runIdentity . go))
 
 {----- Execute spec -----}
 
@@ -193,113 +139,7 @@ runSpecs hooks0 specs =
 
   getIndentLevel testInfo = length (TestInfo.testContexts testInfo) + 1 -- +1 to include the module name
 
-{----- Entrypoint -----}
-
-type SpecRegistry = [SpecInfo]
-
-data SpecInfo = SpecInfo
-  { specPath :: FilePath
-  , specSpec :: Spec
-  }
-
-pruneSpec :: SpecRegistry -> SpecRegistry
-pruneSpec = mapMaybe $ \info -> do
-  let spec = mapSpecTrees (\go -> filter (not . isEmptySpec) . map go) (specSpec info)
-  guard $ (not . null . getSpecTrees) spec
-  pure info{specSpec = spec}
- where
-  isEmptySpec = \case
-    SpecGroup _ [] -> True
-    _ -> False
-
--- TODO: make hookable? implement manual tests with hook?
-applyTestSelections :: TestTargets -> SpecRegistry -> SpecRegistry
-applyTestSelections = \case
-  Just selections -> map (applyTestSelections' selections)
-  -- if no selections are specified, hide manual tests
-  Nothing -> map (\info -> info{specSpec = hideManualTests $ specSpec info})
- where
-  hideManualTests = mapSpecTrees (\go -> filter (not . isManualTest) . map go)
-  isManualTest = \case
-    SpecGroup{} -> False
-    SpecTest{testMarkers} -> isJust $ findMarker @MarkerManual testMarkers
-
-applyTestSelections' :: TestTarget -> SpecInfo -> SpecInfo
-applyTestSelections' selections info = info{specSpec = applySelections $ specSpec info}
- where
-  applySelections = (`Trans.runReader` []) . traverseSpecTrees apply
-
-  apply go = mapMaybeM $ \case
-    group@SpecGroup{groupLabel} -> Just <$> Trans.local (<> [groupLabel]) (go group)
-    stest@SpecTest{testName, testMarkers} -> do
-      groups <- Trans.ask
-      let attrs =
-            TestTargets.TestAttrs
-              { testPath = specPath info
-              , testIdentifier = groups <> [testName]
-              , testMarkers = [Text.pack $ getMarkerName m | SomeMarker m <- testMarkers]
-              }
-      pure $
-        if matchesTest selections attrs
-          then Just stest
-          else Nothing
-
-  mapMaybeM f = fmap catMaybes . mapM f
-
-{----- Defining a Spec -----}
-
--- | The entity or concept being tested.
-describe :: String -> Spec -> Spec
-describe name = runIdentity . withSpecTrees (pure . (: []) . mkGroup)
- where
-  mkGroup trees =
-    SpecGroup
-      { groupLabel = Text.pack name
-      , groupTrees = trees
-      }
-
-test :: (Testable m) => String -> m () -> Spec
-test name t = Spec $ tell [mkTest]
- where
-  mkTest =
-    SpecTest
-      { testName = Text.pack name
-      , testMarkers = []
-      , testAction = runTestable t
-      }
-
--- | Define an IO-based test.
---
--- Should typically be written to be read as full sentences in traditional BDD style:
--- https://en.wikipedia.org/wiki/Behavior-driven_development.
---
--- @
--- describe \"User\" $ do
---   it "can be checked for equality" $ do
---     user1 `shouldBe` user1
--- @
-it :: String -> IO () -> Spec
-it = test
-
--- | Define a property test.
---
--- @
--- describe \"User\" $ do
---   prop "decode . encode === Just" $ do
---     let genUser = ...
---     (decode . encode) P.=== Just \`shouldSatisfy\` P.isoWith genUser
--- @
-prop :: String -> Property -> Spec
-prop = test
-
-{----- Modifiers -----}
-
--- | Mark the given spec as expected to fail.
--- Fails tests if they unexpectedly pass.
---
--- Can be selected with the marker @@xfail@
-xfail :: String -> Spec -> Spec
-xfail = withMarker . MarkerXFail . Text.pack
+{----- Built-in hooks -----}
 
 xfailHook :: Hooks
 xfailHook =
@@ -325,12 +165,6 @@ xfailHook =
           , testResultMessage = TestResultMessageInline reason
           }
 
--- | Skip all tests in the given spec.
---
--- Can be selected with the marker @@skip@
-skip :: String -> Spec -> Spec
-skip = withMarker . MarkerSkip . Text.pack
-
 skipHook :: Hooks
 skipHook =
   defaultHooks
@@ -345,44 +179,3 @@ skipHook =
                 }
           Nothing -> runTest
     }
-
--- | Mark tests as tests that should only be run when explicitly specified on the command line.
-markManual :: Spec -> Spec
-markManual = withMarker MarkerManual
-
-{----- Markers -----}
-
-newtype MarkerXFail = MarkerXFail Text
-  deriving (Show)
-
-instance IsMarker MarkerXFail where
-  getMarkerName _ = "xfail"
-
-newtype MarkerSkip = MarkerSkip Text
-  deriving (Show)
-
-instance IsMarker MarkerSkip where
-  getMarkerName _ = "skip"
-
-data MarkerManual = MarkerManual
-  deriving (Show)
-
-instance IsMarker MarkerManual where
-  getMarkerName _ = "manual"
-
--- | Adds the given marker to all the tests in the given spec.
---
--- Useful for selecting tests from the command line or identifying tests in hooks
-withMarker :: (IsMarker a) => a -> Spec -> Spec
-withMarker m = mapSpecTrees (\go -> map (addMarker . go))
- where
-  marker = SomeMarker m
-  addMarker = \case
-    group@SpecGroup{} -> group
-    tree@SpecTest{} -> tree{testMarkers = marker : testMarkers tree}
-
--- | Adds the given names as plain markers to all tests in the given spec.
---
--- See 'getMarkerName'.
-withMarkers :: [String] -> Spec -> Spec
-withMarkers = foldr (\name acc -> withMarker (AnonMarker name) . acc) id

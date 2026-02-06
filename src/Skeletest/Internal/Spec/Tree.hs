@@ -131,6 +131,7 @@ data SpecInfo = SpecInfo
   , specSpec :: Spec
   }
 
+-- | Remove specs with no tests.
 pruneSpec :: SpecRegistry -> SpecRegistry
 pruneSpec = mapMaybe $ \info -> do
   let spec = mapSpecTrees (\go -> filter (not . isEmptySpec) . map go) (specSpec info)

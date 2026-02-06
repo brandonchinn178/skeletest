@@ -55,6 +55,7 @@ import Skeletest.Internal.Spec.Tree (
   SpecRegistry,
   SpecTree (..),
   getSpecTrees,
+  pruneSpec,
  )
 import Skeletest.Internal.Spec.Tree qualified as X
 import Skeletest.Internal.TestInfo (TestInfo (TestInfo), withTestInfo)
@@ -80,7 +81,7 @@ import UnliftIO.Exception (
 runSpecs :: Hooks -> SpecRegistry -> IO Bool
 runSpecs hooks0 specs =
   (`finally` cleanupFixtures PerSessionFixtureKey) $
-    fmap and . forM specs $ \SpecInfo{..} ->
+    fmap and . forM (pruneSpec specs) $ \SpecInfo{..} ->
       (`finally` cleanupFixtures (PerFileFixtureKey specPath)) $ do
         let emptyTestInfo =
               TestInfo

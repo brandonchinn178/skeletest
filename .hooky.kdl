@@ -1,0 +1,28 @@
+defaults {
+    files !*.snap.md
+}
+
+hook hooky {
+    command hooky lint {
+        fix_args --fix
+        pass_files file
+    }
+    files *
+}
+
+hook fourmolu {
+    command "tools/fourmolu" {
+        check_args -m check
+        fix_args -m inplace
+    }
+    files *.hs
+}
+
+lint_rules {
+    - check_broken_symlinks
+    - check_case_conflict
+    - check_merge_conflict
+    - end_of_file_fixer
+    - no_commit_to_branch
+    - trailing_whitespace
+}

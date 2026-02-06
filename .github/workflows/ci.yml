@@ -106,21 +106,26 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
-    env:
-      FOURMOLU_VERSION: '0.19.0.1'
     steps:
       -
         uses: actions/checkout@v3
       -
-        name: Install fourmolu
+        name: Install hooky
         run: |
           curl -fsSL \
-            "https://github.com/fourmolu/fourmolu/releases/download/v${FOURMOLU_VERSION}/fourmolu-${FOURMOLU_VERSION}-linux-x86_64" \
-            -o /usr/local/bin/fourmolu
-          chmod +x /usr/local/bin/fourmolu
+            https://github.com/brandonchinn178/hooky/releases/download/v1.0.0/hooky-1.0.0-linux-x86_64 \
+            -o /usr/local/bin/hooky
+          chmod +x /usr/local/bin/hooky
       -
-        name: Run fourmolu
-        run: fourmolu -m check $(git ls-files '*.hs')
+        name: Install dotslash
+        run: >
+          curl -fsSL https://github.com/facebook/dotslash/releases/latest/download/dotslash-ubuntu-22.04.$(uname -m).tar.gz
+          | tar xzf - -C /usr/local/bin/
+      -
+        name: Run hooky
+        run: hooky run --all --format=verbose
+        env:
+          SKIP: no_commit_to_branch
 
   build_sdist:
     runs-on: ubuntu-latest

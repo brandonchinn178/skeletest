@@ -1,0 +1,39 @@
+#!/usr/bin/env dotslash
+{
+  "name": "fourmolu-0.19.0.1",
+  "platforms": {
+    "macos-aarch64": {
+      "size": 100525160,
+      "hash": "sha256",
+      "digest": "e8e793f2c361ad6e506fce46f4b89d46fce2af6647e753dc088fb005b650bb8c",
+      "path": "fourmolu",
+      "providers": [
+        {
+          "url": "https://github.com/fourmolu/fourmolu/releases/download/v0.19.0.1/fourmolu-0.19.0.1-osx-arm64"
+        }
+      ]
+    },
+    "macos-x86_64": {
+      "size": 33288184,
+      "hash": "sha256",
+      "digest": "eb60ab166bcd4d51d9b2d0eb4f27918c4ab9b4ca88eaac491ef5135a2b9fb0dd",
+      "path": "fourmolu",
+      "providers": [
+        {
+          "url": "https://github.com/fourmolu/fourmolu/releases/download/v0.19.0.1/fourmolu-0.19.0.1-osx-x86_64"
+        }
+      ]
+    },
+    "linux-x86_64": {
+      "size": 68679136,
+      "hash": "sha256",
+      "digest": "2c5ccd4be51e72dcbd09468d6e62082fc3a47f5fabdd8c6979729129bc81e755",
+      "path": "fourmolu",
+      "providers": [
+        {
+          "url": "https://github.com/fourmolu/fourmolu/releases/download/v0.19.0.1/fourmolu-0.19.0.1-linux-x86_64"
+        }
+      ]
+    }
+  }
+}

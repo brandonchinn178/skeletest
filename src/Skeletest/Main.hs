@@ -34,12 +34,11 @@ import Skeletest.Internal.Snapshot (
 import Skeletest.Internal.Spec (
   Spec,
   SpecInfo (..),
+  applyTestSelectionsHook,
+  manualTestsHook,
   runSpecs,
   skipHook,
   xfailHook,
- )
-import Skeletest.Internal.Spec.Tree (
-  applyTestSelections,
  )
 import Skeletest.Plugin (Hooks (..), Plugin (..))
 import Skeletest.Prop.Internal (PropLimitFlag, PropSeedFlag)
@@ -54,7 +53,7 @@ runSkeletest' Plugin{hooks = hooks0, ..} testModules = do
   setSnapshotRenderers (snapshotRenderers <> defaultSnapshotRenderers)
 
   let initialSpecs = map mkSpec testModules
-  success <- runSpecs hooks <=< hooks.modifySpecRegistry selections (pure . applyTestSelections selections) $ initialSpecs
+  success <- runSpecs hooks <=< hooks.modifySpecRegistry selections pure $ initialSpecs
   unless success exitFailure
  where
   hooks = mconcat builtinHooks <> hooks0
@@ -62,6 +61,8 @@ runSkeletest' Plugin{hooks = hooks0, ..} testModules = do
   builtinHooks =
     [ xfailHook
     , skipHook
+    , applyTestSelectionsHook
+    , manualTestsHook
     ]
 
   builtinFlags =

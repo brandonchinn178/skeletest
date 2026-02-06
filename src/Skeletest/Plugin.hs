@@ -32,6 +32,8 @@ module Skeletest.Plugin (
   X.SpecTree,
   X.mapSpecTrees,
   X.traverseSpecTrees,
+  X.mapSpecs,
+  X.traverseSpecs,
 ) where
 
 import Skeletest.Internal.CLI (Flag)

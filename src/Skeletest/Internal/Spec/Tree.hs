@@ -26,6 +26,7 @@ module Skeletest.Internal.Spec.Tree (
   xfail,
   MarkerSkip (..),
   skip,
+  MarkerManual (..),
   markManual,
 
   -- ** Markers
@@ -37,13 +38,15 @@ module Skeletest.Internal.Spec.Tree (
   getSpecTrees,
   mapSpecTrees,
   traverseSpecTrees,
+  mapSpecs,
+  traverseSpecs,
 ) where
 
 import Control.Monad (guard)
 import Control.Monad.Trans.Reader qualified as Trans
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
 import Data.Functor.Identity (runIdentity)
-import Data.Maybe (catMaybes, isJust, mapMaybe)
+import Data.Maybe (catMaybes, mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Skeletest.Assertions (Testable, runTestable)
@@ -51,10 +54,9 @@ import Skeletest.Internal.Markers (
   AnonMarker (..),
   IsMarker (..),
   SomeMarker (..),
-  findMarker,
  )
 import Skeletest.Internal.TestRunner (TestResult)
-import Skeletest.Internal.TestTargets (TestTarget, TestTargets, matchesTest)
+import Skeletest.Internal.TestTargets (TestTarget, matchesTest)
 import Skeletest.Internal.TestTargets qualified as TestTargets
 import Skeletest.Prop.Internal (Property)
 
@@ -135,6 +137,12 @@ data SpecInfo = SpecInfo
   , specSpec :: Spec
   }
 
+traverseSpecs :: (Applicative f) => (Spec -> f Spec) -> SpecRegistry -> f SpecRegistry
+traverseSpecs f = traverse $ \info -> (\spec -> info{specSpec = spec}) <$> f info.specSpec
+
+mapSpecs :: (Spec -> Spec) -> SpecRegistry -> SpecRegistry
+mapSpecs f = runIdentity . traverseSpecs (pure . f)
+
 -- | Remove specs with no tests.
 pruneSpec :: SpecRegistry -> SpecRegistry
 pruneSpec = mapMaybe $ \info -> do
@@ -146,20 +154,8 @@ pruneSpec = mapMaybe $ \info -> do
     SpecGroup _ [] -> True
     _ -> False
 
--- TODO: make hookable? implement manual tests with hook?
-applyTestSelections :: TestTargets -> SpecRegistry -> SpecRegistry
-applyTestSelections = \case
-  Just selections -> map (applyTestSelections' selections)
-  -- if no selections are specified, hide manual tests
-  Nothing -> map (\info -> info{specSpec = hideManualTests info.specSpec})
- where
-  hideManualTests = mapSpecTrees (\go -> filter (not . isManualTest) . map go)
-  isManualTest = \case
-    SpecGroup{} -> False
-    SpecTest{testMarkers} -> isJust $ findMarker @MarkerManual testMarkers
-
-applyTestSelections' :: TestTarget -> SpecInfo -> SpecInfo
-applyTestSelections' selections info = info{specSpec = applySelections info.specSpec}
+applyTestSelections :: TestTarget -> SpecInfo -> SpecInfo
+applyTestSelections selections info = info{specSpec = applySelections info.specSpec}
  where
   applySelections = (`Trans.runReader` []) . traverseSpecTrees apply
 

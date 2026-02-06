@@ -33,12 +33,15 @@ module Skeletest.Internal.Spec (
   X.withMarker,
 
   -- ** Built-in hooks
+  applyTestSelectionsHook,
+  manualTestsHook,
   xfailHook,
   skipHook,
 ) where
 
 import Control.Concurrent (myThreadId)
 import Control.Monad (forM)
+import Data.Maybe (isJust)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Skeletest.Internal.Capture (addCapturedOutput, withCaptureOutput)
@@ -54,12 +57,16 @@ import Skeletest.Internal.Spec.Output (
   reportTestResultWithoutMessage,
  )
 import Skeletest.Internal.Spec.Tree (
+  MarkerManual (..),
   MarkerSkip (..),
   MarkerXFail (..),
   SpecInfo (..),
   SpecRegistry,
   SpecTree (..),
+  applyTestSelections,
   getSpecTrees,
+  mapSpecTrees,
+  mapSpecs,
   pruneSpec,
  )
 import Skeletest.Internal.Spec.Tree qualified as X
@@ -143,6 +150,28 @@ runSpecs hooks specs =
   getIndentLevel testInfo = length testInfo.testContexts + 1 -- +1 to include the module name
 
 {----- Built-in hooks -----}
+
+applyTestSelectionsHook :: Hooks
+applyTestSelectionsHook =
+  defaultHooks
+    { modifySpecRegistry = \case
+        Just selections -> \modify -> fmap (map (applyTestSelections selections)) . modify
+        Nothing -> id
+    }
+
+manualTestsHook :: Hooks
+manualTestsHook =
+  defaultHooks
+    { modifySpecRegistry = \case
+        -- only hide manual tests when no selections are specified
+        Just _ -> id
+        Nothing -> \modify -> fmap (mapSpecs hideManual) . modify
+    }
+ where
+  hideManual = mapSpecTrees (\go -> filter (not . isManualTest) . map go)
+  isManualTest = \case
+    SpecGroup{} -> False
+    SpecTest{testMarkers} -> isJust $ findMarker @MarkerManual testMarkers
 
 xfailHook :: Hooks
 xfailHook =

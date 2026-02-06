@@ -24,6 +24,7 @@ import Text.Megaparsec qualified as Parser
 import Text.Megaparsec.Char qualified as Parser
 import Text.Megaparsec.Char.Lexer qualified as Parser.L
 
+-- | 'Nothing' means no test targets were provided to the CLI
 type TestTargets = Maybe TestTarget
 
 data TestTarget

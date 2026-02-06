@@ -45,7 +45,7 @@ spec = do
   -- either myFunc nor otherFunc
   prop "myFunc x . otherFunc === id" $ do
     x <- forAll $ Gen.int (Range.linear 0 100)
-    let input = 
+    let input =
           Gen.list (Range.linear 0 10) $
             Gen.string (Range.linear 0 100) Gen.unicode
     (myFunc x . otherFunc) P.=== id `shouldSatisfy` P.isoWith input
@@ -181,7 +181,7 @@ Test targets are specified as plain positional arguments, with the following syn
 Some more examples:
 * `test/MySpec.hs and ([myFooFunc] or [myBarFunc]) and @fast`
 * `[myFooFunc] or test/MySpec.hs[myBarFunc]`
- 
+
 When multiple targets are specified, they are joined with `or`.
 
 ### Assertions and Predicates

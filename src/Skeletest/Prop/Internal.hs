@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Skeletest.Prop.Internal (
@@ -239,7 +240,7 @@ runProperty = \case
               failure
                 { testFailContext =
                     -- N.B. testFailContext is reversed!
-                    testFailContext failure <> reverse info
+                    failure.testFailContext <> reverse info
                 }
  where
   reportProgress _ = pure ()

@@ -1,10 +1,12 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeData #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 module Skeletest.Internal.Predicate (
   Predicate,
@@ -137,7 +139,7 @@ runPredicate Predicate{..} val = do
          in PredicateFail . withFailCtx failCtx predicateShowFailCtx $ predicateExplain
 
 renderPredicate :: Predicate m a -> Text
-renderPredicate = predicateDisp
+renderPredicate = (.predicateDisp)
 
 data PredicateFuncResult = PredicateFuncResult
   { predicateSuccess :: Bool
@@ -196,10 +198,10 @@ noCtx :: ShowFailCtx
 noCtx = NoFailCtx
 
 showMergedCtxs :: [PredicateFuncResult] -> ShowFailCtx
-showMergedCtxs = max ShowFailCtx . maybe NoFailCtx Foldable1.maximum . NonEmpty.nonEmpty . map predicateShowFailCtx
+showMergedCtxs = max ShowFailCtx . maybe NoFailCtx Foldable1.maximum . NonEmpty.nonEmpty . map (.predicateShowFailCtx)
 
 showCtx :: PredicateFuncResult -> PredicateFuncResult
-showCtx result = result{predicateShowFailCtx = max ShowFailCtx $ predicateShowFailCtx result}
+showCtx result = result{predicateShowFailCtx = max ShowFailCtx result.predicateShowFailCtx}
 
 {----- General -----}
 
@@ -312,7 +314,7 @@ list predList =
   Predicate
     { predicateFunc = \actual ->
         if length actual == length predList
-          then verifyAll listify <$> sequence (zipWith predicateFunc predList actual)
+          then verifyAll listify <$> sequence (zipWith (.predicateFunc) predList actual)
           else
             pure
               PredicateFuncResult
@@ -325,7 +327,7 @@ list predList =
     }
  where
   listify vals = "[" <> Text.intercalate ", " vals <> "]"
-  disp = listify $ map predicateDisp predList
+  disp = listify $ map (.predicateDisp) predList
   dispNeg = "not " <> disp
 
 class IsTuple a where
@@ -381,7 +383,7 @@ tup predTup =
  where
   preds = toHListPred (Proxy @a) predTup
   tupify vals = "(" <> Text.intercalate ", " vals <> ")"
-  disp = tupify $ HList.toListWith predicateDisp preds
+  disp = tupify $ HList.toListWith (.predicateDisp) preds
   dispNeg = "not " <> disp
 
 -- | A predicate checking if the input matches the given constructor.
@@ -433,7 +435,7 @@ conMatches conNameS mFieldNames deconstruct preds =
   conName = Text.pack conNameS
   disp = "matches " <> predsDisp
   dispNeg = "does not match " <> predsDisp
-  predsDisp = consify $ HList.toListWith predicateDisp preds
+  predsDisp = consify $ HList.toListWith (.predicateDisp) preds
 
   -- consify ["= 1", "anything"] => User{id = (= 1), name = anything}
   -- consify ["= 1", "anything"] => Foo (= 1) anything
@@ -517,7 +519,7 @@ not Predicate{..} =
   Predicate
     { predicateFunc = \actual -> do
         result <- showCtx <$> predicateFunc actual
-        pure result{predicateSuccess = Prelude.not $ predicateSuccess result}
+        pure result{predicateSuccess = Prelude.not result.predicateSuccess}
     , predicateDisp = predicateDispNeg
     , predicateDispNeg = predicateDisp
     }
@@ -541,13 +543,13 @@ and :: (Monad m) => [Predicate m a] -> Predicate m a
 and preds =
   Predicate
     { predicateFunc = \actual ->
-        verifyAll (const "All predicates passed") <$> mapM (\p -> predicateFunc p actual) preds
+        verifyAll (const "All predicates passed") <$> mapM (\p -> p.predicateFunc actual) preds
     , predicateDisp = andify predList
     , predicateDispNeg = "At least one failure:\n" <> andify predList
     }
  where
   andify = Text.intercalate "\nand "
-  predList = map (parens . predicateDisp) preds
+  predList = map (parens . (.predicateDisp)) preds
 
 -- | A predicate checking if the input matches any of the given predicates
 --
@@ -556,13 +558,13 @@ or :: (Monad m) => [Predicate m a] -> Predicate m a
 or preds =
   Predicate
     { predicateFunc = \actual ->
-        verifyAny (const "No predicates passed") <$> mapM (\p -> predicateFunc p actual) preds
+        verifyAny (const "No predicates passed") <$> mapM (\p -> p.predicateFunc actual) preds
     , predicateDisp = orify predList
     , predicateDispNeg = "All failures:\n" <> orify predList
     }
  where
   orify = Text.intercalate "\nor "
-  predList = map (parens . predicateDisp) preds
+  predList = map (parens . (.predicateDisp)) preds
 
 {----- Containers -----}
 
@@ -892,7 +894,7 @@ runPredicates :: (Monad m) => HList (Predicate m) xs -> HList Identity xs -> m [
 runPredicates preds = HList.toListWithM run . HList.hzip preds
  where
   run :: (Predicate m :*: Identity) a -> m PredicateFuncResult
-  run (p :*: Identity x) = predicateFunc p x
+  run (p :*: Identity x) = p.predicateFunc x
 
 verifyAll :: ([Text] -> Text) -> [PredicateFuncResult] -> PredicateFuncResult
 verifyAll mergeMessages results =
@@ -900,12 +902,12 @@ verifyAll mergeMessages results =
     { predicateSuccess = isNothing firstFailure
     , predicateExplain =
         case firstFailure of
-          Just p -> predicateExplain p
-          Nothing -> mergeMessages $ map predicateExplain results
+          Just p -> p.predicateExplain
+          Nothing -> mergeMessages $ map (.predicateExplain) results
     , predicateShowFailCtx = showMergedCtxs results
     }
  where
-  firstFailure = listToMaybe $ filter (Prelude.not . predicateSuccess) results
+  firstFailure = listToMaybe $ filter (Prelude.not . (.predicateSuccess)) results
 
 verifyAny :: ([Text] -> Text) -> [PredicateFuncResult] -> PredicateFuncResult
 verifyAny mergeMessages results =
@@ -913,12 +915,12 @@ verifyAny mergeMessages results =
     { predicateSuccess = isJust firstSuccess
     , predicateExplain =
         case firstSuccess of
-          Just p -> predicateExplain p
-          Nothing -> mergeMessages $ map predicateExplain results
+          Just p -> p.predicateExplain
+          Nothing -> mergeMessages $ map (.predicateExplain) results
     , predicateShowFailCtx = showMergedCtxs results
     }
  where
-  firstSuccess = listToMaybe $ filter predicateSuccess results
+  firstSuccess = listToMaybe $ filter (.predicateSuccess) results
 
 render :: a -> Text
 render = Text.pack . anythingToString

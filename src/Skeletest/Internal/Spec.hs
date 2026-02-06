@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -83,7 +84,7 @@ import UnliftIO.Exception (
 
 -- | Run the given Specs and return whether all of the tests passed.
 runSpecs :: Hooks -> SpecRegistry -> IO Bool
-runSpecs Hooks{..} specs =
+runSpecs hooks specs =
   (`finally` cleanupFixtures PerSessionFixtureKey) $
     fmap and . forM (pruneSpec specs) $ \SpecInfo{..} ->
       (`finally` cleanupFixtures (PerFileFixtureKey specPath)) $ do
@@ -103,7 +104,7 @@ runSpecs Hooks{..} specs =
     SpecGroup{..} -> do
       let lvl = getIndentLevel baseTestInfo
       reportGroup lvl groupLabel
-      runTrees baseTestInfo{TestInfo.testContexts = TestInfo.testContexts baseTestInfo <> [groupLabel]} groupTrees
+      runTrees baseTestInfo{TestInfo.testContexts = baseTestInfo.testContexts <> [groupLabel]} groupTrees
     SpecTest{..} -> do
       let lvl = getIndentLevel baseTestInfo
       reportTestInProgress lvl testName
@@ -129,7 +130,7 @@ runSpecs Hooks{..} specs =
       pure testResultSuccess
 
   runTest info action =
-    hookRunTest info $ do
+    hooks.runTest info $ do
       (mCapture, resultOrError) <- withCaptureOutput (try action)
       case resultOrError of
         Right result -> pure result
@@ -139,15 +140,15 @@ runSpecs Hooks{..} specs =
               Just e' -> testResultFromAssertionFail e'
               Nothing -> testResultFromError e
 
-  getIndentLevel testInfo = length (TestInfo.testContexts testInfo) + 1 -- +1 to include the module name
+  getIndentLevel testInfo = length testInfo.testContexts + 1 -- +1 to include the module name
 
 {----- Built-in hooks -----}
 
 xfailHook :: Hooks
 xfailHook =
   defaultHooks
-    { hookRunTest = \testInfo runTest ->
-        case findMarker (TestInfo.testMarkers testInfo) of
+    { runTest = \testInfo runTest ->
+        case findMarker testInfo.testMarkers of
           Just (MarkerXFail reason) -> modify reason <$> runTest
           Nothing -> runTest
     }
@@ -170,8 +171,8 @@ xfailHook =
 skipHook :: Hooks
 skipHook =
   defaultHooks
-    { hookRunTest = \testInfo runTest ->
-        case findMarker (TestInfo.testMarkers testInfo) of
+    { runTest = \testInfo runTest ->
+        case findMarker (testInfo.testMarkers) of
           Just (MarkerSkip reason) ->
             pure
               TestResult

@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 module Skeletest.Internal.TestInfo (
   TestInfo (..),

@@ -1,5 +1,7 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 module Skeletest.Internal.Spec.Tree (
   -- * Spec interface
@@ -106,7 +108,7 @@ traverseSpecTrees f = withSpecTrees go
 
   recurseGroups = \case
     group@SpecGroup{} -> do
-      trees' <- go $ groupTrees group
+      trees' <- go group.groupTrees
       pure group{groupTrees = trees'}
     stest@SpecTest{} -> pure stest
 
@@ -136,7 +138,7 @@ data SpecInfo = SpecInfo
 -- | Remove specs with no tests.
 pruneSpec :: SpecRegistry -> SpecRegistry
 pruneSpec = mapMaybe $ \info -> do
-  let spec = mapSpecTrees (\go -> filter (not . isEmptySpec) . map go) (specSpec info)
+  let spec = mapSpecTrees (\go -> filter (not . isEmptySpec) . map go) info.specSpec
   guard $ (not . null . getSpecTrees) spec
   pure info{specSpec = spec}
  where
@@ -149,7 +151,7 @@ applyTestSelections :: TestTargets -> SpecRegistry -> SpecRegistry
 applyTestSelections = \case
   Just selections -> map (applyTestSelections' selections)
   -- if no selections are specified, hide manual tests
-  Nothing -> map (\info -> info{specSpec = hideManualTests $ specSpec info})
+  Nothing -> map (\info -> info{specSpec = hideManualTests info.specSpec})
  where
   hideManualTests = mapSpecTrees (\go -> filter (not . isManualTest) . map go)
   isManualTest = \case
@@ -157,7 +159,7 @@ applyTestSelections = \case
     SpecTest{testMarkers} -> isJust $ findMarker @MarkerManual testMarkers
 
 applyTestSelections' :: TestTarget -> SpecInfo -> SpecInfo
-applyTestSelections' selections info = info{specSpec = applySelections $ specSpec info}
+applyTestSelections' selections info = info{specSpec = applySelections info.specSpec}
  where
   applySelections = (`Trans.runReader` []) . traverseSpecTrees apply
 
@@ -167,7 +169,7 @@ applyTestSelections' selections info = info{specSpec = applySelections $ specSpe
       groups <- Trans.ask
       let attrs =
             TestTargets.TestAttrs
-              { testPath = specPath info
+              { testPath = info.specPath
               , testIdentifier = groups <> [testName]
               , testMarkers = [Text.pack $ getMarkerName m | SomeMarker m <- testMarkers]
               }
@@ -272,7 +274,7 @@ withMarker m = mapSpecTrees (\go -> map (addMarker . go))
   marker = SomeMarker m
   addMarker = \case
     group@SpecGroup{} -> group
-    tree@SpecTest{} -> tree{testMarkers = marker : testMarkers tree}
+    tree@SpecTest{} -> tree{testMarkers = marker : tree.testMarkers}
 
 -- | Adds the given names as plain markers to all tests in the given spec.
 --

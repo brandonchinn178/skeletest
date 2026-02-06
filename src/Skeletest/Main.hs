@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -53,7 +54,7 @@ runSkeletest' Plugin{hooks = hooks0, ..} testModules = do
   setSnapshotRenderers (snapshotRenderers <> defaultSnapshotRenderers)
 
   let initialSpecs = map mkSpec testModules
-  success <- runSpecs hooks <=< hookModifySpecRegistry hooks selections (pure . applyTestSelections selections) $ initialSpecs
+  success <- runSpecs hooks <=< hooks.modifySpecRegistry selections (pure . applyTestSelections selections) $ initialSpecs
   unless success exitFailure
  where
   hooks = mconcat builtinHooks <> hooks0

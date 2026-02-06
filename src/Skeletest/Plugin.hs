@@ -1,3 +1,6 @@
+{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE NoFieldSelectors #-}
+
 module Skeletest.Plugin (
   -- * Plugin
   Plugin (..),
@@ -56,9 +59,9 @@ data Plugin = Plugin
 instance Semigroup Plugin where
   plugin1 <> plugin2 =
     Plugin
-      { cliFlags = cliFlags plugin1 <> cliFlags plugin2
-      , snapshotRenderers = snapshotRenderers plugin1 <> snapshotRenderers plugin2
-      , hooks = hooks plugin1 <> hooks plugin2
+      { cliFlags = plugin1.cliFlags <> plugin2.cliFlags
+      , snapshotRenderers = plugin1.snapshotRenderers <> plugin2.snapshotRenderers
+      , hooks = plugin1.hooks <> plugin2.hooks
       }
 
 instance Monoid Plugin where
@@ -77,7 +80,7 @@ defaultPlugin =
 -- Use 'defaultHooks' instead of using v'Hooks' directly, to minimize
 -- breaking changes.
 data Hooks = Hooks
-  { hookModifySpecRegistry :: TestTargets -> (SpecRegistry -> IO SpecRegistry) -> (SpecRegistry -> IO SpecRegistry)
+  { modifySpecRegistry :: TestTargets -> (SpecRegistry -> IO SpecRegistry) -> (SpecRegistry -> IO SpecRegistry)
   -- ^ Modify all the specs in the test suite, being able to modify before/after
   -- previously registered hooks.
   --
@@ -85,15 +88,15 @@ data Hooks = Hooks
   -- @
   -- \_ modify -> pre >=> modify >=> post
   -- @
-  , hookRunTest :: TestInfo -> IO TestResult -> IO TestResult
+  , runTest :: TestInfo -> IO TestResult -> IO TestResult
   -- ^ Modify how a test is executed
   }
 
 instance Semigroup Hooks where
   hooks1 <> hooks2 =
     Hooks
-      { hookModifySpecRegistry = \targets -> hookModifySpecRegistry hooks2 targets . hookModifySpecRegistry hooks1 targets
-      , hookRunTest = \testInfo -> hookRunTest hooks2 testInfo . hookRunTest hooks1 testInfo
+      { modifySpecRegistry = \targets -> hooks2.modifySpecRegistry targets . hooks1.modifySpecRegistry targets
+      , runTest = \testInfo -> hooks2.runTest testInfo . hooks1.runTest testInfo
       }
 
 instance Monoid Hooks where
@@ -102,6 +105,6 @@ instance Monoid Hooks where
 defaultHooks :: Hooks
 defaultHooks =
   Hooks
-    { hookModifySpecRegistry = \_ -> id
-    , hookRunTest = \_ -> id
+    { modifySpecRegistry = \_ -> id
+    , runTest = \_ -> id
     }

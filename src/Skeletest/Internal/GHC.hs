@@ -6,6 +6,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 {-| Provide a pure API for GHC internals.
 
@@ -49,6 +50,7 @@ module Skeletest.Internal.GHC (
   HsName,
   hsName,
   hsVarName,
+  hsFieldName,
   getHsName,
 ) where
 
@@ -332,6 +334,15 @@ hsName = HsName
 
 hsVarName :: Text -> HsName p
 hsVarName = HsVarName
+
+hsFieldName :: TH.Name -> String -> HsName p
+hsFieldName conName fieldName =
+  HsName $
+    TH.mkNameG_fld
+      (fromMaybe "" $ TH.namePackage conName)
+      (fromMaybe "" $ TH.nameModule conName)
+      (TH.nameBase conName)
+      fieldName
 
 hsGhcName :: forall p. (IsPass p) => GHC.IdP (GhcPass p) -> HsName (GhcPass p)
 hsGhcName = HsGhcName . onPsOrRn @p GhcIdPs GhcIdRn

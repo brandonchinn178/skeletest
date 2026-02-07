@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -20,7 +21,7 @@ module Skeletest.Main (
   Spec,
 ) where
 
-import Control.Monad (unless)
+import Control.Monad (unless, (<=<))
 import Skeletest.Internal.CLI (Flag, flag, loadCliArgs)
 import Skeletest.Internal.Capture (CaptureOutputFlag)
 import Skeletest.Internal.Snapshot (
@@ -33,11 +34,13 @@ import Skeletest.Internal.Snapshot (
 import Skeletest.Internal.Spec (
   Spec,
   SpecInfo (..),
-  applyTestSelections,
-  pruneSpec,
+  applyTestSelectionsHook,
+  manualTestsHook,
   runSpecs,
+  skipHook,
+  xfailHook,
  )
-import Skeletest.Plugin (Plugin (..))
+import Skeletest.Plugin (Hooks (..), Plugin (..))
 import Skeletest.Prop.Internal (PropLimitFlag, PropSeedFlag)
 import System.Exit (exitFailure)
 
@@ -45,14 +48,23 @@ runSkeletest :: [Plugin] -> [(FilePath, Spec)] -> IO ()
 runSkeletest = runSkeletest' . mconcat
 
 runSkeletest' :: Plugin -> [(FilePath, Spec)] -> IO ()
-runSkeletest' Plugin{..} testModules = do
+runSkeletest' Plugin{hooks = hooks0, ..} testModules = do
   selections <- loadCliArgs builtinFlags cliFlags
   setSnapshotRenderers (snapshotRenderers <> defaultSnapshotRenderers)
 
   let initialSpecs = map mkSpec testModules
-  success <- runSpecs hooks . pruneSpec . applyTestSelections selections $ initialSpecs
+  success <- runSpecs hooks <=< hooks.modifySpecRegistry selections pure $ initialSpecs
   unless success exitFailure
  where
+  hooks = mconcat builtinHooks <> hooks0
+
+  builtinHooks =
+    [ xfailHook
+    , skipHook
+    , applyTestSelectionsHook
+    , manualTestsHook
+    ]
+
   builtinFlags =
     [ flag @SnapshotUpdateFlag
     , flag @PropSeedFlag

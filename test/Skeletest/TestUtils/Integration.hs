@@ -1,5 +1,7 @@
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 module Skeletest.TestUtils.Integration (
   integration,
@@ -76,7 +78,7 @@ setMainFile FixtureTestRunner{testRunnerSettingsRef} contents =
 addTestFile :: FixtureTestRunner -> FilePath -> FileContents -> IO ()
 addTestFile FixtureTestRunner{testRunnerSettingsRef} fp contents =
   modifyIORef testRunnerSettingsRef $ \settings ->
-    settings{testFiles = (fp, contents) : testFiles settings}
+    settings{testFiles = (fp, contents) : settings.testFiles}
 
 readTestFile :: FixtureTestRunner -> FilePath -> IO String
 readTestFile FixtureTestRunner{testRunnerDir} fp = readFile $ testRunnerDir </> fp

@@ -86,7 +86,7 @@ addCapturedOutput = maybe id updateResult
     result
       { testResultMessage =
           TestResultMessageBox . concat $
-            [ toBoxContents (testResultMessage result)
+            [ toBoxContents result.testResultMessage
             , renderOutput output
             ]
       }

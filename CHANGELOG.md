@@ -1,5 +1,10 @@
 ## Unreleased
 
+API changes:
+* Replace `hookModifyFileSpecs` with `hookModifySpecRegistry`
+* Remove `hook` prefix from `Hook` fields
+* Turn on `NoFieldSelectors` everywhere
+
 ## v0.3.3
 
 Configuration:

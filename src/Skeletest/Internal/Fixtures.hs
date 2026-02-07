@@ -1,6 +1,8 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 module Skeletest.Internal.Fixtures (
   Fixture (..),
@@ -86,7 +88,7 @@ getFixture = liftIO $ do
     fmap getScopedAccessors $
       case fixtureScope @a of
         PerTestFixture -> PerTestFixtureKey <$> myThreadId
-        PerFileFixture -> PerFileFixtureKey . testFile <$> getTestInfo
+        PerFileFixture -> PerFileFixtureKey . (.testFile) <$> getTestInfo
         PerSessionFixture -> pure PerSessionFixtureKey
 
   let insertFixture state = updateScopedFixtures (OMap.>| (rep, state))
@@ -193,16 +195,16 @@ getScopedAccessors ::
 getScopedAccessors scopeKey =
   case scopeKey of
     PerTestFixtureKey tid ->
-      ( Map.Utils.findOrEmpty tid . testFixtures
-      , \f registry -> registry{testFixtures = Map.Utils.adjustNested f tid (testFixtures registry)}
+      ( Map.Utils.findOrEmpty tid . (.testFixtures)
+      , \f registry -> registry{testFixtures = Map.Utils.adjustNested f tid registry.testFixtures}
       )
     PerFileFixtureKey fp ->
-      ( Map.Utils.findOrEmpty fp . fileFixtures
-      , \f registry -> registry{fileFixtures = Map.Utils.adjustNested f fp (fileFixtures registry)}
+      ( Map.Utils.findOrEmpty fp . (.fileFixtures)
+      , \f registry -> registry{fileFixtures = Map.Utils.adjustNested f fp registry.fileFixtures}
       )
     PerSessionFixtureKey ->
-      ( sessionFixtures
-      , \f registry -> registry{sessionFixtures = f (sessionFixtures registry)}
+      ( (.sessionFixtures)
+      , \f registry -> registry{sessionFixtures = f registry.sessionFixtures}
       )
 
 {----- Built-in fixtures -----}

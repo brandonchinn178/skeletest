@@ -1,3 +1,7 @@
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE NoFieldSelectors #-}
+
 module Skeletest.Plugin (
   -- * Plugin
   Plugin (..),
@@ -10,27 +14,40 @@ module Skeletest.Plugin (
   -- * Re-exports
 
   -- ** TestResult
-  TestResult (..),
-  TestResultMessage (..),
-  BoxSpec,
-  BoxSpecContent (..),
+  X.TestResult (..),
+  X.TestResultMessage (..),
+  X.BoxSpec,
+  X.BoxSpecContent (..),
 
   -- ** TestInfo
-  TestInfo (..),
+  X.TestInfo (..),
 
   -- ** Markers
-  findMarker,
-  hasMarkerNamed,
+  X.findMarker,
+  X.hasMarkerNamed,
+
+  -- ** SpecRegistry
+  X.SpecRegistry,
+  X.Spec,
+  X.SpecInfo (..),
+  X.SpecTree (..),
+  X.mapSpecTrees,
+  X.traverseSpecTrees,
+  X.mapSpecs,
+  X.traverseSpecs,
 ) where
 
-import Control.Monad ((>=>))
 import Skeletest.Internal.CLI (Flag)
-import Skeletest.Internal.Markers (findMarker, hasMarkerNamed)
+import Skeletest.Internal.Markers qualified as X
 import Skeletest.Internal.Snapshot (SnapshotRenderer)
-import Skeletest.Internal.Spec.Output (BoxSpec, BoxSpecContent (..))
-import Skeletest.Internal.Spec.Tree (SpecTree)
+import Skeletest.Internal.Spec.Output qualified as X
+import Skeletest.Internal.Spec.Tree (SpecRegistry)
+import Skeletest.Internal.Spec.Tree qualified as X
 import Skeletest.Internal.TestInfo (TestInfo (..))
-import Skeletest.Internal.TestRunner (TestResult (..), TestResultMessage (..))
+import Skeletest.Internal.TestInfo qualified as X
+import Skeletest.Internal.TestRunner (TestResult (..))
+import Skeletest.Internal.TestRunner qualified as X
+import Skeletest.Internal.TestTargets (TestTargets)
 
 -- | A plugin for extending Skeletest.
 --
@@ -45,9 +62,9 @@ data Plugin = Plugin
 instance Semigroup Plugin where
   plugin1 <> plugin2 =
     Plugin
-      { cliFlags = cliFlags plugin1 <> cliFlags plugin2
-      , snapshotRenderers = snapshotRenderers plugin1 <> snapshotRenderers plugin2
-      , hooks = hooks plugin1 <> hooks plugin2
+      { cliFlags = plugin1.cliFlags <> plugin2.cliFlags
+      , snapshotRenderers = plugin1.snapshotRenderers <> plugin2.snapshotRenderers
+      , hooks = plugin1.hooks <> plugin2.hooks
       }
 
 instance Monoid Plugin where
@@ -66,18 +83,23 @@ defaultPlugin =
 -- Use 'defaultHooks' instead of using v'Hooks' directly, to minimize
 -- breaking changes.
 data Hooks = Hooks
-  { hookModifyFileSpecs :: [SpecTree] -> IO [SpecTree]
-  -- ^ Modify the specs in a file
-  -- @since 0.3.2
-  , hookRunTest :: TestInfo -> IO TestResult -> IO TestResult
+  { modifySpecRegistry :: TestTargets -> (SpecRegistry -> IO SpecRegistry) -> (SpecRegistry -> IO SpecRegistry)
+  -- ^ Modify all the specs in the test suite, being able to modify before/after
+  -- previously registered hooks.
+  --
+  -- For example:
+  -- @
+  -- \_ modify -> pre >=> modify >=> post
+  -- @
+  , runTest :: TestInfo -> IO TestResult -> IO TestResult
   -- ^ Modify how a test is executed
   }
 
 instance Semigroup Hooks where
   hooks1 <> hooks2 =
     Hooks
-      { hookModifyFileSpecs = hookModifyFileSpecs hooks1 >=> hookModifyFileSpecs hooks2
-      , hookRunTest = \testInfo -> hookRunTest hooks2 testInfo . hookRunTest hooks1 testInfo
+      { modifySpecRegistry = \targets -> hooks2.modifySpecRegistry targets . hooks1.modifySpecRegistry targets
+      , runTest = \testInfo -> hooks2.runTest testInfo . hooks1.runTest testInfo
       }
 
 instance Monoid Hooks where
@@ -86,6 +108,6 @@ instance Monoid Hooks where
 defaultHooks :: Hooks
 defaultHooks =
   Hooks
-    { hookModifyFileSpecs = pure
-    , hookRunTest = \_ -> id
+    { modifySpecRegistry = \_ -> id
+    , runTest = \_ -> id
     }

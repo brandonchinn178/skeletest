@@ -52,13 +52,13 @@ plugin =
 transformMainModule :: Preprocessor.Options -> ParsedModule -> ParsedModule
 transformMainModule options modl =
   modl
-    { moduleFuncs = (hsVarName options.mainFuncName, Just mainFun) : moduleFuncs modl
+    { moduleFuncs = (hsVarName options.mainFuncName, Just mainFun) : modl.moduleFuncs
     }
  where
   findVar name =
     fmap hsExprVar . listToMaybe $
       [ funName
-      | (funName, _) <- moduleFuncs modl
+      | (funName, _) <- modl.moduleFuncs
       , getHsName funName == name
       ]
 
@@ -77,9 +77,9 @@ transformMainModule options modl =
             [ hsExprApps (hsExprVar (hsName '(:))) $
                 [ hsExprRecordCon
                     (hsName 'Plugin.Plugin)
-                    [ (hsName 'Plugin.cliFlags, cliFlagsExpr)
-                    , (hsName 'Plugin.snapshotRenderers, snapshotRenderersExpr)
-                    , (hsName 'Plugin.hooks, hooksExpr)
+                    [ (hsFieldName 'Plugin.Plugin "cliFlags", cliFlagsExpr)
+                    , (hsFieldName 'Plugin.Plugin "snapshotRenderers", snapshotRenderersExpr)
+                    , (hsFieldName 'Plugin.Plugin "hooks", hooksExpr)
                     ]
                 , pluginsExpr
                 ]
@@ -129,7 +129,7 @@ replaceConMatch ctx e =
     -- Matches:
     --   P.con $ User "..."
     HsExprOp (getExpr -> HsExprVar name) (getExpr -> HsExprVar dollar) arg
-      | matchesName ctx (hsName '($)) dollar
+      | ctx.matchesName (hsName '($)) dollar
       , isCon name ->
           convertCon arg
     -- Check if P.con is by itself
@@ -142,7 +142,7 @@ replaceConMatch ctx e =
           skeletestPluginError (getLoc e) "P.con must be applied to exactly one argument"
     _ -> e
  where
-  isCon = matchesName ctx (hsName 'P.con)
+  isCon = ctx.matchesName (hsName 'P.con)
 
   convertCon con =
     case getExpr con of
@@ -220,7 +220,7 @@ replaceIsoChecker :: Ctx -> HsExpr GhcRn -> HsExpr GhcRn
 replaceIsoChecker ctx e =
   case getExpr e of
     HsExprOp l (getExpr -> HsExprVar eqeqeq) r
-      | matchesName ctx (hsName '(P.===)) eqeqeq ->
+      | ctx.matchesName (hsName '(P.===)) eqeqeq ->
           inlineIsoChecker l r
     _ -> e
  where

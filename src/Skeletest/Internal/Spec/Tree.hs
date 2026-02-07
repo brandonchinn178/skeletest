@@ -27,6 +27,8 @@ module Skeletest.Internal.Spec.Tree (
   xfail,
   MarkerSkip (..),
   skip,
+  MarkerFocus (..),
+  focus,
   MarkerManual (..),
   markManual,
 
@@ -243,18 +245,26 @@ prop = test
 
 {----- Modifiers -----}
 
--- | Mark the given spec as expected to fail.
+-- | Mark the given spec as expected to fail with the given description.
 -- Fails tests if they unexpectedly pass.
 --
 -- Can be selected with the marker @@xfail@
 xfail :: String -> Spec -> Spec
 xfail = withMarker . MarkerXFail . Text.pack
 
--- | Skip all tests in the given spec.
+-- | Skip all tests in the given spec with the given description.
 --
 -- Can be selected with the marker @@skip@
 skip :: String -> Spec -> Spec
 skip = withMarker . MarkerSkip . Text.pack
+
+-- | If at least one test is focused, skip all unfocused tests.
+--
+-- This definition includes a WARNING so that CI errors if it's accidentally
+-- committed (assuming CI runs with @-Wall -Werror@).
+focus :: Spec -> Spec
+focus = withMarker MarkerFocus
+{-# WARNING in "x-focused-tests" focus "focus should only be used in development" #-}
 
 -- | Mark tests as tests that should only be run when explicitly specified on the command line.
 markManual :: Spec -> Spec
@@ -273,6 +283,12 @@ newtype MarkerSkip = MarkerSkip Text
 
 instance IsMarker MarkerSkip where
   getMarkerName _ = "skip"
+
+data MarkerFocus = MarkerFocus
+  deriving (Show)
+
+instance IsMarker MarkerFocus where
+  getMarkerName _ = "focus"
 
 data MarkerManual = MarkerManual
   deriving (Show)

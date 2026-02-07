@@ -35,6 +35,7 @@ import Skeletest.Internal.Spec (
   Spec,
   SpecInfo (..),
   applyTestSelectionsHook,
+  focusHook,
   manualTestsHook,
   runSpecs,
   skipHook,
@@ -61,6 +62,7 @@ runSkeletest' Plugin{hooks = hooks0, ..} testModules = do
   builtinHooks =
     [ xfailHook
     , skipHook
+    , focusHook
     , applyTestSelectionsHook
     , manualTestsHook
     ]

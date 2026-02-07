@@ -25,6 +25,7 @@ module Skeletest.Internal.Spec (
   -- ** Modifiers
   X.xfail,
   X.skip,
+  X.focus,
   X.markManual,
 
   -- ** Markers
@@ -37,6 +38,7 @@ module Skeletest.Internal.Spec (
   manualTestsHook,
   xfailHook,
   skipHook,
+  focusHook,
 ) where
 
 import Control.Concurrent (myThreadId)
@@ -56,6 +58,7 @@ import Skeletest.Internal.Spec.Output (
   reportTestResultWithoutMessage,
  )
 import Skeletest.Internal.Spec.Tree (
+  MarkerFocus (..),
   MarkerManual (..),
   MarkerSkip (..),
   MarkerXFail (..),
@@ -207,3 +210,19 @@ skipHook =
                 }
           Nothing -> runTest
     }
+
+focusHook :: Hooks
+focusHook =
+  defaultHooks
+    { modifySpecRegistry = \_ modify -> fmap applyFocus . modify
+    }
+ where
+  applyFocus specs = if hasFocus specs then mapSpecs hideNotFocused specs else specs
+  hasFocus = any (anySpecTests isFocused . (.specSpec))
+  anySpecTests f spec =
+    let go = \case
+          SpecTree_Group{trees} -> concatMap go trees
+          SpecTree_Test test -> [test]
+     in any f $ concatMap go (getSpecTrees spec)
+  isFocused test = hasMarker @MarkerFocus test.markers
+  hideNotFocused = filterSpecTests isFocused

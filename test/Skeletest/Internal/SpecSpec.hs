@@ -56,6 +56,23 @@ spec = do
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
+  describe "focus" $ do
+    -- TODO: test that using focus with -Werror fails
+    integration . it "only runs focused test" $ do
+      runner <- getFixture
+      addTestFile runner "ExampleSpec.hs" $
+        [ "module ExampleSpec (spec) where"
+        , ""
+        , "import Skeletest"
+        , ""
+        , "spec = do"
+        , "  focus . it \"in progress\" $ pure ()"
+        , "  it \"not working yet\" $ failTest \"broken\""
+        ]
+
+      (stdout, _) <- expectSuccess $ runTests runner []
+      stdout `shouldSatisfy` P.matchesSnapshot
+
   describe "markManual" $ do
     integration . it "skips manual tests by default" $ do
       runner <- getFixture

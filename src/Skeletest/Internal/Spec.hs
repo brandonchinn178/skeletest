@@ -108,11 +108,11 @@ runSpecs hooks specs =
  where
   runTrees baseTestInfo = fmap and . mapM (runTree baseTestInfo)
   runTree baseTestInfo = \case
-    SpecGroup{..} -> do
+    SpecTree_Group{..} -> do
       let lvl = getIndentLevel baseTestInfo
       reportGroup lvl groupLabel
       runTrees baseTestInfo{TestInfo.testContexts = baseTestInfo.testContexts <> [groupLabel]} groupTrees
-    SpecTest{..} -> do
+    SpecTree_Test{..} -> do
       let lvl = getIndentLevel baseTestInfo
       reportTestInProgress lvl testName
 
@@ -170,8 +170,8 @@ manualTestsHook =
  where
   hideManual = mapSpecTrees (\go -> filter (not . isManualTest) . map go)
   isManualTest = \case
-    SpecGroup{} -> False
-    SpecTest{testMarkers} -> isJust $ findMarker @MarkerManual testMarkers
+    SpecTree_Group{} -> False
+    SpecTree_Test{testMarkers} -> isJust $ findMarker @MarkerManual testMarkers
 
 xfailHook :: Hooks
 xfailHook =

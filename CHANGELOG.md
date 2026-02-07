@@ -1,5 +1,7 @@
 ## Unreleased
 
+## v0.3.4
+
 API changes:
 * Replace `hookModifyFileSpecs` with `hookModifySpecRegistry`
 * Remove field prefixes from many constructors (e.g. `Hooks`, `TestInfo`, etc.)

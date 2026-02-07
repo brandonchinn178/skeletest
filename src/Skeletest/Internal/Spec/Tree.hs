@@ -262,6 +262,8 @@ skip = withMarker . MarkerSkip . Text.pack
 --
 -- This definition includes a WARNING so that CI errors if it's accidentally
 -- committed (assuming CI runs with @-Wall -Werror@).
+--
+-- @since 0.3.4
 focus :: Spec -> Spec
 focus = withMarker MarkerFocus
 {-# WARNING in "x-focused-tests" focus "focus should only be used in development" #-}

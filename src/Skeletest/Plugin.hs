@@ -98,6 +98,8 @@ data Hooks = Hooks
   -- @
   -- \_ modify -> pre >=> modify >=> post
   -- @
+  --
+  -- @since 0.3.4
   , runTest :: TestInfo -> IO TestResult -> IO TestResult
   -- ^ Modify how a test is executed
   }

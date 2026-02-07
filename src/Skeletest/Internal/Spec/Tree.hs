@@ -7,6 +7,7 @@ module Skeletest.Internal.Spec.Tree (
   -- * Spec interface
   Spec,
   SpecTree (..),
+  SpecTest (..),
 
   -- ** Entrypoint
   SpecRegistry,
@@ -26,6 +27,8 @@ module Skeletest.Internal.Spec.Tree (
   xfail,
   MarkerSkip (..),
   skip,
+  MarkerFocus (..),
+  focus,
   MarkerManual (..),
   markManual,
 
@@ -36,13 +39,17 @@ module Skeletest.Internal.Spec.Tree (
 
   -- ** Internal API
   getSpecTrees,
+  withSpecTrees,
   mapSpecTrees,
   traverseSpecTrees,
+  mapSpecTests,
+  filterSpecTests,
+  traverseSpecTests,
   mapSpecs,
   traverseSpecs,
 ) where
 
-import Control.Monad (guard)
+import Control.Monad (guard, (>=>))
 import Control.Monad.Trans.Reader qualified as Trans
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
 import Data.Functor.Identity (runIdentity)
@@ -66,22 +73,24 @@ newtype Spec' a = Spec (Writer [SpecTree] a)
   deriving (Functor, Applicative, Monad)
 
 data SpecTree
-  = SpecGroup
-      { groupLabel :: Text
-      , groupTrees :: [SpecTree]
+  = SpecTree_Group
+      { label :: Text
+      , trees :: [SpecTree]
       }
-  | SpecTest
-      { testName :: Text
-      , testMarkers :: [SomeMarker]
-      -- ^ Markers, in order from least to most recently applied.
-      --
-      -- >>> withMarker MarkerA . withMarker MarkerB $ test ...
-      --
-      -- will contain
-      --
-      -- >>> SpecTest { testMarkers = [MarkerA, MarkerB] }
-      , testAction :: IO TestResult
-      }
+  | SpecTree_Test SpecTest
+
+data SpecTest = SpecTest
+  { name :: Text
+  , markers :: [SomeMarker]
+  -- ^ Markers, in order from least to most recently applied.
+  --
+  -- >>> withMarker MarkerA . withMarker MarkerB $ test ...
+  --
+  -- will contain
+  --
+  -- >>> SpecTree_Test { testMarkers = [MarkerA, MarkerB] }
+  , action :: IO TestResult
+  }
 
 getSpecTrees :: Spec -> [SpecTree]
 getSpecTrees (Spec spec) = execWriter spec
@@ -97,10 +106,7 @@ withSpecTrees f = fmap (Spec . tell) . f . getSpecTrees
 traverseSpecTrees ::
   forall m.
   (Monad m) =>
-  ( (SpecTree -> m SpecTree) ->
-    [SpecTree] ->
-    m [SpecTree]
-  ) ->
+  ((SpecTree -> m SpecTree) -> [SpecTree] -> m [SpecTree]) ->
   Spec ->
   m Spec
 traverseSpecTrees f = withSpecTrees go
@@ -109,10 +115,10 @@ traverseSpecTrees f = withSpecTrees go
   go = f recurseGroups
 
   recurseGroups = \case
-    group@SpecGroup{} -> do
-      trees' <- go group.groupTrees
-      pure group{groupTrees = trees'}
-    stest@SpecTest{} -> pure stest
+    group@SpecTree_Group{} -> do
+      trees' <- go group.trees
+      pure group{trees = trees'}
+    stest@SpecTree_Test{} -> pure stest
 
 -- | Map the tree with the given processing function.
 --
@@ -120,13 +126,27 @@ traverseSpecTrees f = withSpecTrees go
 --
 -- >>> mapSpecTrees (\go -> post . map go . pre) spec
 mapSpecTrees ::
-  ( (SpecTree -> SpecTree) ->
-    [SpecTree] ->
-    [SpecTree]
-  ) ->
+  ((SpecTree -> SpecTree) -> [SpecTree] -> [SpecTree]) ->
   Spec ->
   Spec
 mapSpecTrees f = runIdentity . traverseSpecTrees (\go -> pure . f (runIdentity . go))
+
+traverseSpecTests :: (Monad m) => (SpecTest -> m SpecTest) -> Spec -> m Spec
+traverseSpecTests f = traverseSpecTrees $ \go ->
+  traverse $
+    go >=> \case
+      group@SpecTree_Group{} -> pure group
+      SpecTree_Test test_ -> SpecTree_Test <$> f test_
+
+mapSpecTests :: (SpecTest -> SpecTest) -> Spec -> Spec
+mapSpecTests f = runIdentity . traverseSpecTests (pure . f)
+
+filterSpecTests :: (SpecTest -> Bool) -> Spec -> Spec
+filterSpecTests f = mapSpecTrees $ \go -> filter f' . map go
+ where
+  f' = \case
+    SpecTree_Group{} -> True
+    SpecTree_Test test_ -> f test_
 
 {----- Entrypoint -----}
 
@@ -151,7 +171,7 @@ pruneSpec = mapMaybe $ \info -> do
   pure info{specSpec = spec}
  where
   isEmptySpec = \case
-    SpecGroup _ [] -> True
+    SpecTree_Group _ [] -> True
     _ -> False
 
 applyTestSelections :: TestTarget -> SpecInfo -> SpecInfo
@@ -160,14 +180,14 @@ applyTestSelections selections info = info{specSpec = applySelections info.specS
   applySelections = (`Trans.runReader` []) . traverseSpecTrees apply
 
   apply go = mapMaybeM $ \case
-    group@SpecGroup{groupLabel} -> Just <$> Trans.local (<> [groupLabel]) (go group)
-    stest@SpecTest{testName, testMarkers} -> do
+    group@SpecTree_Group{label} -> Just <$> Trans.local (<> [label]) (go group)
+    stest@(SpecTree_Test test_) -> do
       groups <- Trans.ask
       let attrs =
             TestTargets.TestAttrs
-              { testPath = info.specPath
-              , testIdentifier = groups <> [testName]
-              , testMarkers = [Text.pack $ getMarkerName m | SomeMarker m <- testMarkers]
+              { path = info.specPath
+              , identifier = groups <> [test_.name]
+              , markers = [Text.pack $ getMarkerName m | SomeMarker m <- test_.markers]
               }
       pure $
         if matchesTest selections attrs
@@ -183,20 +203,21 @@ describe :: String -> Spec -> Spec
 describe name = runIdentity . withSpecTrees (pure . (: []) . mkGroup)
  where
   mkGroup trees =
-    SpecGroup
-      { groupLabel = Text.pack name
-      , groupTrees = trees
+    SpecTree_Group
+      { label = Text.pack name
+      , trees
       }
 
 test :: (Testable m) => String -> m () -> Spec
 test name t = Spec $ tell [mkTest]
  where
   mkTest =
-    SpecTest
-      { testName = Text.pack name
-      , testMarkers = []
-      , testAction = runTestable t
-      }
+    SpecTree_Test $
+      SpecTest
+        { name = Text.pack name
+        , markers = []
+        , action = runTestable t
+        }
 
 -- | Define an IO-based test.
 --
@@ -224,18 +245,26 @@ prop = test
 
 {----- Modifiers -----}
 
--- | Mark the given spec as expected to fail.
+-- | Mark the given spec as expected to fail with the given description.
 -- Fails tests if they unexpectedly pass.
 --
 -- Can be selected with the marker @@xfail@
 xfail :: String -> Spec -> Spec
 xfail = withMarker . MarkerXFail . Text.pack
 
--- | Skip all tests in the given spec.
+-- | Skip all tests in the given spec with the given description.
 --
 -- Can be selected with the marker @@skip@
 skip :: String -> Spec -> Spec
 skip = withMarker . MarkerSkip . Text.pack
+
+-- | If at least one test is focused, skip all unfocused tests.
+--
+-- This definition includes a WARNING so that CI errors if it's accidentally
+-- committed (assuming CI runs with @-Wall -Werror@).
+focus :: Spec -> Spec
+focus = withMarker MarkerFocus
+{-# WARNING in "x-focused-tests" focus "focus should only be used in development" #-}
 
 -- | Mark tests as tests that should only be run when explicitly specified on the command line.
 markManual :: Spec -> Spec
@@ -255,6 +284,12 @@ newtype MarkerSkip = MarkerSkip Text
 instance IsMarker MarkerSkip where
   getMarkerName _ = "skip"
 
+data MarkerFocus = MarkerFocus
+  deriving (Show)
+
+instance IsMarker MarkerFocus where
+  getMarkerName _ = "focus"
+
 data MarkerManual = MarkerManual
   deriving (Show)
 
@@ -269,8 +304,8 @@ withMarker m = mapSpecTrees (\go -> map (addMarker . go))
  where
   marker = SomeMarker m
   addMarker = \case
-    group@SpecGroup{} -> group
-    tree@SpecTest{} -> tree{testMarkers = marker : tree.testMarkers}
+    group@SpecTree_Group{} -> group
+    SpecTree_Test test_ -> SpecTree_Test test_{markers = marker : test_.markers}
 
 -- | Adds the given names as plain markers to all tests in the given spec.
 --

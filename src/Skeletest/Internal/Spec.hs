@@ -25,6 +25,7 @@ module Skeletest.Internal.Spec (
   -- ** Modifiers
   X.xfail,
   X.skip,
+  X.focus,
   X.markManual,
 
   -- ** Markers
@@ -37,11 +38,11 @@ module Skeletest.Internal.Spec (
   manualTestsHook,
   xfailHook,
   skipHook,
+  focusHook,
 ) where
 
 import Control.Concurrent (myThreadId)
 import Control.Monad (forM)
-import Data.Maybe (isJust)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Skeletest.Internal.Capture (addCapturedOutput, withCaptureOutput)
@@ -57,15 +58,16 @@ import Skeletest.Internal.Spec.Output (
   reportTestResultWithoutMessage,
  )
 import Skeletest.Internal.Spec.Tree (
+  MarkerFocus (..),
   MarkerManual (..),
   MarkerSkip (..),
   MarkerXFail (..),
   SpecInfo (..),
   SpecRegistry,
+  SpecTest (..),
   SpecTree (..),
   applyTestSelections,
   getSpecTrees,
-  mapSpecTrees,
   mapSpecs,
   pruneSpec,
  )
@@ -79,7 +81,7 @@ import Skeletest.Internal.TestRunner (
   testResultFromError,
  )
 import Skeletest.Internal.Utils.Color qualified as Color
-import Skeletest.Plugin (Hooks (..), defaultHooks)
+import Skeletest.Plugin (Hooks (..), defaultHooks, filterSpecTests, hasMarker)
 import System.Console.Terminal.Size qualified as Term
 import UnliftIO.Exception (
   finally,
@@ -97,10 +99,10 @@ runSpecs hooks specs =
       (`finally` cleanupFixtures (PerFileFixtureKey specPath)) $ do
         let emptyTestInfo =
               TestInfo
-                { testContexts = []
-                , testName = ""
-                , testMarkers = []
-                , testFile = specPath
+                { contexts = []
+                , name = ""
+                , markers = []
+                , file = specPath
                 }
         Text.putStrLn $ Text.pack specPath
         let specTrees = getSpecTrees specSpec
@@ -108,23 +110,23 @@ runSpecs hooks specs =
  where
   runTrees baseTestInfo = fmap and . mapM (runTree baseTestInfo)
   runTree baseTestInfo = \case
-    SpecGroup{..} -> do
+    SpecTree_Group{..} -> do
       let lvl = getIndentLevel baseTestInfo
-      reportGroup lvl groupLabel
-      runTrees baseTestInfo{TestInfo.testContexts = baseTestInfo.testContexts <> [groupLabel]} groupTrees
-    SpecTest{..} -> do
+      reportGroup lvl label
+      runTrees baseTestInfo{TestInfo.contexts = baseTestInfo.contexts <> [label]} trees
+    SpecTree_Test test -> do
       let lvl = getIndentLevel baseTestInfo
-      reportTestInProgress lvl testName
+      reportTestInProgress lvl test.name
 
       let testInfo =
             baseTestInfo
-              { TestInfo.testName = testName
-              , TestInfo.testMarkers = testMarkers
+              { TestInfo.name = test.name
+              , TestInfo.markers = test.markers
               }
       TestResult{..} <-
         withTestInfo testInfo $ do
           tid <- myThreadId
-          runTest testInfo testAction `finally` cleanupFixtures (PerTestFixtureKey tid)
+          runTest testInfo test.action `finally` cleanupFixtures (PerTestFixtureKey tid)
 
       case testResultMessage of
         TestResultMessageNone -> do
@@ -133,7 +135,7 @@ runSpecs hooks specs =
           reportTestResultWithInlineMessage lvl testResultLabel msg
         TestResultMessageBox box -> do
           termSize <- Term.size
-          reportTestResultWithBoxMessage termSize lvl testName testResultLabel box
+          reportTestResultWithBoxMessage termSize lvl test.name testResultLabel box
       pure testResultSuccess
 
   runTest info action =
@@ -147,7 +149,7 @@ runSpecs hooks specs =
               Just e' -> testResultFromAssertionFail e'
               Nothing -> testResultFromError e
 
-  getIndentLevel testInfo = length testInfo.testContexts + 1 -- +1 to include the module name
+  getIndentLevel testInfo = length testInfo.contexts + 1 -- +1 to include the module name
 
 {----- Built-in hooks -----}
 
@@ -168,16 +170,13 @@ manualTestsHook =
         Nothing -> \modify -> fmap (mapSpecs hideManual) . modify
     }
  where
-  hideManual = mapSpecTrees (\go -> filter (not . isManualTest) . map go)
-  isManualTest = \case
-    SpecGroup{} -> False
-    SpecTest{testMarkers} -> isJust $ findMarker @MarkerManual testMarkers
+  hideManual = filterSpecTests (not . hasMarker @MarkerManual . (.markers))
 
 xfailHook :: Hooks
 xfailHook =
   defaultHooks
     { runTest = \testInfo runTest ->
-        case findMarker testInfo.testMarkers of
+        case findMarker testInfo.markers of
           Just (MarkerXFail reason) -> modify reason <$> runTest
           Nothing -> runTest
     }
@@ -201,7 +200,7 @@ skipHook :: Hooks
 skipHook =
   defaultHooks
     { runTest = \testInfo runTest ->
-        case findMarker (testInfo.testMarkers) of
+        case findMarker (testInfo.markers) of
           Just (MarkerSkip reason) ->
             pure
               TestResult
@@ -211,3 +210,19 @@ skipHook =
                 }
           Nothing -> runTest
     }
+
+focusHook :: Hooks
+focusHook =
+  defaultHooks
+    { modifySpecRegistry = \_ modify -> fmap applyFocus . modify
+    }
+ where
+  applyFocus specs = if hasFocus specs then mapSpecs hideNotFocused specs else specs
+  hasFocus = any (anySpecTests isFocused . (.specSpec))
+  anySpecTests f spec =
+    let go = \case
+          SpecTree_Group{trees} -> concatMap go trees
+          SpecTree_Test test -> [test]
+     in any f $ concatMap go (getSpecTrees spec)
+  isFocused test = hasMarker @MarkerFocus test.markers
+  hideNotFocused = filterSpecTests isFocused

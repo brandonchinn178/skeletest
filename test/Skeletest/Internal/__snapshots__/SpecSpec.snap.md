@@ -1,5 +1,12 @@
 # test/Skeletest/Internal/SpecSpec.hs
 
+## focus / only runs focused test
+
+```
+./ExampleSpec.hs
+    in progress: OK
+```
+
 ## skip / skips tests completely
 
 ```

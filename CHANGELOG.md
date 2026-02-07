@@ -2,8 +2,9 @@
 
 API changes:
 * Replace `hookModifyFileSpecs` with `hookModifySpecRegistry`
-* Remove `hook` prefix from `Hook` fields
+* Remove field prefixes from many constructors (e.g. `Hooks`, `TestInfo`, etc.)
 * Turn on `NoFieldSelectors` everywhere
+* Add `focus` for focusing a specific test ([#58](https://github.com/brandonchinn178/skeletest/issues/58))
 
 ## v0.3.3
 

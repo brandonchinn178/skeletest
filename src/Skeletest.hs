@@ -8,6 +8,7 @@ module Skeletest (
   -- ** Modifiers
   xfail,
   skip,
+  focus,
   markManual,
 
   -- ** Markers

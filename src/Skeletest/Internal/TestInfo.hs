@@ -21,10 +21,10 @@ import UnliftIO.Exception (bracket_)
 import UnliftIO.IORef (IORef, modifyIORef, newIORef, readIORef)
 
 data TestInfo = TestInfo
-  { testContexts :: [Text]
-  , testName :: Text
-  , testMarkers :: [SomeMarker]
-  , testFile :: FilePath
+  { contexts :: [Text]
+  , name :: Text
+  , markers :: [SomeMarker]
+  , file :: FilePath
   -- ^ Relative to CWD
   }
   deriving (Show)

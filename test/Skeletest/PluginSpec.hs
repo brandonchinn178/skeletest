@@ -37,6 +37,7 @@ spec = do
         [ "{-# LANGUAGE DisambiguateRecordFields #-}"
         , "{-# LANGUAGE LambdaCase #-}"
         , "{-# LANGUAGE NamedFieldPuns #-}"
+        , "{-# LANGUAGE OverloadedRecordDot #-}"
         , "{-# LANGUAGE OverloadedStrings #-}"
         , ""
         , "import qualified Data.Text as T"
@@ -45,13 +46,10 @@ spec = do
         , ""
         , "plugins = [defaultPlugin{hooks = myHooks}]"
         , "myHooks = defaultHooks"
-        , "  { modifySpecRegistry = \\_ modify -> (fmap . mapSpecs . mapSpecTrees) update . modify"
+        , "  { modifySpecRegistry = \\_ modify -> (fmap . mapSpecs . filterSpecTests) isValid . modify"
         , "  }"
         , " where"
-        , "  update go = filter isValid . map go"
-        , "  isValid = \\case"
-        , "    SpecGroup{} -> True"
-        , "    SpecTest{testName} -> not $ \"SKIP\" `T.isPrefixOf` testName"
+        , "  isValid = not . (\"SKIP\" `T.isPrefixOf`) . (.name)"
         ]
       addTestFile runner "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"

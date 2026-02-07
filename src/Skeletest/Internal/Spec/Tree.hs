@@ -37,13 +37,17 @@ module Skeletest.Internal.Spec.Tree (
 
   -- ** Internal API
   getSpecTrees,
+  withSpecTrees,
   mapSpecTrees,
   traverseSpecTrees,
+  mapSpecTests,
+  filterSpecTests,
+  traverseSpecTests,
   mapSpecs,
   traverseSpecs,
 ) where
 
-import Control.Monad (guard)
+import Control.Monad (guard, (>=>))
 import Control.Monad.Trans.Reader qualified as Trans
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
 import Data.Functor.Identity (runIdentity)
@@ -100,10 +104,7 @@ withSpecTrees f = fmap (Spec . tell) . f . getSpecTrees
 traverseSpecTrees ::
   forall m.
   (Monad m) =>
-  ( (SpecTree -> m SpecTree) ->
-    [SpecTree] ->
-    m [SpecTree]
-  ) ->
+  ((SpecTree -> m SpecTree) -> [SpecTree] -> m [SpecTree]) ->
   Spec ->
   m Spec
 traverseSpecTrees f = withSpecTrees go
@@ -123,13 +124,27 @@ traverseSpecTrees f = withSpecTrees go
 --
 -- >>> mapSpecTrees (\go -> post . map go . pre) spec
 mapSpecTrees ::
-  ( (SpecTree -> SpecTree) ->
-    [SpecTree] ->
-    [SpecTree]
-  ) ->
+  ((SpecTree -> SpecTree) -> [SpecTree] -> [SpecTree]) ->
   Spec ->
   Spec
 mapSpecTrees f = runIdentity . traverseSpecTrees (\go -> pure . f (runIdentity . go))
+
+traverseSpecTests :: (Monad m) => (SpecTest -> m SpecTest) -> Spec -> m Spec
+traverseSpecTests f = traverseSpecTrees $ \go ->
+  traverse $
+    go >=> \case
+      group@SpecTree_Group{} -> pure group
+      SpecTree_Test test_ -> SpecTree_Test <$> f test_
+
+mapSpecTests :: (SpecTest -> SpecTest) -> Spec -> Spec
+mapSpecTests f = runIdentity . traverseSpecTests (pure . f)
+
+filterSpecTests :: (SpecTest -> Bool) -> Spec -> Spec
+filterSpecTests f = mapSpecTrees $ \go -> filter f' . map go
+ where
+  f' = \case
+    SpecTree_Group{} -> True
+    SpecTree_Test test_ -> f test_
 
 {----- Entrypoint -----}
 

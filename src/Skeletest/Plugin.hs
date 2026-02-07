@@ -24,6 +24,7 @@ module Skeletest.Plugin (
 
   -- ** Markers
   X.findMarker,
+  X.hasMarker,
   X.hasMarkerNamed,
 
   -- ** SpecRegistry
@@ -32,8 +33,13 @@ module Skeletest.Plugin (
   X.SpecInfo (..),
   X.SpecTree (..),
   X.SpecTest (..),
+  X.getSpecTrees,
+  X.withSpecTrees,
   X.mapSpecTrees,
   X.traverseSpecTrees,
+  X.mapSpecTests,
+  X.traverseSpecTests,
+  X.filterSpecTests,
   X.mapSpecs,
   X.traverseSpecs,
 ) where

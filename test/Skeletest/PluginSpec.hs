@@ -46,13 +46,10 @@ spec = do
         , ""
         , "plugins = [defaultPlugin{hooks = myHooks}]"
         , "myHooks = defaultHooks"
-        , "  { modifySpecRegistry = \\_ modify -> (fmap . mapSpecs . mapSpecTrees) update . modify"
+        , "  { modifySpecRegistry = \\_ modify -> (fmap . mapSpecs . filterSpecTests) isValid . modify"
         , "  }"
         , " where"
-        , "  update go = filter isValid . map go"
-        , "  isValid = \\case"
-        , "    SpecTree_Group{} -> True"
-        , "    SpecTree_Test test -> not $ \"SKIP\" `T.isPrefixOf` test.name"
+        , "  isValid = not . (\"SKIP\" `T.isPrefixOf`) . (.name)"
         ]
       addTestFile runner "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"

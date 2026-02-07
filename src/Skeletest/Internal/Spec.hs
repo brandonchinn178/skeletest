@@ -41,7 +41,6 @@ module Skeletest.Internal.Spec (
 
 import Control.Concurrent (myThreadId)
 import Control.Monad (forM)
-import Data.Maybe (isJust)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Skeletest.Internal.Capture (addCapturedOutput, withCaptureOutput)
@@ -66,7 +65,6 @@ import Skeletest.Internal.Spec.Tree (
   SpecTree (..),
   applyTestSelections,
   getSpecTrees,
-  mapSpecTrees,
   mapSpecs,
   pruneSpec,
  )
@@ -80,7 +78,7 @@ import Skeletest.Internal.TestRunner (
   testResultFromError,
  )
 import Skeletest.Internal.Utils.Color qualified as Color
-import Skeletest.Plugin (Hooks (..), defaultHooks)
+import Skeletest.Plugin (Hooks (..), defaultHooks, filterSpecTests, hasMarker)
 import System.Console.Terminal.Size qualified as Term
 import UnliftIO.Exception (
   finally,
@@ -169,10 +167,7 @@ manualTestsHook =
         Nothing -> \modify -> fmap (mapSpecs hideManual) . modify
     }
  where
-  hideManual = mapSpecTrees (\go -> filter (not . isManualTest) . map go)
-  isManualTest = \case
-    SpecTree_Group{} -> False
-    SpecTree_Test test -> isJust $ findMarker @MarkerManual test.markers
+  hideManual = filterSpecTests (not . hasMarker @MarkerManual . (.markers))
 
 xfailHook :: Hooks
 xfailHook =

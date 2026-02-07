@@ -1,12 +1,15 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+
 module Skeletest.Internal.Markers (
   IsMarker (..),
   AnonMarker (..),
   SomeMarker (..),
   findMarker,
+  hasMarker,
   hasMarkerNamed,
 ) where
 
-import Data.Maybe (listToMaybe, mapMaybe)
+import Data.Maybe (isJust, listToMaybe, mapMaybe)
 import Data.Typeable (Typeable, cast)
 
 class (Show a, Typeable a) => IsMarker a where
@@ -30,6 +33,10 @@ deriving instance Show SomeMarker
 -- | Find the first marker in the given list with the given type.
 findMarker :: forall a. (IsMarker a) => [SomeMarker] -> Maybe a
 findMarker = listToMaybe . mapMaybe (\(SomeMarker m) -> cast m)
+
+-- | Helper for @isJust . findMarker @MyMarker@.
+hasMarker :: forall a. (IsMarker a) => [SomeMarker] -> Bool
+hasMarker = isJust . findMarker @a
 
 -- | Return true if the given marker name is present.
 hasMarkerNamed :: String -> [SomeMarker] -> Bool

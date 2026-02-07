@@ -51,7 +51,7 @@ spec = do
         , "  update go = filter isValid . map go"
         , "  isValid = \\case"
         , "    SpecTree_Group{} -> True"
-        , "    SpecTree_Test{testName} -> not $ \"SKIP\" `T.isPrefixOf` testName"
+        , "    SpecTree_Test{name} -> not $ \"SKIP\" `T.isPrefixOf` name"
         ]
       addTestFile runner "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"

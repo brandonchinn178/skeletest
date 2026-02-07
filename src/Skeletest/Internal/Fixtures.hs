@@ -34,10 +34,8 @@ import Data.Proxy (Proxy (..))
 import Data.Text qualified as Text
 import Data.Typeable (TypeRep, Typeable, eqT, typeOf, typeRep, (:~:) (Refl))
 import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
-import Skeletest.Internal.TestInfo (
-  TestInfo (testFile),
-  getTestInfo,
- )
+import Skeletest.Internal.TestInfo (getTestInfo)
+import Skeletest.Internal.TestInfo qualified as TestInfo
 import Skeletest.Internal.Utils.Map qualified as Map.Utils
 import System.Directory (
   createDirectory,
@@ -88,7 +86,7 @@ getFixture = liftIO $ do
     fmap getScopedAccessors $
       case fixtureScope @a of
         PerTestFixture -> PerTestFixtureKey <$> myThreadId
-        PerFileFixture -> PerFileFixtureKey . (.testFile) <$> getTestInfo
+        PerFileFixture -> PerFileFixtureKey . (.file) <$> getTestInfo
         PerSessionFixture -> pure PerSessionFixtureKey
 
   let insertFixture state = updateScopedFixtures (OMap.>| (rep, state))

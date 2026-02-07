@@ -97,8 +97,8 @@ data SnapshotFileFixture = SnapshotFileFixture
 instance Fixture SnapshotFileFixture where
   fixtureScope = PerFileFixture
   fixtureAction = do
-    TestInfo{testFile} <- getTestInfo
-    let snapshotPath = getSnapshotPath testFile
+    TestInfo{file} <- getTestInfo
+    let snapshotPath = getSnapshotPath file
 
     mSnapshotFile <-
       try (Text.readFile snapshotPath) >>= \case
@@ -143,13 +143,13 @@ updateSnapshot snapshotContext testResult = do
  where
   SnapshotContext
     { snapshotRenderers = renderers
-    , snapshotTestInfo = testInfo@TestInfo{testFile}
+    , snapshotTestInfo = testInfo@TestInfo{file}
     , snapshotIndex
     } = snapshotContext
 
   emptySnapshotFile =
     SnapshotFile
-      { testFile = Text.pack testFile
+      { testFile = Text.pack file
       , snapshots = Map.empty
       }
 
@@ -244,7 +244,7 @@ getSnapshotPath testFile = testDir </> "__snapshots__" </> snapshotFileName
   snapshotFileName = replaceExtension testFileName ".snap.md"
 
 toTestIdentifier :: TestInfo -> TestIdentifier
-toTestIdentifier TestInfo{testContexts, testName} = testContexts <> [testName]
+toTestIdentifier TestInfo{contexts, name} = contexts <> [name]
 
 decodeSnapshotFile :: Text -> Maybe SnapshotFile
 decodeSnapshotFile = parseFile . Text.lines

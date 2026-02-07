@@ -2,7 +2,7 @@
 
 API changes:
 * Replace `hookModifyFileSpecs` with `hookModifySpecRegistry`
-* Remove `hook` prefix from `Hook` fields
+* Remove field prefixes from many constructors (e.g. `Hooks`, `TestInfo`, etc.)
 * Turn on `NoFieldSelectors` everywhere
 
 ## v0.3.3

@@ -97,10 +97,10 @@ runSpecs hooks specs =
       (`finally` cleanupFixtures (PerFileFixtureKey specPath)) $ do
         let emptyTestInfo =
               TestInfo
-                { testContexts = []
-                , testName = ""
-                , testMarkers = []
-                , testFile = specPath
+                { contexts = []
+                , name = ""
+                , markers = []
+                , file = specPath
                 }
         Text.putStrLn $ Text.pack specPath
         let specTrees = getSpecTrees specSpec
@@ -110,21 +110,21 @@ runSpecs hooks specs =
   runTree baseTestInfo = \case
     SpecTree_Group{..} -> do
       let lvl = getIndentLevel baseTestInfo
-      reportGroup lvl groupLabel
-      runTrees baseTestInfo{TestInfo.testContexts = baseTestInfo.testContexts <> [groupLabel]} groupTrees
+      reportGroup lvl label
+      runTrees baseTestInfo{TestInfo.contexts = baseTestInfo.contexts <> [label]} trees
     SpecTree_Test{..} -> do
       let lvl = getIndentLevel baseTestInfo
-      reportTestInProgress lvl testName
+      reportTestInProgress lvl name
 
       let testInfo =
             baseTestInfo
-              { TestInfo.testName = testName
-              , TestInfo.testMarkers = testMarkers
+              { TestInfo.name = name
+              , TestInfo.markers = markers
               }
       TestResult{..} <-
         withTestInfo testInfo $ do
           tid <- myThreadId
-          runTest testInfo testAction `finally` cleanupFixtures (PerTestFixtureKey tid)
+          runTest testInfo action `finally` cleanupFixtures (PerTestFixtureKey tid)
 
       case testResultMessage of
         TestResultMessageNone -> do
@@ -133,7 +133,7 @@ runSpecs hooks specs =
           reportTestResultWithInlineMessage lvl testResultLabel msg
         TestResultMessageBox box -> do
           termSize <- Term.size
-          reportTestResultWithBoxMessage termSize lvl testName testResultLabel box
+          reportTestResultWithBoxMessage termSize lvl name testResultLabel box
       pure testResultSuccess
 
   runTest info action =
@@ -147,7 +147,7 @@ runSpecs hooks specs =
               Just e' -> testResultFromAssertionFail e'
               Nothing -> testResultFromError e
 
-  getIndentLevel testInfo = length testInfo.testContexts + 1 -- +1 to include the module name
+  getIndentLevel testInfo = length testInfo.contexts + 1 -- +1 to include the module name
 
 {----- Built-in hooks -----}
 
@@ -171,13 +171,13 @@ manualTestsHook =
   hideManual = mapSpecTrees (\go -> filter (not . isManualTest) . map go)
   isManualTest = \case
     SpecTree_Group{} -> False
-    SpecTree_Test{testMarkers} -> isJust $ findMarker @MarkerManual testMarkers
+    SpecTree_Test{markers} -> isJust $ findMarker @MarkerManual markers
 
 xfailHook :: Hooks
 xfailHook =
   defaultHooks
     { runTest = \testInfo runTest ->
-        case findMarker testInfo.testMarkers of
+        case findMarker testInfo.markers of
           Just (MarkerXFail reason) -> modify reason <$> runTest
           Nothing -> runTest
     }
@@ -201,7 +201,7 @@ skipHook :: Hooks
 skipHook =
   defaultHooks
     { runTest = \testInfo runTest ->
-        case findMarker (testInfo.testMarkers) of
+        case findMarker (testInfo.markers) of
           Just (MarkerSkip reason) ->
             pure
               TestResult

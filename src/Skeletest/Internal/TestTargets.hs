@@ -39,9 +39,9 @@ data TestTarget
   deriving (Eq)
 
 data TestAttrs = TestAttrs
-  { testPath :: FilePath
-  , testIdentifier :: [Text]
-  , testMarkers :: [Text]
+  { path :: FilePath
+  , identifier :: [Text]
+  , markers :: [Text]
   }
 
 matchesTest :: TestTarget -> TestAttrs -> Bool
@@ -49,9 +49,9 @@ matchesTest selection TestAttrs{..} = go selection
  where
   go = \case
     TestTargetEverything -> True
-    TestTargetFile path -> testPath == path
-    TestTargetName s -> s `Text.isInfixOf` Text.unwords testIdentifier
-    TestTargetMarker marker -> marker `elem` testMarkers
+    TestTargetFile path' -> path == path'
+    TestTargetName s -> s `Text.isInfixOf` Text.unwords identifier
+    TestTargetMarker marker -> marker `elem` markers
     TestTargetNot e -> not $ go e
     TestTargetAnd l r -> go l && go r
     TestTargetOr l r -> go l || go r

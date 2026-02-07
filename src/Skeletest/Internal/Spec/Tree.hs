@@ -67,12 +67,12 @@ newtype Spec' a = Spec (Writer [SpecTree] a)
 
 data SpecTree
   = SpecTree_Group
-      { groupLabel :: Text
-      , groupTrees :: [SpecTree]
+      { label :: Text
+      , trees :: [SpecTree]
       }
   | SpecTree_Test
-      { testName :: Text
-      , testMarkers :: [SomeMarker]
+      { name :: Text
+      , markers :: [SomeMarker]
       -- ^ Markers, in order from least to most recently applied.
       --
       -- >>> withMarker MarkerA . withMarker MarkerB $ test ...
@@ -80,7 +80,7 @@ data SpecTree
       -- will contain
       --
       -- >>> SpecTree_Test { testMarkers = [MarkerA, MarkerB] }
-      , testAction :: IO TestResult
+      , action :: IO TestResult
       }
 
 getSpecTrees :: Spec -> [SpecTree]
@@ -110,8 +110,8 @@ traverseSpecTrees f = withSpecTrees go
 
   recurseGroups = \case
     group@SpecTree_Group{} -> do
-      trees' <- go group.groupTrees
-      pure group{groupTrees = trees'}
+      trees' <- go group.trees
+      pure group{trees = trees'}
     stest@SpecTree_Test{} -> pure stest
 
 -- | Map the tree with the given processing function.
@@ -160,14 +160,14 @@ applyTestSelections selections info = info{specSpec = applySelections info.specS
   applySelections = (`Trans.runReader` []) . traverseSpecTrees apply
 
   apply go = mapMaybeM $ \case
-    group@SpecTree_Group{groupLabel} -> Just <$> Trans.local (<> [groupLabel]) (go group)
-    stest@SpecTree_Test{testName, testMarkers} -> do
+    group@SpecTree_Group{label} -> Just <$> Trans.local (<> [label]) (go group)
+    stest@SpecTree_Test{name, markers} -> do
       groups <- Trans.ask
       let attrs =
             TestTargets.TestAttrs
-              { testPath = info.specPath
-              , testIdentifier = groups <> [testName]
-              , testMarkers = [Text.pack $ getMarkerName m | SomeMarker m <- testMarkers]
+              { path = info.specPath
+              , identifier = groups <> [name]
+              , markers = [Text.pack $ getMarkerName m | SomeMarker m <- markers]
               }
       pure $
         if matchesTest selections attrs
@@ -184,8 +184,8 @@ describe name = runIdentity . withSpecTrees (pure . (: []) . mkGroup)
  where
   mkGroup trees =
     SpecTree_Group
-      { groupLabel = Text.pack name
-      , groupTrees = trees
+      { label = Text.pack name
+      , trees
       }
 
 test :: (Testable m) => String -> m () -> Spec
@@ -193,9 +193,9 @@ test name t = Spec $ tell [mkTest]
  where
   mkTest =
     SpecTree_Test
-      { testName = Text.pack name
-      , testMarkers = []
-      , testAction = runTestable t
+      { name = Text.pack name
+      , markers = []
+      , action = runTestable t
       }
 
 -- | Define an IO-based test.
@@ -270,7 +270,7 @@ withMarker m = mapSpecTrees (\go -> map (addMarker . go))
   marker = SomeMarker m
   addMarker = \case
     group@SpecTree_Group{} -> group
-    tree@SpecTree_Test{} -> tree{testMarkers = marker : tree.testMarkers}
+    tree@SpecTree_Test{} -> tree{markers = marker : tree.markers}
 
 -- | Adds the given names as plain markers to all tests in the given spec.
 --

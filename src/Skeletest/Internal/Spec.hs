@@ -62,6 +62,7 @@ import Skeletest.Internal.Spec.Tree (
   MarkerXFail (..),
   SpecInfo (..),
   SpecRegistry,
+  SpecTest (..),
   SpecTree (..),
   applyTestSelections,
   getSpecTrees,
@@ -112,19 +113,19 @@ runSpecs hooks specs =
       let lvl = getIndentLevel baseTestInfo
       reportGroup lvl label
       runTrees baseTestInfo{TestInfo.contexts = baseTestInfo.contexts <> [label]} trees
-    SpecTree_Test{..} -> do
+    SpecTree_Test test -> do
       let lvl = getIndentLevel baseTestInfo
-      reportTestInProgress lvl name
+      reportTestInProgress lvl test.name
 
       let testInfo =
             baseTestInfo
-              { TestInfo.name = name
-              , TestInfo.markers = markers
+              { TestInfo.name = test.name
+              , TestInfo.markers = test.markers
               }
       TestResult{..} <-
         withTestInfo testInfo $ do
           tid <- myThreadId
-          runTest testInfo action `finally` cleanupFixtures (PerTestFixtureKey tid)
+          runTest testInfo test.action `finally` cleanupFixtures (PerTestFixtureKey tid)
 
       case testResultMessage of
         TestResultMessageNone -> do
@@ -133,7 +134,7 @@ runSpecs hooks specs =
           reportTestResultWithInlineMessage lvl testResultLabel msg
         TestResultMessageBox box -> do
           termSize <- Term.size
-          reportTestResultWithBoxMessage termSize lvl name testResultLabel box
+          reportTestResultWithBoxMessage termSize lvl test.name testResultLabel box
       pure testResultSuccess
 
   runTest info action =
@@ -171,7 +172,7 @@ manualTestsHook =
   hideManual = mapSpecTrees (\go -> filter (not . isManualTest) . map go)
   isManualTest = \case
     SpecTree_Group{} -> False
-    SpecTree_Test{markers} -> isJust $ findMarker @MarkerManual markers
+    SpecTree_Test test -> isJust $ findMarker @MarkerManual test.markers
 
 xfailHook :: Hooks
 xfailHook =

@@ -37,6 +37,7 @@ spec = do
         [ "{-# LANGUAGE DisambiguateRecordFields #-}"
         , "{-# LANGUAGE LambdaCase #-}"
         , "{-# LANGUAGE NamedFieldPuns #-}"
+        , "{-# LANGUAGE OverloadedRecordDot #-}"
         , "{-# LANGUAGE OverloadedStrings #-}"
         , ""
         , "import qualified Data.Text as T"
@@ -51,7 +52,7 @@ spec = do
         , "  update go = filter isValid . map go"
         , "  isValid = \\case"
         , "    SpecTree_Group{} -> True"
-        , "    SpecTree_Test{name} -> not $ \"SKIP\" `T.isPrefixOf` name"
+        , "    SpecTree_Test test -> not $ \"SKIP\" `T.isPrefixOf` test.name"
         ]
       addTestFile runner "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"

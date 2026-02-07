@@ -31,6 +31,7 @@ module Skeletest.Plugin (
   X.Spec,
   X.SpecInfo (..),
   X.SpecTree (..),
+  X.SpecTest (..),
   X.mapSpecTrees,
   X.traverseSpecTrees,
   X.mapSpecs,

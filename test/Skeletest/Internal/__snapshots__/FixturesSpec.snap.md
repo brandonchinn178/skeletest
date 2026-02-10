@@ -21,7 +21,12 @@
 │ 
 │ Fixture setup failed
 ╰───────────────────────────────────────────────────────────────────────────────
-╭── should error again: ERROR
-│ Found circular dependency when resolving fixtures: FixtureA -> FixtureA
+╭── should error again: FAIL
+│ ./ExampleSpec.hs:9:
+│ │
+│ │   fixtureAction = failTest "Fixture setup failed"
+│ │                   ^^^^^^^^
+│ 
+│ Fixture setup failed
 ╰───────────────────────────────────────────────────────────────────────────────
 ```

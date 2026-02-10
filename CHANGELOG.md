@@ -1,5 +1,8 @@
 ## Unreleased
 
+Runtime changes:
+* Fix circular dependency error when a session-scoped fixture errors ([#72](https://github.com/brandonchinn178/skeletest/issues/72))
+
 ## v0.3.4
 
 API changes:

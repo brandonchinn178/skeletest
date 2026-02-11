@@ -59,7 +59,6 @@ spec = do
       stdout `shouldSatisfy` P.matchesSnapshot
 
   describe "focus" $ do
-    -- TODO: test that using focus with -Werror fails
     integration . it "only runs focused test" $ do
       runner <- getFixture @TestRunner
       runner.addTestFile "ExampleSpec.hs" $
@@ -74,6 +73,22 @@ spec = do
 
       (stdout, _) <- expectSuccess runner.runTests
       stdout `shouldSatisfy` P.matchesSnapshot
+
+    integration . it "fails with -Werror" $ do
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
+        [ "module ExampleSpec (spec) where"
+        , ""
+        , "import Skeletest"
+        , ""
+        , "spec = do"
+        , "  focus . it \"in progress\" $ pure ()"
+        , "  it \"not working yet\" $ failTest \"broken\""
+        ]
+
+      (stdout, stderr) <- expectFailure $ runner.runTestsWith def{ghcArgs = ["-Werror"]}
+      stdout `shouldBe` ""
+      stderr `shouldSatisfy` P.matchesSnapshot
 
   describe "markManual" $ do
     integration . it "skips manual tests by default" $ do

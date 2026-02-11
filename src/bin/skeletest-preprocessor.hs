@@ -58,15 +58,25 @@ handleErrors = handle $ \(e :: SkeletestError) -> do
     | otherwise = id
 
 parseOpts :: Preprocessor.Options -> String -> Either String Preprocessor.Options
-parseOpts opts argStr
-  | Just (mMainMod, mMainFunc) <- Text.stripPrefix "main:" arg >>= parseMain =
-      Right
+parseOpts opts arg = do
+  (name, val) <-
+    case Text.breakOn ":" (Text.pack arg) of
+      (name, rest) | Just value <- Text.stripPrefix ":" rest -> pure (name, value)
+      _ -> Left $ "Option must be in the format 'name:value', got: " <> show arg
+  parse <- getParser name
+  case parse val of
+    Just a -> Right a
+    Nothing -> Left $ "Option '" <> Text.unpack name <> "' got invalid value: " <> show val
+ where
+  getParser = \case
+    "main" -> Right $ \val -> do
+      (mMainMod, mMainFunc) <- parseMain val
+      Just
         . maybe id (\s o -> o{Preprocessor.mainModuleName = s}) mMainMod
         . maybe id (\s o -> o{Preprocessor.mainFuncName = s}) mMainFunc
         $ opts
-  | otherwise = Left $ "Unknown option: " <> argStr
- where
-  arg = Text.pack argStr
+    name -> Left $ "Unknown option: " <> Text.unpack name
+
   parseMain s =
     case Text.splitOn "." s of
       [modName, modFunc] -> Just (Just modName, Just modFunc)

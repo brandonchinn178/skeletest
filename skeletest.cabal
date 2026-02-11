@@ -50,6 +50,7 @@ library
     Skeletest.Internal.Snapshot
     Skeletest.Internal.Spec
     Skeletest.Internal.Spec.Output
+    Skeletest.Internal.Spec.TestFailure
     Skeletest.Internal.Spec.Tree
     Skeletest.Internal.TestInfo
     Skeletest.Internal.TestRunner

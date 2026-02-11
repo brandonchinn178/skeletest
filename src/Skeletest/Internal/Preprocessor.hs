@@ -9,8 +9,12 @@ module Skeletest.Internal.Preprocessor (
   decodeOptions,
 ) where
 
-import Control.Monad (guard)
+import Control.Monad (guard, when, (>=>))
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Except qualified as Except
+import Control.Monad.Trans.State.Strict qualified as State
 import Data.Char (isDigit, isLower, isUpper)
+import Data.Functor.Identity (Identity (runIdentity))
 import Data.List (sort)
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
@@ -20,7 +24,7 @@ import Skeletest.Internal.Error (SkeletestError (..))
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (makeRelative, splitExtensions, takeDirectory, (</>))
 import Text.Read (readMaybe)
-import UnliftIO.Exception (throwIO)
+import UnliftIO.Exception (fromEither)
 
 data Options = Options
   { mainModuleName :: Text
@@ -96,10 +100,12 @@ getModuleName file =
 updateMainFile :: FilePath -> Text -> IO Text
 updateMainFile path file = do
   modules <- findTestModules path
-  either throwIO pure $
-    pure file
-      >>= insertImports modules
-      >>= pure . addSpecsList modules
+  fromEither $
+    runMainFileTransformer
+      ( addSpecsList modules
+          >=> insertImports -- Must be last!
+      )
+      file
 
 -- | Find all test modules using the given path to the Main module.
 --
@@ -127,39 +133,55 @@ findTestModules path = mapMaybe toTestModule <$> listDirectoryRecursive testDir
     guard $ Text.all (\c -> isUpper c || isLower c || isDigit c || c == '\'') rest
     pure name
 
-addSpecsList :: [(FilePath, Text)] -> Text -> Text
-addSpecsList testModules file =
-  Text.unlines
+{----- Main file generation -----}
+
+type ImportDef = (Text, Text) -- (module name, qualified as)
+type MainFileTransformerM a = State.StateT [ImportDef] (Except.ExceptT SkeletestError Identity) a
+type MainFileTransformer = Text -> MainFileTransformerM Text
+
+runMainFileTransformer :: MainFileTransformer -> Text -> Either SkeletestError Text
+runMainFileTransformer transform =
+  runIdentity
+    . Except.runExceptT
+    . (`State.evalStateT` [])
+    . transform
+
+addImport :: ImportDef -> MainFileTransformerM ()
+addImport i = State.modify (i :)
+
+addSpecsList :: [(FilePath, Text)] -> MainFileTransformer
+addSpecsList testModules file = do
+  specsList <- mapM mkSpecDef testModules
+  pure . Text.unlines $
     [ file
     , mainFileSpecsListIdentifier <> " :: [(FilePath, Spec)]"
-    , mainFileSpecsListIdentifier <> " = " <> renderSpecList specsList
+    , mainFileSpecsListIdentifier <> " = " <> (renderList . map renderPair) specsList
     ]
  where
-  specsList =
-    [ (quote $ Text.pack fp, modName <> ".spec")
-    | (fp, modName) <- testModules
-    ]
+  mkSpecDef (fp, modName) = do
+    addImport (modName, modName)
+    pure (quote $ Text.pack fp, modName <> ".spec")
   quote s = "\"" <> s <> "\""
-  renderSpecList xs = "[" <> (Text.intercalate ", " . map renderSpecInfo) xs <> "]"
-  renderSpecInfo (fp, spec) = "(" <> fp <> ", " <> spec <> ")"
+  renderList xs = "[" <> Text.intercalate ", " xs <> "]"
+  renderPair (x, y) = "(" <> x <> ", " <> y <> ")"
 
 -- | Add imports after the Skeletest.Main import, which should always be present in the Main module.
-insertImports :: [(FilePath, Text)] -> Text -> Either SkeletestError Text
-insertImports testModules file =
+insertImports :: MainFileTransformer
+insertImports file = do
+  imports <- State.get
+
   let (pre, post) = break isSkeletestImport $ Text.lines file
-   in if null post
-        then Left $ CompilationError Nothing "Could not find Skeletest.Main import in Main module"
-        else pure . Text.unlines $ pre <> importTests <> post
+  when (null post) $ do
+    lift . Except.throwE $
+      CompilationError Nothing "Could not find Skeletest.Main import in Main module"
+
+  pure . Text.unlines $ pre <> map mkImport imports <> post
  where
   isSkeletestImport line =
     case Text.words line of
       "import" : "Skeletest.Main" : _ -> True
       _ -> False
-
-  importTests =
-    [ "import qualified " <> name
-    | (_, name) <- testModules
-    ]
+  mkImport (name, alias) = "import qualified " <> name <> " as " <> alias
 
 {----- Helpers -----}
 

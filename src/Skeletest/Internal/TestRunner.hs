@@ -31,8 +31,8 @@ import Skeletest.Internal.Error (SkeletestError)
 import Skeletest.Internal.Spec.Output (
   BoxSpec,
   BoxSpecContent (..),
-  renderPrettyFailure,
  )
+import Skeletest.Internal.Spec.TestFailure (renderPrettyFailure)
 import Skeletest.Internal.TestInfo (TestInfo)
 import Skeletest.Internal.Utils.Color qualified as Color
 import Text.Read (readMaybe)

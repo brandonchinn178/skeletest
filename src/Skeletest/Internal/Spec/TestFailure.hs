@@ -18,6 +18,7 @@ import UnliftIO.Exception (SomeException, try)
 data TestSrcs
   = TestSrcs_FromDisk
   | TestSrcs_Static [(FilePath, Text)]
+  deriving (Show, Read)
 
 readTestSrc :: FilePath -> IO Text
 readTestSrc fp =

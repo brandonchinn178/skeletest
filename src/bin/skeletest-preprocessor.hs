@@ -75,7 +75,16 @@ parseOpts opts arg = do
         . maybe id (\s o -> o{Preprocessor.mainModuleName = s}) mMainMod
         . maybe id (\s o -> o{Preprocessor.mainFuncName = s}) mMainFunc
         $ opts
+    "bundle-test-srcs" -> Right $ \val -> do
+      bundleTestSrcs <- parseBool val
+      Just opts{Preprocessor.bundleTestSrcs = bundleTestSrcs}
     name -> Left $ "Unknown option: " <> Text.unpack name
+
+  parseBool v =
+    case Text.toLower v of
+      "true" -> Just True
+      "false" -> Just False
+      _ -> Nothing
 
   parseMain s =
     case Text.splitOn "." s of

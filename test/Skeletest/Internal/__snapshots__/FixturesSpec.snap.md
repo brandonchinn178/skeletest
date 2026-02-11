@@ -8,3 +8,25 @@
 │ Found circular dependency when resolving fixtures: FixtureA -> FixtureB -> FixtureD -> FixtureA
 ╰────────────────────────────────────────────────────────────────────────────────────────────────
 ```
+
+## getFixture / throws the appropriate error when setup fails
+
+```
+./ExampleSpec.hs
+╭── should error: FAIL
+│ ./ExampleSpec.hs:9:
+│ │
+│ │   fixtureAction = failTest "Fixture setup failed"
+│ │                   ^^^^^^^^
+│ 
+│ Fixture setup failed
+╰───────────────────────────────────────────────────────────────────────────────
+╭── should error again: FAIL
+│ ./ExampleSpec.hs:9:
+│ │
+│ │   fixtureAction = failTest "Fixture setup failed"
+│ │                   ^^^^^^^^
+│ 
+│ Fixture setup failed
+╰───────────────────────────────────────────────────────────────────────────────
+```

@@ -90,6 +90,7 @@ getFixture = liftIO $ do
         PerSessionFixture -> pure PerSessionFixtureKey
 
   let insertFixture state = updateScopedFixtures (OMap.>| (rep, state))
+  let rmFixture = updateScopedFixtures (OMap.delete rep)
 
   cachedFixture <-
     modifyFixtureRegistry $ \registry ->
@@ -118,9 +119,13 @@ getFixture = liftIO $ do
     Right (Just fixture) -> pure fixture
     -- otherwise, execute it (allowing it to request other fixtures) and cache the result.
     Right Nothing -> do
-      result@(fixture, _) <- fixtureAction @a
-      modifyFixtureRegistry $ \registry -> (insertFixture (FixtureLoaded result) registry, ())
-      pure fixture
+      tryAny (fixtureAction @a) >>= \case
+        Left e -> do
+          modifyFixtureRegistry $ \registry -> (rmFixture registry, ())
+          throwIO e
+        Right result@(fixture, _) -> do
+          modifyFixtureRegistry $ \registry -> (insertFixture (FixtureLoaded result) registry, ())
+          pure fixture
  where
   rep = typeRep (Proxy @a)
   isInProgress = \case

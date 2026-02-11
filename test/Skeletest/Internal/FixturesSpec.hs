@@ -54,3 +54,31 @@ spec = do
       (stdout, stderr) <- expectFailure $ runTests runner []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
+
+    -- https://github.com/brandonchinn178/skeletest/issues/72
+    integration . it "throws the appropriate error when setup fails" $ do
+      runner <- getFixture
+
+      addTestFile runner "ExampleSpec.hs" $
+        [ "module ExampleSpec (spec) where"
+        , ""
+        , "import Skeletest"
+        , ""
+        , "data FixtureA = FixtureA"
+        , ""
+        , "instance Fixture FixtureA where"
+        , "  fixtureScope = PerSessionFixture"
+        , "  fixtureAction = failTest \"Fixture setup failed\""
+        , ""
+        , "spec = do"
+        , "  it \"should error\" $ do"
+        , "    FixtureA <- getFixture"
+        , "    pure ()"
+        , "  it \"should error again\" $ do"
+        , "    FixtureA <- getFixture"
+        , "    pure ()"
+        ]
+
+      (stdout, stderr) <- expectFailure $ runTests runner []
+      stderr `shouldBe` ""
+      stdout `shouldSatisfy` P.matchesSnapshot

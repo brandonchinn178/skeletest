@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedRecordDot #-}
+
 module Skeletest.Internal.CLISpec (spec) where
 
 import Control.Monad ((>=>))
@@ -42,13 +44,13 @@ spec = do
 
   describe "getFlag" $ do
     integration . it "reads registered flag" $ do
-      runner <- getFixture
-      setMainFile runner $
+      runner <- getFixture @TestRunner
+      runner.setMainFile
         [ "import Skeletest.Main"
         , "import ExampleSpec (MyFlag)"
         , "cliFlags = [flag @MyFlag]"
         ]
-      addTestFile runner "ExampleSpec.hs" $
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (MyFlag, spec) where"
         , "import Skeletest"
         , ""
@@ -63,12 +65,12 @@ spec = do
         , "  s `shouldBe` \"hello world\""
         ]
 
-      _ <- expectSuccess $ runTests runner ["--my-flag", "hello world"]
+      _ <- expectSuccess $ runner.runTests ["--my-flag", "hello world"]
       pure ()
 
     integration . it "errors if flag is not registered" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -84,7 +86,7 @@ spec = do
         , "  pure ()"
         ]
 
-      (stdout, stderr) <- expectFailure $ runTests runner []
+      (stdout, stderr) <- expectFailure $ runner.runTests []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 

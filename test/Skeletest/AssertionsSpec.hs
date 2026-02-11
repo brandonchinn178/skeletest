@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 
 module Skeletest.AssertionsSpec (spec) where
 
@@ -17,8 +18,8 @@ spec = do
       1 `shouldBe` (1 :: Int)
 
     integration . it "should show helpful failure" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -26,7 +27,7 @@ spec = do
         , "spec = it \"should fail\" $ 1 `shouldBe` (2 :: Int)"
         ]
 
-      (stdout, stderr) <- expectFailure $ runTests runner []
+      (stdout, stderr) <- expectFailure $ runner.runTests []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -35,8 +36,8 @@ spec = do
       1 `shouldNotBe` (2 :: Int)
 
     integration . it "should show helpful failure" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -44,7 +45,7 @@ spec = do
         , "spec = it \"should fail\" $ 1 `shouldNotBe` (1 :: Int)"
         ]
 
-      (stdout, stderr) <- expectFailure $ runTests runner []
+      (stdout, stderr) <- expectFailure $ runner.runTests []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -53,8 +54,8 @@ spec = do
       1 `shouldSatisfy` P.gt (0 :: Int)
 
     integration . it "should show helpful failure" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -63,7 +64,7 @@ spec = do
         , "spec = it \"should fail\" $ (-1) `shouldSatisfy` P.gt (0 :: Int)"
         ]
 
-      (stdout, stderr) <- expectFailure $ runTests runner []
+      (stdout, stderr) <- expectFailure $ runner.runTests []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -72,8 +73,8 @@ spec = do
       (-1) `shouldNotSatisfy` P.gt (0 :: Int)
 
     integration . it "should show helpful failure" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -82,7 +83,7 @@ spec = do
         , "spec = it \"should fail\" $ 1 `shouldNotSatisfy` P.gt (0 :: Int)"
         ]
 
-      (stdout, stderr) <- expectFailure $ runTests runner []
+      (stdout, stderr) <- expectFailure $ runner.runTests []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -91,8 +92,8 @@ spec = do
       pure 1 `shouldReturn` (1 :: Int)
 
     integration . it "should show helpful failure" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -100,14 +101,14 @@ spec = do
         , "spec = it \"should fail\" $ pure 1 `shouldReturn` (2 :: Int)"
         ]
 
-      (stdout, stderr) <- expectFailure $ runTests runner []
+      (stdout, stderr) <- expectFailure $ runner.runTests []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
   describe "context" $ do
     integration . it "should show failure context" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -117,14 +118,14 @@ spec = do
         , "    1 `shouldBe` (2 :: Int)"
         ]
 
-      (stdout, stderr) <- expectFailure $ runTests runner []
+      (stdout, stderr) <- expectFailure $ runner.runTests []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
   describe "failTest" $ do
     integration . it "should show failure" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -132,13 +133,13 @@ spec = do
         , "spec = it \"should fail\" $ failTest \"error message\""
         ]
 
-      (stdout, stderr) <- expectFailure $ runTests runner []
+      (stdout, stderr) <- expectFailure $ runner.runTests []
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
   integration . it "shows backtrace of failed assertions" $ do
-    runner <- getFixture
-    addTestFile runner "ExampleSpec.hs" $
+    runner <- getFixture @TestRunner
+    runner.addTestFile "ExampleSpec.hs" $
       [ "module ExampleSpec (spec) where"
       , ""
       , "import Skeletest"
@@ -153,13 +154,13 @@ spec = do
       , "expectGT x actual = actual `shouldSatisfy` P.gt x"
       ]
 
-    (stdout, stderr) <- expectFailure $ runTests runner []
+    (stdout, stderr) <- expectFailure $ runner.runTests []
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
 
   integration . it "shows helpful error on pattern match fail" $ do
-    runner <- getFixture
-    addTestFile runner "ExampleSpec.hs" $
+    runner <- getFixture @TestRunner
+    runner.addTestFile "ExampleSpec.hs" $
       [ "module ExampleSpec (spec) where"
       , ""
       , "import Skeletest"
@@ -170,13 +171,13 @@ spec = do
       , "  x `shouldBe` True"
       ]
 
-    (stdout, stderr) <- expectFailure $ runTests runner []
+    (stdout, stderr) <- expectFailure $ runner.runTests []
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
 
   integration . it "shows unrecognized exceptions" $ do
-    runner <- getFixture
-    addTestFile runner "ExampleSpec.hs" $
+    runner <- getFixture @TestRunner
+    runner.addTestFile "ExampleSpec.hs" $
       [ "module ExampleSpec (spec) where"
       , ""
       , "import Skeletest"
@@ -187,7 +188,7 @@ spec = do
       , "  pure ()"
       ]
 
-    (stdout, stderr) <- expectFailure $ runTests runner []
+    (stdout, stderr) <- expectFailure $ runner.runTests []
     stderr `shouldBe` ""
     sanitizeTraceback stdout `shouldSatisfy` P.matchesSnapshot
 

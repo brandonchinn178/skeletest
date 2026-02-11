@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedRecordDot #-}
+
 module Skeletest.PluginSpec (spec) where
 
 import Skeletest
@@ -8,8 +10,8 @@ spec :: Spec
 spec = do
   describe "runTest" $ do
     integration . it "allows hooking into test execution" $ do
-      runner <- getFixture
-      setMainFile runner $
+      runner <- getFixture @TestRunner
+      runner.setMainFile
         [ "import Skeletest.Main"
         , "import Skeletest.Plugin"
         , ""
@@ -22,18 +24,18 @@ spec = do
         , "      pure result"
         , "  }"
         ]
-      addTestFile runner "ExampleSpec.hs" $
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , "import Skeletest"
         , "spec = it \"should run\" $ pure ()"
         ]
-      (stdout, _) <- expectSuccess $ runTests runner []
+      (stdout, _) <- expectSuccess $ runner.runTests []
       stdout `shouldSatisfy` P.matchesSnapshot
 
   describe "modifySpecRegistry" $ do
     integration . it "allows modifying specs" $ do
-      runner <- getFixture
-      setMainFile runner $
+      runner <- getFixture @TestRunner
+      runner.setMainFile
         [ "{-# LANGUAGE DisambiguateRecordFields #-}"
         , "{-# LANGUAGE LambdaCase #-}"
         , "{-# LANGUAGE NamedFieldPuns #-}"
@@ -51,12 +53,12 @@ spec = do
         , " where"
         , "  isValid = not . (\"SKIP\" `T.isPrefixOf`) . (.name)"
         ]
-      addTestFile runner "ExampleSpec.hs" $
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , "import Skeletest"
         , "spec = do"
         , "  it \"should run\" $ pure ()"
         , "  it \"SKIP should not run\" $ failTest \"bad\""
         ]
-      (stdout, _) <- expectSuccess $ runTests runner []
+      (stdout, _) <- expectSuccess $ runner.runTests []
       stdout `shouldSatisfy` P.matchesSnapshot

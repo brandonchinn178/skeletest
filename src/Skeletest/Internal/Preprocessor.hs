@@ -19,8 +19,13 @@ import Data.List (sort)
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
+import Data.Text.IO qualified as Text
+import Skeletest.Internal.Constants (
+  mainFileSpecsListIdentifier,
+  mainFileTestSrcsIdentifier,
+ )
 import Skeletest.Internal.Error (SkeletestError (..))
+import Skeletest.Internal.Spec.TestFailure (TestSrcs (..))
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (makeRelative, splitExtensions, takeDirectory, (</>))
 import Text.Read (readMaybe)
@@ -29,6 +34,7 @@ import UnliftIO.Exception (fromEither)
 data Options = Options
   { mainModuleName :: Text
   , mainFuncName :: Text
+  , bundleTestSrcs :: Bool
   }
   deriving (Show, Read)
 
@@ -37,6 +43,7 @@ defaultOptions =
   Options
     { mainModuleName = "Main"
     , mainFuncName = "main"
+    , bundleTestSrcs = False
     }
 
 encodeOptions :: Options -> Text
@@ -59,7 +66,7 @@ processFile :: Options -> FilePath -> Text -> IO Text
 processFile options path file = do
   file' <-
     if getModuleName file == options.mainModuleName
-      then updateMainFile path file
+      then updateMainFile options path file
       else pure file
   pure
     . addLine pluginPragma
@@ -97,14 +104,19 @@ getModuleName file =
       "module" : name : _ -> Just name
       _ -> Nothing
 
-updateMainFile :: FilePath -> Text -> IO Text
-updateMainFile mainFile file = do
+updateMainFile :: Options -> FilePath -> Text -> IO Text
+updateMainFile options mainFile file = do
   let testDir = takeDirectory mainFile
   allFiles <- filter (/= mainFile) <$> listDirectoryRecursive testDir
+  testSrcs <-
+    if options.bundleTestSrcs
+      then TestSrcs_Static <$> mapM (\fp -> (fp,) <$> Text.readFile fp) allFiles
+      else pure TestSrcs_FromDisk
   let modules = mapMaybe (toTestModule testDir) allFiles
   fromEither $
     runMainFileTransformer
       ( addSpecsList modules
+          >=> addTestSrcs testSrcs
           >=> insertImports -- Must be last!
       )
       file
@@ -161,6 +173,15 @@ addSpecsList testModules file = do
   quote s = "\"" <> s <> "\""
   renderList xs = "[" <> Text.intercalate ", " xs <> "]"
   renderPair (x, y) = "(" <> x <> ", " <> y <> ")"
+
+addTestSrcs :: TestSrcs -> MainFileTransformer
+addTestSrcs testSrcs file = do
+  addImport ("Skeletest.Internal.Spec.TestFailure", "X")
+  pure . Text.unlines $
+    [ file
+    , mainFileTestSrcsIdentifier <> " :: X.TestSrcs"
+    , mainFileTestSrcsIdentifier <> " = read " <> (Text.pack . show . show) testSrcs
+    ]
 
 -- | Add imports after the Skeletest.Main import, which should always be present in the Main module.
 insertImports :: MainFileTransformer

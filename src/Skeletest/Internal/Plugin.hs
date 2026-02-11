@@ -12,11 +12,15 @@ module Skeletest.Internal.Plugin (
 import Data.Functor.Const (Const (..))
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Text qualified as Text
-import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
+import Skeletest.Internal.Constants (
+  mainFileSpecsListIdentifier,
+  mainFileTestSrcsIdentifier,
+ )
 import Skeletest.Internal.Error (skeletestPluginError)
 import Skeletest.Internal.GHC
 import Skeletest.Internal.Predicate qualified as P
 import Skeletest.Internal.Preprocessor qualified as Preprocessor
+import Skeletest.Internal.Spec.TestFailure qualified as Skeletest
 import Skeletest.Internal.Utils.HList (HList (..))
 import Skeletest.Main qualified as Main
 import Skeletest.Plugin qualified as Plugin
@@ -72,20 +76,29 @@ transformMainModule options modl =
       { funType = HsTypeApps (HsTypeCon $ hsName ''IO) [HsTypeTuple []]
       , funPats = []
       , funBody =
-          hsExprApps
-            (hsExprVar $ hsName 'Main.runSkeletest)
-            [ hsExprApps (hsExprVar (hsName '(:))) $
-                [ hsExprRecordCon
-                    (hsName 'Plugin.Plugin)
-                    [ (hsFieldName 'Plugin.Plugin "cliFlags", cliFlagsExpr)
-                    , (hsFieldName 'Plugin.Plugin "snapshotRenderers", snapshotRenderersExpr)
-                    , (hsFieldName 'Plugin.Plugin "hooks", hooksExpr)
-                    ]
-                , pluginsExpr
-                ]
-            , hsExprVar $ hsVarName mainFileSpecsListIdentifier
+          sequenceExpr
+            [ setTestSrcsExpr
+            , runSkeletestExpr
             ]
       }
+  sequenceExpr es = hsExprApps (hsExprVar $ hsName 'sequence_) [hsExprList es]
+  setTestSrcsExpr =
+    hsExprApps (hsExprVar $ hsName 'Skeletest.setTestSrcs) $
+      [ hsExprVar $ hsVarName mainFileTestSrcsIdentifier
+      ]
+  runSkeletestExpr =
+    hsExprApps (hsExprVar $ hsName 'Main.runSkeletest) $
+      [ hsExprApps (hsExprVar (hsName '(:))) $
+          [ hsExprRecordCon
+              (hsName 'Plugin.Plugin)
+              [ (hsFieldName 'Plugin.Plugin "cliFlags", cliFlagsExpr)
+              , (hsFieldName 'Plugin.Plugin "snapshotRenderers", snapshotRenderersExpr)
+              , (hsFieldName 'Plugin.Plugin "hooks", hooksExpr)
+              ]
+          , pluginsExpr
+          ]
+      , hsExprVar $ hsVarName mainFileSpecsListIdentifier
+      ]
 
 transformTestModule :: Ctx -> HsExpr GhcRn -> HsExpr GhcRn
 transformTestModule ctx =

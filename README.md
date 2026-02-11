@@ -437,6 +437,8 @@ Skeletest accepts the following options, which may be added as `-optF=<name>:<va
 
 * `main`: Specify the main module/function, as either `OtherMain.otherMainFunc`, `OtherMain` (equivalent to `OtherMain.main`), or `otherMainFunc` (equivalent to `Main.otherMainFunc`). Generally only useful with the `-main-is` GHC option.
 
+* `bundle-test-srcs`: Bundle test source files at compile-time to display source lines in test failures. Useful when the test executable is run in a different directory than the project directory.
+
 ### Hooks
 
 Skeletest lets you hook into specific parts of test execution. Skeletest currently supports the following hooks:

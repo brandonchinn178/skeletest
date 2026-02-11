@@ -1,5 +1,8 @@
 ## Unreleased
 
+Configuration:
+* Add `-optF=bundle-test-srcs:_` option for optionally bundling test source files at compile-time ([#74](https://github.com/brandonchinn178/skeletest/issues/74))
+
 Runtime changes:
 * Fix circular dependency error when a session-scoped fixture errors ([#72](https://github.com/brandonchinn178/skeletest/issues/72))
 

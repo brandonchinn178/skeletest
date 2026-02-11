@@ -94,8 +94,10 @@ getModuleName file =
       _ -> Nothing
 
 updateMainFile :: FilePath -> Text -> IO Text
-updateMainFile path file = do
-  modules <- findTestModules path
+updateMainFile mainFile file = do
+  let testDir = takeDirectory mainFile
+  allFiles <- filter (/= mainFile) <$> listDirectoryRecursive testDir
+  let modules = mapMaybe (toTestModule . makeRelative testDir) allFiles
   either throwIO pure $
     pure file
       >>= insertImports modules
@@ -105,18 +107,13 @@ updateMainFile path file = do
 --
 -- >>> findTestModules "test/Main.hs"
 -- ["My.Module.Test1", "My.Module.Test2", ...]
-findTestModules :: FilePath -> IO [(FilePath, Text)]
-findTestModules path = mapMaybe toTestModule <$> listDirectoryRecursive testDir
+toTestModule :: FilePath -> Maybe (FilePath, Text)
+toTestModule fp = do
+  (fpNoExt, ".hs") <- pure $ splitExtensions fp
+  guard ("Spec" `Text.isSuffixOf` Text.pack fpNoExt)
+  name <- moduleNameFromPath $ Text.pack fpNoExt
+  pure (fp, name)
  where
-  testDir = takeDirectory path
-
-  toTestModule fp = do
-    guard (fp /= path)
-    (fpNoExt, ".hs") <- pure $ splitExtensions fp
-    guard ("Spec" `Text.isSuffixOf` Text.pack fpNoExt)
-    name <- moduleNameFromPath $ Text.pack $ makeRelative testDir fpNoExt
-    pure (fp, name)
-
   moduleNameFromPath = fmap (Text.intercalate ".") . mapM validateModuleName . Text.splitOn "/"
 
   -- https://www.haskell.org/onlinereport/syntax-iso.html

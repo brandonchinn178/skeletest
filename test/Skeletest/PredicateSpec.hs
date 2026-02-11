@@ -144,7 +144,7 @@ spec = do
           , "  User \"alice\" `shouldSatisfy` P.con User{name = P.eq \"\"}"
           ]
 
-        (stdout, stderr) <- expectFailure $ runner.runTests []
+        (stdout, stderr) <- expectFailure runner.runTests
         stderr `shouldBe` ""
         stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -162,7 +162,7 @@ spec = do
           , "  User \"alice\" `shouldSatisfy` P.con User{foo = P.eq \"\"}"
           ]
 
-        (stdout, stderr) <- expectFailure $ runner.runTests []
+        (stdout, stderr) <- expectFailure runner.runTests
         stdout `shouldBe` ""
         stderr `shouldSatisfy` P.matchesSnapshot
 
@@ -180,7 +180,7 @@ spec = do
           , "  User \"alice\" (Just 1) `shouldSatisfy` P.con (User (P.eq \"\"))"
           ]
 
-        (stdout, stderr) <- expectFailure $ runner.runTests []
+        (stdout, stderr) <- expectFailure runner.runTests
         stdout `shouldBe` ""
         (normalizeConFailure . normalizeVars) stderr `shouldSatisfy` P.matchesSnapshot
 
@@ -196,7 +196,7 @@ spec = do
           , "  \"\" `shouldSatisfy` P.con \"\""
           ]
 
-        (stdout, stderr) <- expectFailure $ runner.runTests []
+        (stdout, stderr) <- expectFailure runner.runTests
         stdout `shouldBe` ""
         stderr `shouldSatisfy` P.matchesSnapshot
 
@@ -212,7 +212,7 @@ spec = do
           , "  \"\" `shouldSatisfy` P.con"
           ]
 
-        (stdout, stderr) <- expectFailure $ runner.runTests []
+        (stdout, stderr) <- expectFailure runner.runTests
         stdout `shouldBe` ""
         stderr `shouldSatisfy` P.matchesSnapshot
 
@@ -228,7 +228,7 @@ spec = do
           , "  \"\" `shouldSatisfy` P.con 1 2"
           ]
 
-        (stdout, stderr) <- expectFailure $ runner.runTests []
+        (stdout, stderr) <- expectFailure runner.runTests
         stdout `shouldBe` ""
         stderr `shouldSatisfy` P.matchesSnapshot
 

@@ -29,7 +29,7 @@ spec = do
         , "import Skeletest"
         , "spec = it \"should run\" $ pure ()"
         ]
-      (stdout, _) <- expectSuccess $ runner.runTests []
+      (stdout, _) <- expectSuccess runner.runTests
       stdout `shouldSatisfy` P.matchesSnapshot
 
   describe "modifySpecRegistry" $ do
@@ -60,5 +60,5 @@ spec = do
         , "  it \"should run\" $ pure ()"
         , "  it \"SKIP should not run\" $ failTest \"bad\""
         ]
-      (stdout, _) <- expectSuccess $ runner.runTests []
+      (stdout, _) <- expectSuccess runner.runTests
       stdout `shouldSatisfy` P.matchesSnapshot

@@ -44,7 +44,7 @@ spec = do
       ]
     runner.addTestFile "__snapshots__/ExampleSpec.snap.md" ["asdf"]
 
-    (stdout, stderr) <- expectFailure $ runner.runTests []
+    (stdout, stderr) <- expectFailure runner.runTests
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -73,7 +73,7 @@ spec = do
       , "  testUser `shouldSatisfy` P.matchesSnapshot"
       ]
 
-    _ <- expectSuccess $ runner.runTests ["-u"]
+    _ <- expectSuccess $ runner.runTestsWith def{cliArgs = ["-u"]}
     snapshot <- runner.readTestFile "__snapshots__/ExampleSpec.snap.md"
     snapshot `shouldSatisfy` P.hasInfix "User {name = \"Alice\", age = 30}"
 
@@ -105,7 +105,7 @@ spec = do
       , "```"
       ]
 
-    (stdout, stderr) <- expectFailure $ runner.runTests []
+    (stdout, stderr) <- expectFailure runner.runTests
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
 

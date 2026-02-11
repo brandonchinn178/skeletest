@@ -41,7 +41,7 @@ runtimeSpec handle = do
         , "    " <> render_hPutStrLn handle "line1"
         , "    " <> render_hPutStrLn handle "line2"
         ]
-      (code, stdout, stderr) <- runner.runTests []
+      (code, stdout, stderr) <- runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
       code `shouldBe` ExitSuccess
@@ -64,7 +64,7 @@ runtimeSpec handle = do
         , "    " <> render_hPutStrLn handle "line2"
         , "    1 `shouldBe` 2"
         ]
-      (stdout, stderr) <- expectFailure $ runner.runTests []
+      (stdout, stderr) <- expectFailure runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -87,7 +87,7 @@ runtimeSpec handle = do
         , "    Just _ <- pure Nothing"
         , "    pure ()"
         ]
-      (stdout, stderr) <- expectFailure $ runner.runTests []
+      (stdout, stderr) <- expectFailure runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -108,7 +108,7 @@ runtimeSpec handle = do
         , "    " <> render_hPutStrLn handle "line1"
         , "    " <> render_hPutStrLn handle "line2"
         ]
-      (code, stdout, stderr) <- runner.runTests ["--capture-output=off"]
+      (code, stdout, stderr) <- runner.runTestsWith def{cliArgs = ["--capture-output=off"]}
       List.intercalate "\n\n" [">>> stdout", stdout, ">>> stderr", stderr] `shouldSatisfy` P.matchesSnapshot
       code `shouldBe` ExitSuccess
 
@@ -139,7 +139,7 @@ fixtureGetSpec (handle, func) =
         , "    s <- output." <> func
         , "    s `shouldBe` " <> show "test1\ntest2\n"
         ]
-      _ <- expectSuccess $ runner.runTests []
+      _ <- expectSuccess runner.runTests
       pure ()
 
 fixtureReadSpec :: (String, String) -> Spec
@@ -169,7 +169,7 @@ fixtureReadSpec (handle, func) =
         , "    s <- output." <> func
         , "    s `shouldBe` " <> show "test2\n"
         ]
-      _ <- expectSuccess $ runner.runTests []
+      _ <- expectSuccess runner.runTests
       pure ()
 
 render_hPutStrLn :: String -> String -> String

@@ -12,14 +12,17 @@ module Skeletest.TestUtils.Integration (
   FileContents,
 
   -- * runTests
+  TestArgs (..),
   expectCode,
   expectSuccess,
   expectFailure,
 
   -- * Re-exports
   ExitCode (..),
+  def,
 ) where
 
+import Data.Default (Default (..))
 import Data.IORef (IORef, modifyIORef, newIORef, readIORef)
 import Data.Text qualified as Text
 import GHC.Records (HasField (..))
@@ -78,7 +81,22 @@ instance HasField "addTestFile" TestRunner (FilePath -> FileContents -> IO ()) w
 instance HasField "readTestFile" TestRunner (FilePath -> IO String) where
   getField runner fp = readFile $ runner.dir </> fp
 
-instance HasField "runTests" TestRunner ([String] -> IO (ExitCode, String, String)) where
+data TestArgs = TestArgs
+  { cliArgs :: [String]
+  , ghcArgs :: [String]
+  }
+
+instance Default TestArgs where
+  def =
+    TestArgs
+      { cliArgs = []
+      , ghcArgs = []
+      }
+
+instance HasField "runTests" TestRunner (IO (ExitCode, String, String)) where
+  getField runner = runner.runTestsWith def
+
+instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, String)) where
   getField runner args = do
     TestRunnerSettings{..} <- readIORef runner.settingsRef
     addFile "Main.hs" mainFile
@@ -87,8 +105,8 @@ instance HasField "runTests" TestRunner ([String] -> IO (ExitCode, String, Strin
     (code, stdout, stderr) <-
       flip readCreateProcessWithExitCode "" $
         setCWD runner.dir . proc "runghc" . concat $
-          [ "--" : ghcArgs
-          , "--" : "Main.hs" : args
+          [ "--" : (ghcArgs <> args.ghcArgs)
+          , "--" : "Main.hs" : args.cliArgs
           ]
 
     pure (code, sanitize stdout, sanitize stderr)

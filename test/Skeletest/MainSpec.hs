@@ -15,7 +15,7 @@ spec = do
     runner.setMainFile []
     runner.addTestFile "ExampleSpec.hs" (minimalTest "ExampleSpec")
 
-    (stdout, stderr) <- expectFailure $ runner.runTests []
+    (stdout, stderr) <- expectFailure runner.runTests
     stdout `shouldBe` ""
     normalizePluginError stderr `shouldSatisfy` P.matchesSnapshot
 
@@ -32,7 +32,7 @@ spec = do
       , "testUserName = \"Alice\""
       ]
 
-    _ <- expectSuccess $ runner.runTests []
+    _ <- expectSuccess runner.runTests
     pure ()
 
   integration . it "errors if main function defined" $ do
@@ -44,7 +44,7 @@ spec = do
       ]
     runner.addTestFile "ExampleSpec.hs" (minimalTest "ExampleSpec")
 
-    (stdout, stderr) <- expectFailure $ runner.runTests []
+    (stdout, stderr) <- expectFailure runner.runTests
     stdout `shouldBe` ""
     normalizeGhc29916 stderr `shouldSatisfy` P.matchesSnapshot
 

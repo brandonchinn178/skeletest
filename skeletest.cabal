@@ -137,6 +137,7 @@ test-suite skeletest-tests
       base
     , aeson
     , containers
+    , data-default
     , directory
     , filepath
     , skeletest

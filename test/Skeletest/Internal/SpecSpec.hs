@@ -21,7 +21,7 @@ spec = do
         , "  it \"should not run either\" $ undefined"
         ]
 
-      (stdout, stderr) <- expectSuccess $ runner.runTests []
+      (stdout, stderr) <- expectSuccess runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -38,7 +38,7 @@ spec = do
         , "  it \"should fail too\" $ undefined"
         ]
 
-      (stdout, stderr) <- expectSuccess $ runner.runTests []
+      (stdout, stderr) <- expectSuccess runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -54,7 +54,7 @@ spec = do
         , "  it \"should fail too\" $ pure ()"
         ]
 
-      (stdout, stderr) <- expectFailure $ runner.runTests []
+      (stdout, stderr) <- expectFailure runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -72,7 +72,7 @@ spec = do
         , "  it \"not working yet\" $ failTest \"broken\""
         ]
 
-      (stdout, _) <- expectSuccess $ runner.runTests []
+      (stdout, _) <- expectSuccess runner.runTests
       stdout `shouldSatisfy` P.matchesSnapshot
 
   describe "markManual" $ do
@@ -91,7 +91,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (stdout, stderr) <- expectSuccess $ runner.runTests []
+      (stdout, stderr) <- expectSuccess runner.runTests
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and
@@ -116,7 +116,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (stdout, stderr) <- expectSuccess $ runner.runTests ["*"]
+      (stdout, stderr) <- expectSuccess $ runner.runTestsWith def{cliArgs = ["*"]}
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and
@@ -142,7 +142,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (stdout, stderr) <- expectSuccess $ runner.runTests ["@foo"]
+      (stdout, stderr) <- expectSuccess $ runner.runTestsWith def{cliArgs = ["@foo"]}
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and
@@ -171,7 +171,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (stdout, stderr) <- expectSuccess $ runner.runTests ["@my-marker"]
+      (stdout, stderr) <- expectSuccess $ runner.runTestsWith def{cliArgs = ["@my-marker"]}
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and

@@ -65,7 +65,7 @@ spec = do
         , "  s `shouldBe` \"hello world\""
         ]
 
-      _ <- expectSuccess $ runner.runTests ["--my-flag", "hello world"]
+      _ <- expectSuccess $ runner.runTestsWith def{cliArgs = ["--my-flag", "hello world"]}
       pure ()
 
     integration . it "errors if flag is not registered" $ do
@@ -86,7 +86,7 @@ spec = do
         , "  pure ()"
         ]
 
-      (stdout, stderr) <- expectFailure $ runner.runTests []
+      (stdout, stderr) <- expectFailure runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 

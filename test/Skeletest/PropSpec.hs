@@ -24,7 +24,7 @@ spec = do
         , "  discard"
         ]
 
-      (stdout, stderr) <- expectFailure $ runner.runTests []
+      (stdout, stderr) <- expectFailure runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -50,6 +50,6 @@ spec = do
         , "    (read . show) P.=== id `shouldNotSatisfy` P.isoWith (Gen.int $ Range.linear 0 10)"
         ]
 
-      (stdout, stderr) <- expectFailure $ runner.runTests ["--seed=0:0"]
+      (stdout, stderr) <- expectFailure $ runner.runTestsWith def{cliArgs = ["--seed=0:0"]}
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot

@@ -2,14 +2,37 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Skeletest.Internal.Spec.TestFailure (
+  TestSrcs (..),
+  setTestSrcs,
   renderPrettyFailure,
 ) where
 
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
+import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.Exception (SomeException, try)
+
+data TestSrcs
+  = TestSrcs_FromDisk
+  | TestSrcs_Static [(FilePath, Text)]
+
+readTestSrc :: FilePath -> IO Text
+readTestSrc fp =
+  readIORef testSrcsRef >>= \case
+    TestSrcs_FromDisk -> Text.readFile fp
+    TestSrcs_Static files ->
+      case lookup fp files of
+        Nothing -> mempty -- error doesn't matter, isn't displayed to user
+        Just src -> pure src
+
+testSrcsRef :: IORef TestSrcs
+testSrcsRef = unsafePerformIO $ newIORef TestSrcs_FromDisk
+
+setTestSrcs :: TestSrcs -> IO ()
+setTestSrcs = writeIORef testSrcsRef
 
 -- | Render a test failure like:
 --
@@ -41,7 +64,7 @@ renderPrettyFailure msg ctx callstack = do
  where
   renderCallLine (path, lineNum, startCol, endCol) = do
     mLine <-
-      try (Text.readFile path) >>= \case
+      try (readTestSrc path) >>= \case
         Right srcFile
           | Just line <- getLineNum lineNum srcFile -> pure $ Right line
           | otherwise -> pure $ Left "<line does not exist>"

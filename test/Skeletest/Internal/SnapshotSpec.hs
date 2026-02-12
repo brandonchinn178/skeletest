@@ -109,6 +109,25 @@ spec = do
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
 
+  integration . it "works when test changes directories" $ do
+    runner <- getFixture @TestRunner
+    runner.addTestFile "ExampleSpec.hs" $
+      [ "module ExampleSpec (spec) where"
+      , ""
+      , "import Skeletest"
+      , "import qualified Skeletest.Predicate as P"
+      , "import System.Directory (withCurrentDirectory)"
+      , ""
+      , "spec = it \"tests snapshot\" $ do"
+      , "  withCurrentDirectory \"/\" $ do"
+      , "    (123 :: Int) `shouldSatisfy` P.matchesSnapshot"
+      ]
+
+    let args = def{ghcArgs = ["-package", "directory"]}
+    _ <- expectSuccess $ runner.runTestsWith args{cliArgs = ["-u"]}
+    _ <- expectSuccess $ runner.runTestsWith args
+    pure ()
+
 genSnapshotFileRaw :: Gen SnapshotFile
 genSnapshotFileRaw = do
   testFile <- genHsModule

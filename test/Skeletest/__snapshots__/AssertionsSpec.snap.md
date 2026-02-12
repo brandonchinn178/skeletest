@@ -151,6 +151,20 @@
 ╰───────────────────────────────────────────────────────────────────────────────
 ```
 
+## shows source code when running from different directory
+
+```
+./ExampleSpec.hs
+╭── should fail: FAIL
+│ ./ExampleSpec.hs:3:
+│ │
+│ │ <could not open file>
+│ │ 
+│ 
+│ failure
+╰───────────────────────────────────────────────────────────────────────────────
+```
+
 ## shows unrecognized exceptions
 
 ```

@@ -45,28 +45,15 @@ jobs:
           cabal configure
           --enable-append
           --allow-newer='aeson:*'
-          --allow-newer='assoc:*'
-          --allow-newer='async:*'
-          --allow-newer='bifunctors:*'
           --allow-newer='boring:*'
-          --allow-newer='hedgehog:*'
-          --allow-newer='hsc2hs:*'
           --allow-newer='indexed-traversable-instances:*'
           --allow-newer='indexed-traversable:*'
-          --allow-newer='integer-conversion:*'
-          --allow-newer='integer-logarithms:*'
           --allow-newer='ordered-containers:*'
-          --allow-newer='scientific:*'
           --allow-newer='semialign:*'
-          --allow-newer='sop-core:*'
-          --allow-newer='splitmix:*'
-          --allow-newer='text-short:*'
-          --allow-newer='text:*'
-          --allow-newer='th-compat:*'
+          --allow-newer='text-iso8601:*'
           --allow-newer='these:*'
           --allow-newer='time-compat:*'
           --allow-newer='uuid-types:*'
-          --allow-newer='text-iso8601:*'
       -
         if: ${{ matrix.oldest }}
         name: Use oldest dependencies

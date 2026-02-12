@@ -44,6 +44,7 @@ library
     Skeletest.Internal.GHC
     Skeletest.Internal.GHC.Compat
     Skeletest.Internal.Markers
+    Skeletest.Internal.Paths
     Skeletest.Internal.Plugin
     Skeletest.Internal.Predicate
     Skeletest.Internal.Preprocessor

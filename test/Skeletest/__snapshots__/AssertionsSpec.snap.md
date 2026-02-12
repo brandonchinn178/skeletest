@@ -151,6 +151,20 @@
 ╰───────────────────────────────────────────────────────────────────────────────
 ```
 
+## shows source code when running from different directory
+
+```
+./ExampleSpec.hs
+╭── should fail: FAIL
+│ ./ExampleSpec.hs:3:
+│ │
+│ │ spec = it "should fail" $ failTest "failure"
+│ │                           ^^^^^^^^
+│ 
+│ failure
+╰───────────────────────────────────────────────────────────────────────────────
+```
+
 ## shows unrecognized exceptions
 
 ```

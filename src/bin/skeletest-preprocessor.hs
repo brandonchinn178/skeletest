@@ -23,27 +23,30 @@ module Main where
 import Data.Char (isUpper)
 import Data.Foldable (foldlM)
 import Data.List (dropWhileEnd)
+import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import GHC.IO.Encoding (setLocaleEncoding, utf8)
-import System.Environment (getArgs)
-import System.Exit (exitFailure)
-import System.IO (hPutStrLn, stderr)
-import UnliftIO.Exception (displayException, handle)
-
-import Data.Text qualified as Text
 import Skeletest.Internal.Error (SkeletestError)
 import Skeletest.Internal.Preprocessor (processFile)
 import Skeletest.Internal.Preprocessor qualified as Preprocessor
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
+import System.IO (hPutStrLn, stderr)
+import UnliftIO.Directory (getCurrentDirectory)
+import UnliftIO.Exception (displayException, handle)
 
 main :: IO ()
 main = handleErrors $ do
   -- just to be extra sure we don't run into encoding issues
   setLocaleEncoding utf8
 
+  cwd <- getCurrentDirectory
+  let initialOpts = Preprocessor.defaultOptions cwd
+
   getArgs >>= \case
     -- https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/phases.html#options-affecting-a-haskell-pre-processor
     fp : input : output : args -> do
-      options <- either error pure $ foldlM parseOpts Preprocessor.defaultOptions args
+      options <- either error pure $ foldlM parseOpts initialOpts args
       Text.readFile input >>= processFile options fp >>= Text.writeFile output
     _ -> error "The skeletest preprocessor expects at least three arguments."
 

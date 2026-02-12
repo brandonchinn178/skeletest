@@ -192,6 +192,18 @@ spec = do
     stderr `shouldBe` ""
     sanitizeTraceback stdout `shouldSatisfy` P.matchesSnapshot
 
+  integration . it "shows source code when running from different directory" $ do
+    runner <- getFixture @TestRunner
+    runner.addTestFile "ExampleSpec.hs" $
+      [ "module ExampleSpec (spec) where"
+      , "import Skeletest"
+      , "spec = it \"should fail\" $ failTest \"failure\""
+      ]
+
+    (stdout, stderr) <- expectFailure $ runner.runTestsWith def{cwd = Just "/"}
+    stderr `shouldBe` ""
+    stdout `shouldSatisfy` P.matchesSnapshot
+
 -- GHC 9.10 specifically added a backtrace to SomeException, which was reverted in 9.12
 -- https://github.com/haskell/core-libraries-committee/issues/285
 sanitizeTraceback :: String -> String

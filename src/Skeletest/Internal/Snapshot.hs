@@ -58,6 +58,7 @@ import Skeletest.Internal.Fixtures (
   noCleanup,
   withCleanup,
  )
+import Skeletest.Internal.Paths (readTestFile)
 import Skeletest.Internal.TestInfo (TestInfo (..), getTestInfo)
 import Skeletest.Internal.Utils.Map qualified as Map.Utils
 import System.Directory (createDirectoryIfMissing)
@@ -101,7 +102,7 @@ instance Fixture SnapshotFileFixture where
     let snapshotPath = getSnapshotPath file
 
     mSnapshotFile <-
-      try (Text.readFile snapshotPath) >>= \case
+      try (readTestFile snapshotPath) >>= \case
         Left e
           | isDoesNotExistError e -> pure Nothing
           | otherwise -> throwIO e

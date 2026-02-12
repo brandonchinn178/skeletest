@@ -83,7 +83,8 @@ instance HasField "readTestFile" TestRunner (FilePath -> IO String) where
   getField runner fp = readFile $ runner.dir </> fp
 
 data TestArgs = TestArgs
-  { cliArgs :: [String]
+  { cwd :: Maybe FilePath
+  , cliArgs :: [String]
   , ghcArgs :: [String]
   , mainFile :: String
   }
@@ -91,7 +92,8 @@ data TestArgs = TestArgs
 instance Default TestArgs where
   def =
     TestArgs
-      { cliArgs = []
+      { cwd = Nothing
+      , cliArgs = []
       , ghcArgs = []
       , mainFile = "Main.hs"
       }
@@ -114,8 +116,12 @@ instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, S
             , args.ghcArgs
             , [args.mainFile]
             ]
-    runProc "ghc" ghcArgs >>= \case
-      (ExitSuccess, _, _) -> runProc "./test-runner" args.cliArgs
+    runProcWith id "ghc" ghcArgs >>= \case
+      (ExitSuccess, _, _) ->
+        runProcWith
+          (maybe id setCWD args.cwd)
+          (runner.dir </> "test-runner")
+          args.cliArgs
       result -> pure result
    where
     addFile fp contents = do
@@ -123,8 +129,9 @@ instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, S
       createDirectoryIfMissing True (takeDirectory path)
       writeFile path (unlines contents)
 
-    runProc cmd args_ = do
-      let proc = (Process.proc cmd args_){Process.cwd = Just runner.dir}
+    setCWD dir p = p{Process.cwd = Just dir}
+    runProcWith f cmd args_ = do
+      let proc = f . setCWD runner.dir $ Process.proc cmd args_
       (code, stdout, stderr) <- Process.readCreateProcessWithExitCode proc ""
       pure (code, sanitize stdout, sanitize stderr)
 

@@ -25,8 +25,8 @@ runtimeSpec :: String -> Spec
 runtimeSpec handle = do
   describe handle $ do
     integration . it "is hidden on test success" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "{-# LANGUAGE OverloadedRecordDot #-}"
         , "{-# LANGUAGE OverloadedStrings #-}"
         , "module ExampleSpec (spec) where"
@@ -41,14 +41,14 @@ runtimeSpec handle = do
         , "    " <> render_hPutStrLn handle "line1"
         , "    " <> render_hPutStrLn handle "line2"
         ]
-      (code, stdout, stderr) <- runTests runner []
+      (code, stdout, stderr) <- runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
       code `shouldBe` ExitSuccess
 
     integration . it "is rendered on test failure" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "{-# LANGUAGE OverloadedRecordDot #-}"
         , "{-# LANGUAGE OverloadedStrings #-}"
         , "module ExampleSpec (spec) where"
@@ -64,13 +64,13 @@ runtimeSpec handle = do
         , "    " <> render_hPutStrLn handle "line2"
         , "    1 `shouldBe` 2"
         ]
-      (stdout, stderr) <- expectFailure $ runTests runner []
+      (stdout, stderr) <- expectFailure runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
     integration . it "is rendered on test error" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "{-# LANGUAGE OverloadedRecordDot #-}"
         , "{-# LANGUAGE OverloadedStrings #-}"
         , "module ExampleSpec (spec) where"
@@ -87,13 +87,13 @@ runtimeSpec handle = do
         , "    Just _ <- pure Nothing"
         , "    pure ()"
         ]
-      (stdout, stderr) <- expectFailure $ runTests runner []
+      (stdout, stderr) <- expectFailure runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
     integration . it "is not captured with --capture-output=off" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "{-# LANGUAGE OverloadedRecordDot #-}"
         , "{-# LANGUAGE OverloadedStrings #-}"
         , "module ExampleSpec (spec) where"
@@ -108,7 +108,7 @@ runtimeSpec handle = do
         , "    " <> render_hPutStrLn handle "line1"
         , "    " <> render_hPutStrLn handle "line2"
         ]
-      (code, stdout, stderr) <- runTests runner ["--capture-output=off"]
+      (code, stdout, stderr) <- runner.runTestsWith def{cliArgs = ["--capture-output=off"]}
       List.intercalate "\n\n" [">>> stdout", stdout, ">>> stderr", stderr] `shouldSatisfy` P.matchesSnapshot
       code `shouldBe` ExitSuccess
 
@@ -116,8 +116,8 @@ fixtureGetSpec :: (String, String) -> Spec
 fixtureGetSpec (handle, func) =
   describe func $ do
     integration . it "returns captured output from current test" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "{-# LANGUAGE OverloadedRecordDot #-}"
         , "{-# LANGUAGE OverloadedStrings #-}"
         , "module ExampleSpec (spec) where"
@@ -139,15 +139,15 @@ fixtureGetSpec (handle, func) =
         , "    s <- output." <> func
         , "    s `shouldBe` " <> show "test1\ntest2\n"
         ]
-      _ <- expectSuccess $ runTests runner []
+      _ <- expectSuccess runner.runTests
       pure ()
 
 fixtureReadSpec :: (String, String) -> Spec
 fixtureReadSpec (handle, func) =
   describe func $ do
     integration . it "returns captured output from current test" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "{-# LANGUAGE OverloadedRecordDot #-}"
         , "{-# LANGUAGE OverloadedStrings #-}"
         , "module ExampleSpec (spec) where"
@@ -169,7 +169,7 @@ fixtureReadSpec (handle, func) =
         , "    s <- output." <> func
         , "    s `shouldBe` " <> show "test2\n"
         ]
-      _ <- expectSuccess $ runTests runner []
+      _ <- expectSuccess runner.runTests
       pure ()
 
 render_hPutStrLn :: String -> String -> String

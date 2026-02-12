@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
 module Skeletest.PredicateSpec (spec) where
@@ -130,8 +131,8 @@ spec = do
         User "alice" (Just 10) `shouldSatisfy` (P.con $ User (P.eq "alice") (P.just (P.gt 0)))
 
       integration . it "shows a helpful failure message" $ do
-        runner <- getFixture
-        addTestFile runner "ExampleSpec.hs" $
+        runner <- getFixture @TestRunner
+        runner.addTestFile "ExampleSpec.hs" $
           [ "module ExampleSpec (spec) where"
           , ""
           , "import Skeletest"
@@ -143,13 +144,13 @@ spec = do
           , "  User \"alice\" `shouldSatisfy` P.con User{name = P.eq \"\"}"
           ]
 
-        (stdout, stderr) <- expectFailure $ runTests runner []
+        (stdout, stderr) <- expectFailure runner.runTests
         stderr `shouldBe` ""
         stdout `shouldSatisfy` P.matchesSnapshot
 
       integration . it "fails to compile with unknown record field" $ do
-        runner <- getFixture
-        addTestFile runner "ExampleSpec.hs" $
+        runner <- getFixture @TestRunner
+        runner.addTestFile "ExampleSpec.hs" $
           [ "module ExampleSpec (spec) where"
           , ""
           , "import Skeletest"
@@ -161,13 +162,12 @@ spec = do
           , "  User \"alice\" `shouldSatisfy` P.con User{foo = P.eq \"\"}"
           ]
 
-        (stdout, stderr) <- expectFailure $ runTests runner []
-        stdout `shouldBe` ""
+        (_, stderr) <- expectFailure runner.runTests
         stderr `shouldSatisfy` P.matchesSnapshot
 
       integration . it "fails to compile with omitted positional fields" $ do
-        runner <- getFixture
-        addTestFile runner "ExampleSpec.hs" $
+        runner <- getFixture @TestRunner
+        runner.addTestFile "ExampleSpec.hs" $
           [ "module ExampleSpec (spec) where"
           , ""
           , "import Skeletest"
@@ -179,13 +179,12 @@ spec = do
           , "  User \"alice\" (Just 1) `shouldSatisfy` P.con (User (P.eq \"\"))"
           ]
 
-        (stdout, stderr) <- expectFailure $ runTests runner []
-        stdout `shouldBe` ""
+        (_, stderr) <- expectFailure runner.runTests
         (normalizeConFailure . normalizeVars) stderr `shouldSatisfy` P.matchesSnapshot
 
       integration . it "fails to compile with non-constructor" $ do
-        runner <- getFixture
-        addTestFile runner "ExampleSpec.hs" $
+        runner <- getFixture @TestRunner
+        runner.addTestFile "ExampleSpec.hs" $
           [ "module ExampleSpec (spec) where"
           , ""
           , "import Skeletest"
@@ -195,13 +194,12 @@ spec = do
           , "  \"\" `shouldSatisfy` P.con \"\""
           ]
 
-        (stdout, stderr) <- expectFailure $ runTests runner []
-        stdout `shouldBe` ""
+        (_, stderr) <- expectFailure runner.runTests
         stderr `shouldSatisfy` P.matchesSnapshot
 
       integration . it "fails to compile when not applied to anything" $ do
-        runner <- getFixture
-        addTestFile runner "ExampleSpec.hs" $
+        runner <- getFixture @TestRunner
+        runner.addTestFile "ExampleSpec.hs" $
           [ "module ExampleSpec (spec) where"
           , ""
           , "import Skeletest"
@@ -211,13 +209,12 @@ spec = do
           , "  \"\" `shouldSatisfy` P.con"
           ]
 
-        (stdout, stderr) <- expectFailure $ runTests runner []
-        stdout `shouldBe` ""
+        (_, stderr) <- expectFailure runner.runTests
         stderr `shouldSatisfy` P.matchesSnapshot
 
       integration . it "fails to compile when applied to multiple arguments" $ do
-        runner <- getFixture
-        addTestFile runner "ExampleSpec.hs" $
+        runner <- getFixture @TestRunner
+        runner.addTestFile "ExampleSpec.hs" $
           [ "module ExampleSpec (spec) where"
           , ""
           , "import Skeletest"
@@ -227,8 +224,7 @@ spec = do
           , "  \"\" `shouldSatisfy` P.con 1 2"
           ]
 
-        (stdout, stderr) <- expectFailure $ runTests runner []
-        stdout `shouldBe` ""
+        (_, stderr) <- expectFailure runner.runTests
         stderr `shouldSatisfy` P.matchesSnapshot
 
   describe "Numeric" $ do

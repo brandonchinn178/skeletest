@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedRecordDot #-}
+
 module Skeletest.PropSpec (spec) where
 
 import Skeletest
@@ -10,8 +12,8 @@ spec :: Spec
 spec = do
   describe "setDiscardLimit" $ do
     integration . it "sets discard limit" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -22,7 +24,7 @@ spec = do
         , "  discard"
         ]
 
-      (stdout, stderr) <- expectFailure $ runTests runner []
+      (stdout, stderr) <- expectFailure runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -32,8 +34,8 @@ spec = do
       (read . show) P.=== (+ 1) `shouldNotSatisfy` P.isoWith (Gen.int $ Range.exponential 0 10000000)
 
     integration . it "shows a helpful failure message" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -48,6 +50,6 @@ spec = do
         , "    (read . show) P.=== id `shouldNotSatisfy` P.isoWith (Gen.int $ Range.linear 0 10)"
         ]
 
-      (stdout, stderr) <- expectFailure $ runTests runner ["--seed=0:0"]
+      (stdout, stderr) <- expectFailure $ runner.runTestsWith def{cliArgs = ["--seed=0:0"]}
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot

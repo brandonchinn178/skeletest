@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -7,29 +9,29 @@ module Skeletest.TestUtils.Integration (
   integration,
 
   -- * Test runner
-  FixtureTestRunner,
+  TestRunner,
   FileContents,
-  setMainFile,
-  addTestFile,
-  readTestFile,
 
   -- * runTests
-  runTests,
+  TestArgs (..),
   expectCode,
   expectSuccess,
   expectFailure,
 
   -- * Re-exports
   ExitCode (..),
+  def,
 ) where
 
+import Data.Default (Default (..))
 import Data.IORef (IORef, modifyIORef, newIORef, readIORef)
 import Data.Text qualified as Text
+import GHC.Records (HasField (..))
 import Skeletest
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode (..))
 import System.FilePath (takeDirectory, (</>))
-import System.Process (CreateProcess (..), proc, readCreateProcessWithExitCode)
+import System.Process qualified as Process
 
 data MarkerIntegration = MarkerIntegration
   deriving (Show)
@@ -42,84 +44,99 @@ integration = markManual . withMarker MarkerIntegration
 
 {----- runTests -----}
 
-data FixtureTestRunner = FixtureTestRunner
-  { testRunnerDir :: FilePath
-  , testRunnerSettingsRef :: IORef TestRunnerSettings
+data TestRunner = TestRunner
+  { dir :: FilePath
+  , settingsRef :: IORef TestRunnerSettings
   }
 
 data TestRunnerSettings = TestRunnerSettings
-  { mainFile :: FileContents
+  { mainFileContents :: FileContents
   , testFiles :: [(FilePath, FileContents)]
   }
 
 -- | File contents as a list of lines.
 type FileContents = [String]
 
-instance Fixture FixtureTestRunner where
+instance Fixture TestRunner where
   fixtureAction = do
-    FixtureTmpDir tmpdir <- getFixture
+    FixtureTmpDir dir <- getFixture
     settingsRef <- newIORef defaultSettings
-    pure . noCleanup $
-      FixtureTestRunner
-        { testRunnerDir = tmpdir
-        , testRunnerSettingsRef = settingsRef
-        }
+    pure $ noCleanup TestRunner{..}
    where
     defaultSettings =
       TestRunnerSettings
-        { mainFile = ["import Skeletest.Main"]
+        { mainFileContents = ["import Skeletest.Main"]
         , testFiles = []
         }
 
-setMainFile :: FixtureTestRunner -> FileContents -> IO ()
-setMainFile FixtureTestRunner{testRunnerSettingsRef} contents =
-  modifyIORef testRunnerSettingsRef $ \settings -> settings{mainFile = contents}
+instance HasField "setMainFile" TestRunner (FileContents -> IO ()) where
+  getField runner contents =
+    modifyIORef runner.settingsRef $ \settings ->
+      settings{mainFileContents = contents}
 
-addTestFile :: FixtureTestRunner -> FilePath -> FileContents -> IO ()
-addTestFile FixtureTestRunner{testRunnerSettingsRef} fp contents =
-  modifyIORef testRunnerSettingsRef $ \settings ->
-    settings{testFiles = (fp, contents) : settings.testFiles}
+instance HasField "addTestFile" TestRunner (FilePath -> FileContents -> IO ()) where
+  getField runner fp contents =
+    modifyIORef runner.settingsRef $ \settings ->
+      settings{testFiles = (fp, contents) : settings.testFiles}
 
-readTestFile :: FixtureTestRunner -> FilePath -> IO String
-readTestFile FixtureTestRunner{testRunnerDir} fp = readFile $ testRunnerDir </> fp
+instance HasField "readTestFile" TestRunner (FilePath -> IO String) where
+  getField runner fp = readFile $ runner.dir </> fp
 
-runTests :: FixtureTestRunner -> [String] -> IO (ExitCode, String, String)
-runTests FixtureTestRunner{..} args = do
-  TestRunnerSettings{..} <- readIORef testRunnerSettingsRef
-  addFile "Main.hs" mainFile
-  mapM_ (uncurry addFile) testFiles
+data TestArgs = TestArgs
+  { cliArgs :: [String]
+  , ghcArgs :: [String]
+  , mainFile :: String
+  }
 
-  (code, stdout, stderr) <-
-    flip readCreateProcessWithExitCode "" $
-      setCWD testRunnerDir . proc "runghc" . concat $
-        [ "--" : ghcArgs
-        , "--" : "Main.hs" : args
-        ]
+instance Default TestArgs where
+  def =
+    TestArgs
+      { cliArgs = []
+      , ghcArgs = []
+      , mainFile = "Main.hs"
+      }
 
-  pure (code, sanitize stdout, sanitize stderr)
- where
-  addFile fp contents = do
-    let path = testRunnerDir </> fp
-    createDirectoryIfMissing True (takeDirectory path)
-    writeFile path (unlines contents)
+instance HasField "runTests" TestRunner (IO (ExitCode, String, String)) where
+  getField runner = runner.runTestsWith def
 
-  ghcArgs =
-    concat
-      [ ["-hide-all-packages"]
-      , ["-F", "-pgmF=skeletest-preprocessor"]
-      , ["-package skeletest"]
-      ]
-  setCWD dir p = p{cwd = Just dir}
+instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, String)) where
+  getField runner args = do
+    settings <- readIORef runner.settingsRef
+    addFile args.mainFile settings.mainFileContents
+    mapM_ (uncurry addFile) settings.testFiles
 
-  sanitize = Text.unpack . stripOverwrites . stripControlChars . Text.strip . Text.pack
-  stripOverwrites s =
-    case Text.breakOn "\r" s of
-      (_, "") -> s
-      (pre, post) -> Text.dropWhileEnd (/= '\n') pre <> stripOverwrites (Text.drop 1 post)
-  stripControlChars s =
-    case Text.breakOn "\x1b" s of
-      (_, "") -> s
-      (pre, post) -> pre <> stripControlChars (Text.drop 1 . Text.dropWhile (/= 'm') $ post)
+    let ghcArgs =
+          concat
+            [ ["-hide-all-packages"]
+            , ["-F", "-pgmF=skeletest-preprocessor"]
+            , ["-package skeletest"]
+            , ["-o", "test-runner"]
+            , args.ghcArgs
+            , [args.mainFile]
+            ]
+    runProc "ghc" ghcArgs >>= \case
+      (ExitSuccess, _, _) -> runProc "./test-runner" args.cliArgs
+      result -> pure result
+   where
+    addFile fp contents = do
+      let path = runner.dir </> fp
+      createDirectoryIfMissing True (takeDirectory path)
+      writeFile path (unlines contents)
+
+    runProc cmd args_ = do
+      let proc = (Process.proc cmd args_){Process.cwd = Just runner.dir}
+      (code, stdout, stderr) <- Process.readCreateProcessWithExitCode proc ""
+      pure (code, sanitize stdout, sanitize stderr)
+
+    sanitize = Text.unpack . stripOverwrites . stripControlChars . Text.strip . Text.pack
+    stripOverwrites s =
+      case Text.breakOn "\r" s of
+        (_, "") -> s
+        (pre, post) -> Text.dropWhileEnd (/= '\n') pre <> stripOverwrites (Text.drop 1 post)
+    stripControlChars s =
+      case Text.breakOn "\x1b" s of
+        (_, "") -> s
+        (pre, post) -> pre <> stripControlChars (Text.drop 1 . Text.dropWhile (/= 'm') $ post)
 
 expectCode :: (HasCallStack) => ExitCode -> IO (ExitCode, String, String) -> IO (String, String)
 expectCode expected m = do

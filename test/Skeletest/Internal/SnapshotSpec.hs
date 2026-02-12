@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -31,8 +32,8 @@ spec = do
     normalizeSnapshotFile' file `shouldBe` normalizeSnapshotFile file
 
   integration . it "detects corrupted snapshot files" $ do
-    runner <- getFixture
-    addTestFile runner "ExampleSpec.hs" $
+    runner <- getFixture @TestRunner
+    runner.addTestFile "ExampleSpec.hs" $
       [ "module ExampleSpec (spec) where"
       , ""
       , "import Skeletest"
@@ -41,26 +42,26 @@ spec = do
       , "spec = it \"should error\" $ do"
       , "  \"\" `shouldSatisfy` P.matchesSnapshot"
       ]
-    addTestFile runner "__snapshots__/ExampleSpec.snap.md" ["asdf"]
+    runner.addTestFile "__snapshots__/ExampleSpec.snap.md" ["asdf"]
 
-    (stdout, stderr) <- expectFailure $ runTests runner []
+    (stdout, stderr) <- expectFailure runner.runTests
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
 
   integration . it "uses registered snapshot renderers" $ do
-    runner <- getFixture
-    setMainFile runner $
+    runner <- getFixture @TestRunner
+    runner.setMainFile
       [ "import Skeletest.Main"
       , "import Lib.User"
       , "snapshotRenderers ="
       , "  [ renderWithShow @User"
       , "  ]"
       ]
-    addTestFile runner "Lib/User.hs" $
+    runner.addTestFile "Lib/User.hs" $
       [ "module Lib.User (User (..)) where"
       , "data User = User {name :: String, age :: Int} deriving (Show)"
       ]
-    addTestFile runner "ExampleSpec.hs" $
+    runner.addTestFile "ExampleSpec.hs" $
       [ "module ExampleSpec (spec) where"
       , ""
       , "import Lib.User"
@@ -72,8 +73,8 @@ spec = do
       , "  testUser `shouldSatisfy` P.matchesSnapshot"
       ]
 
-    _ <- expectSuccess $ runTests runner ["-u"]
-    snapshot <- readTestFile runner "__snapshots__/ExampleSpec.snap.md"
+    _ <- expectSuccess $ runner.runTestsWith def{cliArgs = ["-u"]}
+    snapshot <- runner.readTestFile "__snapshots__/ExampleSpec.snap.md"
     snapshot `shouldSatisfy` P.hasInfix "User {name = \"Alice\", age = 30}"
 
   it "renders JSON values" $ do
@@ -81,8 +82,8 @@ spec = do
     (result :: Maybe Aeson.Value) `shouldSatisfy` P.just P.matchesSnapshot
 
   integration . it "shows helpful failure messages" $ do
-    runner <- getFixture
-    addTestFile runner "ExampleSpec.hs" $
+    runner <- getFixture @TestRunner
+    runner.addTestFile "ExampleSpec.hs" $
       [ "module ExampleSpec (spec) where"
       , ""
       , "import Skeletest"
@@ -91,7 +92,7 @@ spec = do
       , "spec = it \"fails\" $ do"
       , "  unlines [\"new1\", \"same1\", \"same2\", \"new2\"] `shouldSatisfy` P.matchesSnapshot"
       ]
-    addTestFile runner "__snapshots__/ExampleSpec.snap.md" $
+    runner.addTestFile "__snapshots__/ExampleSpec.snap.md" $
       [ "# Example"
       , ""
       , "## fails"
@@ -104,7 +105,7 @@ spec = do
       , "```"
       ]
 
-    (stdout, stderr) <- expectFailure $ runTests runner []
+    (stdout, stderr) <- expectFailure runner.runTests
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
 

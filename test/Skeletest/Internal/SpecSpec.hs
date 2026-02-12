@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedRecordDot #-}
+
 module Skeletest.Internal.SpecSpec (spec) where
 
 import Skeletest
@@ -8,8 +10,8 @@ spec :: Spec
 spec = do
   describe "skip" $ do
     integration . it "skips tests completely" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -19,14 +21,14 @@ spec = do
         , "  it \"should not run either\" $ undefined"
         ]
 
-      (stdout, stderr) <- expectSuccess $ runTests runner []
+      (stdout, stderr) <- expectSuccess runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
   describe "xfail" $ do
     integration . it "checks for expected failures" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -36,13 +38,13 @@ spec = do
         , "  it \"should fail too\" $ undefined"
         ]
 
-      (stdout, stderr) <- expectSuccess $ runTests runner []
+      (stdout, stderr) <- expectSuccess runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
     integration . it "errors on unexpected passes" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -52,15 +54,14 @@ spec = do
         , "  it \"should fail too\" $ pure ()"
         ]
 
-      (stdout, stderr) <- expectFailure $ runTests runner []
+      (stdout, stderr) <- expectFailure runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
   describe "focus" $ do
-    -- TODO: test that using focus with -Werror fails
     integration . it "only runs focused test" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -70,13 +71,28 @@ spec = do
         , "  it \"not working yet\" $ failTest \"broken\""
         ]
 
-      (stdout, _) <- expectSuccess $ runTests runner []
+      (stdout, _) <- expectSuccess runner.runTests
       stdout `shouldSatisfy` P.matchesSnapshot
+
+    integration . it "fails with -Werror" $ do
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
+        [ "module ExampleSpec (spec) where"
+        , ""
+        , "import Skeletest"
+        , ""
+        , "spec = do"
+        , "  focus . it \"in progress\" $ pure ()"
+        , "  it \"not working yet\" $ failTest \"broken\""
+        ]
+
+      (_, stderr) <- expectFailure $ runner.runTestsWith def{ghcArgs = ["-Werror"]}
+      stderr `shouldSatisfy` P.matchesSnapshot
 
   describe "markManual" $ do
     integration . it "skips manual tests by default" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -89,7 +105,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (stdout, stderr) <- expectSuccess $ runTests runner []
+      (stdout, stderr) <- expectSuccess runner.runTests
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and
@@ -100,8 +116,8 @@ spec = do
           ]
 
     integration . it "runs selected manual tests" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -114,7 +130,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (stdout, stderr) <- expectSuccess $ runTests runner ["*"]
+      (stdout, stderr) <- expectSuccess $ runner.runTestsWith def{cliArgs = ["*"]}
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and
@@ -126,8 +142,8 @@ spec = do
 
   describe "withMarkers" $ do
     integration . it "allows selecting from command line" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -140,7 +156,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (stdout, stderr) <- expectSuccess $ runTests runner ["@foo"]
+      (stdout, stderr) <- expectSuccess $ runner.runTestsWith def{cliArgs = ["@foo"]}
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and
@@ -152,8 +168,8 @@ spec = do
 
   describe "withMarker" $ do
     integration . it "allows selecting from command line" $ do
-      runner <- getFixture
-      addTestFile runner "ExampleSpec.hs" $
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -169,7 +185,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (stdout, stderr) <- expectSuccess $ runTests runner ["@my-marker"]
+      (stdout, stderr) <- expectSuccess $ runner.runTestsWith def{cliArgs = ["@my-marker"]}
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and

@@ -92,18 +92,17 @@ renderPrettyFailure msg ctx callstack = do
   renderCallLine (path, lineNum, startCol, endCol) = do
     mLine <-
       try (Text.readFile path) >>= \case
-        Right srcFile -> pure $ getLineNum lineNum srcFile
-        Left (_ :: SomeException) -> pure Nothing
+        Right srcFile
+          | Just line <- getLineNum lineNum srcFile -> pure $ Right line
+          | otherwise -> pure $ Left "<line does not exist>"
+        Left (_ :: SomeException) -> pure $ Left "<could not open file>"
     let (srcLine, pointerLine) =
           case mLine of
-            Just line ->
+            Right line ->
               ( line
               , Text.replicate (startCol - 1) " " <> Text.replicate (endCol - startCol) "^"
               )
-            Nothing ->
-              ( "<unknown line>"
-              , ""
-              )
+            Left e -> (e, "")
 
     pure . Text.intercalate "\n" $
       [ Text.pack path <> ":" <> (Text.pack . show) lineNum <> ":"

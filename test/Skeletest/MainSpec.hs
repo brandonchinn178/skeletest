@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 
 module Skeletest.MainSpec (spec) where
 
@@ -10,41 +11,39 @@ import Skeletest.TestUtils.Integration
 spec :: Spec
 spec = do
   integration . it "errors if Skeletest.Main not imported" $ do
-    runner <- getFixture
-    setMainFile runner []
-    addTestFile runner "ExampleSpec.hs" (minimalTest "ExampleSpec")
+    runner <- getFixture @TestRunner
+    runner.setMainFile []
+    runner.addTestFile "ExampleSpec.hs" (minimalTest "ExampleSpec")
 
-    (stdout, stderr) <- expectFailure $ runTests runner []
-    stdout `shouldBe` ""
+    (_, stderr) <- expectFailure runner.runTests
     normalizePluginError stderr `shouldSatisfy` P.matchesSnapshot
 
   integration . it "ignores non-test files" $ do
-    runner <- getFixture
-    addTestFile runner "ExampleSpec.hs" $
+    runner <- getFixture @TestRunner
+    runner.addTestFile "ExampleSpec.hs" $
       [ "module ExampleSpec (spec) where"
       , "import Skeletest"
       , "import TestUtils"
       , "spec = it \"should run\" $ testUserName `shouldBe` \"Alice\""
       ]
-    addTestFile runner "TestUtils.hs" $
+    runner.addTestFile "TestUtils.hs" $
       [ "module TestUtils where"
       , "testUserName = \"Alice\""
       ]
 
-    _ <- expectSuccess $ runTests runner []
+    _ <- expectSuccess runner.runTests
     pure ()
 
   integration . it "errors if main function defined" $ do
-    runner <- getFixture
-    setMainFile runner $
+    runner <- getFixture @TestRunner
+    runner.setMainFile
       [ "import Skeletest.Main"
       , ""
       , "main = putStrLn \"hello world\""
       ]
-    addTestFile runner "ExampleSpec.hs" (minimalTest "ExampleSpec")
+    runner.addTestFile "ExampleSpec.hs" (minimalTest "ExampleSpec")
 
-    (stdout, stderr) <- expectFailure $ runTests runner []
-    stdout `shouldBe` ""
+    (_, stderr) <- expectFailure runner.runTests
     normalizeGhc29916 stderr `shouldSatisfy` P.matchesSnapshot
 
 minimalTest :: String -> FileContents

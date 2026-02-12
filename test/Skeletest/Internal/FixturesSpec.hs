@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedRecordDot #-}
+
 module Skeletest.Internal.FixturesSpec (spec) where
 
 import Skeletest
@@ -8,7 +10,7 @@ spec :: Spec
 spec = do
   describe "getFixture" $ do
     integration . it "detects circular dependencies" $ do
-      runner <- getFixture
+      runner <- getFixture @TestRunner
 
       -- Fixture graph:
       --   A
@@ -16,7 +18,7 @@ spec = do
       --      -> C
       --      -> D
       --         -> A
-      addTestFile runner "ExampleSpec.hs" $
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -51,15 +53,15 @@ spec = do
         , "  pure ()"
         ]
 
-      (stdout, stderr) <- expectFailure $ runTests runner []
+      (stdout, stderr) <- expectFailure runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
     -- https://github.com/brandonchinn178/skeletest/issues/72
     integration . it "throws the appropriate error when setup fails" $ do
-      runner <- getFixture
+      runner <- getFixture @TestRunner
 
-      addTestFile runner "ExampleSpec.hs" $
+      runner.addTestFile "ExampleSpec.hs" $
         [ "module ExampleSpec (spec) where"
         , ""
         , "import Skeletest"
@@ -79,6 +81,6 @@ spec = do
         , "    pure ()"
         ]
 
-      (stdout, stderr) <- expectFailure $ runTests runner []
+      (stdout, stderr) <- expectFailure runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot

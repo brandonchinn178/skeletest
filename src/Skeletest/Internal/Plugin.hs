@@ -72,20 +72,25 @@ transformMainModule options modl =
       { funType = HsTypeApps (HsTypeCon $ hsName ''IO) [HsTypeTuple []]
       , funPats = []
       , funBody =
-          hsExprApps
-            (hsExprVar $ hsName 'Main.runSkeletest)
-            [ hsExprApps (hsExprVar (hsName '(:))) $
-                [ hsExprRecordCon
-                    (hsName 'Plugin.Plugin)
-                    [ (hsFieldName 'Plugin.Plugin "cliFlags", cliFlagsExpr)
-                    , (hsFieldName 'Plugin.Plugin "snapshotRenderers", snapshotRenderersExpr)
-                    , (hsFieldName 'Plugin.Plugin "hooks", hooksExpr)
-                    ]
-                , pluginsExpr
-                ]
-            , hsExprVar $ hsVarName mainFileSpecsListIdentifier
+          sequenceExpr
+            [ runSkeletestExpr
             ]
       }
+  sequenceExpr exprs = hsExprApps (hsExprVar $ hsName 'sequence_) [hsExprList exprs]
+  runSkeletestExpr =
+    hsExprApps
+      (hsExprVar $ hsName 'Main.runSkeletest)
+      [ hsExprApps (hsExprVar (hsName '(:))) $
+          [ hsExprRecordCon
+              (hsName 'Plugin.Plugin)
+              [ (hsFieldName 'Plugin.Plugin "cliFlags", cliFlagsExpr)
+              , (hsFieldName 'Plugin.Plugin "snapshotRenderers", snapshotRenderersExpr)
+              , (hsFieldName 'Plugin.Plugin "hooks", hooksExpr)
+              ]
+          , pluginsExpr
+          ]
+      , hsExprVar $ hsVarName mainFileSpecsListIdentifier
+      ]
 
 transformTestModule :: Ctx -> HsExpr GhcRn -> HsExpr GhcRn
 transformTestModule ctx =

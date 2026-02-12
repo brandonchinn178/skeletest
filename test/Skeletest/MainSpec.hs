@@ -15,8 +15,7 @@ spec = do
     runner.setMainFile []
     runner.addTestFile "ExampleSpec.hs" (minimalTest "ExampleSpec")
 
-    (stdout, stderr) <- expectFailure runner.runTests
-    stdout `shouldBe` ""
+    (_, stderr) <- expectFailure runner.runTests
     normalizePluginError stderr `shouldSatisfy` P.matchesSnapshot
 
   integration . it "ignores non-test files" $ do
@@ -44,8 +43,7 @@ spec = do
       ]
     runner.addTestFile "ExampleSpec.hs" (minimalTest "ExampleSpec")
 
-    (stdout, stderr) <- expectFailure runner.runTests
-    stdout `shouldBe` ""
+    (_, stderr) <- expectFailure runner.runTests
     normalizeGhc29916 stderr `shouldSatisfy` P.matchesSnapshot
 
 minimalTest :: String -> FileContents

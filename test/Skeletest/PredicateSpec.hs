@@ -162,8 +162,7 @@ spec = do
           , "  User \"alice\" `shouldSatisfy` P.con User{foo = P.eq \"\"}"
           ]
 
-        (stdout, stderr) <- expectFailure runner.runTests
-        stdout `shouldBe` ""
+        (_, stderr) <- expectFailure runner.runTests
         stderr `shouldSatisfy` P.matchesSnapshot
 
       integration . it "fails to compile with omitted positional fields" $ do
@@ -180,8 +179,7 @@ spec = do
           , "  User \"alice\" (Just 1) `shouldSatisfy` P.con (User (P.eq \"\"))"
           ]
 
-        (stdout, stderr) <- expectFailure runner.runTests
-        stdout `shouldBe` ""
+        (_, stderr) <- expectFailure runner.runTests
         (normalizeConFailure . normalizeVars) stderr `shouldSatisfy` P.matchesSnapshot
 
       integration . it "fails to compile with non-constructor" $ do
@@ -196,8 +194,7 @@ spec = do
           , "  \"\" `shouldSatisfy` P.con \"\""
           ]
 
-        (stdout, stderr) <- expectFailure runner.runTests
-        stdout `shouldBe` ""
+        (_, stderr) <- expectFailure runner.runTests
         stderr `shouldSatisfy` P.matchesSnapshot
 
       integration . it "fails to compile when not applied to anything" $ do
@@ -212,8 +209,7 @@ spec = do
           , "  \"\" `shouldSatisfy` P.con"
           ]
 
-        (stdout, stderr) <- expectFailure runner.runTests
-        stdout `shouldBe` ""
+        (_, stderr) <- expectFailure runner.runTests
         stderr `shouldSatisfy` P.matchesSnapshot
 
       integration . it "fails to compile when applied to multiple arguments" $ do
@@ -228,8 +224,7 @@ spec = do
           , "  \"\" `shouldSatisfy` P.con 1 2"
           ]
 
-        (stdout, stderr) <- expectFailure runner.runTests
-        stdout `shouldBe` ""
+        (_, stderr) <- expectFailure runner.runTests
         stderr `shouldSatisfy` P.matchesSnapshot
 
   describe "Numeric" $ do

@@ -86,8 +86,7 @@ spec = do
         , "  it \"not working yet\" $ failTest \"broken\""
         ]
 
-      (stdout, stderr) <- expectFailure $ runner.runTestsWith def{ghcArgs = ["-Werror"]}
-      stdout `shouldBe` ""
+      (_, stderr) <- expectFailure $ runner.runTestsWith def{ghcArgs = ["-Werror"]}
       stderr `shouldSatisfy` P.matchesSnapshot
 
   describe "markManual" $ do

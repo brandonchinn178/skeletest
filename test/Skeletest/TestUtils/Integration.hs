@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -30,7 +31,7 @@ import Skeletest
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode (..))
 import System.FilePath (takeDirectory, (</>))
-import System.Process (CreateProcess (..), proc, readCreateProcessWithExitCode)
+import System.Process qualified as Process
 
 data MarkerIntegration = MarkerIntegration
   deriving (Show)
@@ -98,31 +99,32 @@ instance HasField "runTests" TestRunner (IO (ExitCode, String, String)) where
 
 instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, String)) where
   getField runner args = do
-    TestRunnerSettings{..} <- readIORef runner.settingsRef
-    addFile "Main.hs" mainFile
-    mapM_ (uncurry addFile) testFiles
+    settings <- readIORef runner.settingsRef
+    addFile "Main.hs" settings.mainFileContents
+    mapM_ (uncurry addFile) settings.testFiles
 
-    (code, stdout, stderr) <-
-      flip readCreateProcessWithExitCode "" $
-        setCWD runner.dir . proc "runghc" . concat $
-          [ "--" : (ghcArgs <> args.ghcArgs)
-          , "--" : "Main.hs" : args.cliArgs
-          ]
-
-    pure (code, sanitize stdout, sanitize stderr)
+    let ghcArgs =
+          concat
+            [ ["-hide-all-packages"]
+            , ["-F", "-pgmF=skeletest-preprocessor"]
+            , ["-package skeletest"]
+            , ["-o", "test-runner"]
+            , args.ghcArgs
+            , ["Main.hs"]
+            ]
+    runProc "ghc" ghcArgs >>= \case
+      (ExitSuccess, _, _) -> runProc "./test-runner" args.cliArgs
+      result -> pure result
    where
     addFile fp contents = do
       let path = runner.dir </> fp
       createDirectoryIfMissing True (takeDirectory path)
       writeFile path (unlines contents)
 
-    ghcArgs =
-      concat
-        [ ["-hide-all-packages"]
-        , ["-F", "-pgmF=skeletest-preprocessor"]
-        , ["-package skeletest"]
-        ]
-    setCWD dir p = p{cwd = Just dir}
+    runProc cmd args_ = do
+      let proc = (Process.proc cmd args_){Process.cwd = Just runner.dir}
+      (code, stdout, stderr) <- Process.readCreateProcessWithExitCode proc ""
+      pure (code, sanitize stdout, sanitize stderr)
 
     sanitize = Text.unpack . stripOverwrites . stripControlChars . Text.strip . Text.pack
     stripOverwrites s =

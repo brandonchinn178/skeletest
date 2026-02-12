@@ -1,7 +1,7 @@
 cabal-version: 3.0
 
 name: skeletest
-version: 0.3.4
+version: 0.3.5
 synopsis: Batteries-included, opinionated test framework
 description: Batteries-included, opinionated test framework. See README.md for more details.
 homepage: https://github.com/brandonchinn178/skeletest#readme

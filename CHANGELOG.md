@@ -1,5 +1,7 @@
 ## Unreleased
 
+## v0.3.5
+
 Runtime changes:
 * Fix circular dependency error when a session-scoped fixture errors ([#72](https://github.com/brandonchinn178/skeletest/issues/72))
 * Fix `P.matchesSnapshot` when test changes CWD ([#44](https://github.com/brandonchinn178/skeletest/issues/44))

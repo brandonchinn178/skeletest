@@ -129,6 +129,7 @@ test-suite skeletest-tests
     Skeletest.Internal.SpecSpec
     Skeletest.Internal.TestTargetsSpec
     Skeletest.MainSpec
+    Skeletest.OptionsSpec
     Skeletest.PluginSpec
     Skeletest.PredicateSpec
     Skeletest.PropSpec

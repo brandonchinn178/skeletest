@@ -50,7 +50,7 @@ data TestRunner = TestRunner
   }
 
 data TestRunnerSettings = TestRunnerSettings
-  { mainFile :: FileContents
+  { mainFileContents :: FileContents
   , testFiles :: [(FilePath, FileContents)]
   }
 
@@ -65,14 +65,14 @@ instance Fixture TestRunner where
    where
     defaultSettings =
       TestRunnerSettings
-        { mainFile = ["import Skeletest.Main"]
+        { mainFileContents = ["import Skeletest.Main"]
         , testFiles = []
         }
 
 instance HasField "setMainFile" TestRunner (FileContents -> IO ()) where
   getField runner contents =
     modifyIORef runner.settingsRef $ \settings ->
-      settings{mainFile = contents}
+      settings{mainFileContents = contents}
 
 instance HasField "addTestFile" TestRunner (FilePath -> FileContents -> IO ()) where
   getField runner fp contents =
@@ -85,6 +85,7 @@ instance HasField "readTestFile" TestRunner (FilePath -> IO String) where
 data TestArgs = TestArgs
   { cliArgs :: [String]
   , ghcArgs :: [String]
+  , mainFile :: String
   }
 
 instance Default TestArgs where
@@ -92,6 +93,7 @@ instance Default TestArgs where
     TestArgs
       { cliArgs = []
       , ghcArgs = []
+      , mainFile = "Main.hs"
       }
 
 instance HasField "runTests" TestRunner (IO (ExitCode, String, String)) where
@@ -100,7 +102,7 @@ instance HasField "runTests" TestRunner (IO (ExitCode, String, String)) where
 instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, String)) where
   getField runner args = do
     settings <- readIORef runner.settingsRef
-    addFile "Main.hs" settings.mainFileContents
+    addFile args.mainFile settings.mainFileContents
     mapM_ (uncurry addFile) settings.testFiles
 
     let ghcArgs =
@@ -110,7 +112,7 @@ instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, S
             , ["-package skeletest"]
             , ["-o", "test-runner"]
             , args.ghcArgs
-            , ["Main.hs"]
+            , [args.mainFile]
             ]
     runProc "ghc" ghcArgs >>= \case
       (ExitSuccess, _, _) -> runProc "./test-runner" args.cliArgs

@@ -18,6 +18,7 @@ import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
+import Skeletest.Internal.Paths (readTestFile)
 import System.Console.Terminal.Size qualified as Term
 import System.IO qualified as IO
 import UnliftIO.Exception (SomeException, try)
@@ -91,7 +92,7 @@ renderPrettyFailure msg ctx callstack = do
  where
   renderCallLine (path, lineNum, startCol, endCol) = do
     mLine <-
-      try (Text.readFile path) >>= \case
+      try (readTestFile path) >>= \case
         Right srcFile
           | Just line <- getLineNum lineNum srcFile -> pure $ Right line
           | otherwise -> pure $ Left "<line does not exist>"

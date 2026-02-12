@@ -27,15 +27,17 @@ import Text.Read (readMaybe)
 import UnliftIO.Exception (fromEither)
 
 data Options = Options
-  { mainModuleName :: Text
+  { originalDirectory :: FilePath
+  , mainModuleName :: Text
   , mainFuncName :: Text
   }
   deriving (Show, Read)
 
-defaultOptions :: Options
-defaultOptions =
+defaultOptions :: FilePath -> Options
+defaultOptions originalDirectory =
   Options
-    { mainModuleName = "Main"
+    { originalDirectory
+    , mainModuleName = "Main"
     , mainFuncName = "main"
     }
 

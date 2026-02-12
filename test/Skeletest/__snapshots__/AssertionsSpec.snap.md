@@ -158,8 +158,8 @@
 ╭── should fail: FAIL
 │ ./ExampleSpec.hs:3:
 │ │
-│ │ <could not open file>
-│ │ 
+│ │ spec = it "should fail" $ failTest "failure"
+│ │                           ^^^^^^^^
 │ 
 │ failure
 ╰───────────────────────────────────────────────────────────────────────────────

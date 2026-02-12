@@ -15,6 +15,7 @@ import Data.Text qualified as Text
 import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
 import Skeletest.Internal.Error (skeletestPluginError)
 import Skeletest.Internal.GHC
+import Skeletest.Internal.Paths (setOriginalDirectory)
 import Skeletest.Internal.Predicate qualified as P
 import Skeletest.Internal.Preprocessor qualified as Preprocessor
 import Skeletest.Internal.Utils.HList (HList (..))
@@ -73,10 +74,14 @@ transformMainModule options modl =
       , funPats = []
       , funBody =
           sequenceExpr
-            [ runSkeletestExpr
+            [ setOriginalDirectoryExpr
+            , runSkeletestExpr
             ]
       }
   sequenceExpr exprs = hsExprApps (hsExprVar $ hsName 'sequence_) [hsExprList exprs]
+  setOriginalDirectoryExpr =
+    hsExprApps (hsExprVar $ hsName 'setOriginalDirectory) $
+      [hsExprLitString . Text.pack $ options.originalDirectory]
   runSkeletestExpr =
     hsExprApps
       (hsExprVar $ hsName 'Main.runSkeletest)

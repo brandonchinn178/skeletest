@@ -134,6 +134,7 @@ test-suite skeletest-tests
     Skeletest.PluginSpec
     Skeletest.PredicateSpec
     Skeletest.PropSpec
+    Skeletest.TestUtils.CallStack
     Skeletest.TestUtils.Integration
   build-depends:
       base

@@ -38,6 +38,15 @@
 ╰────────────────────────────────────────────────────────────────────────────────────────
 ```
 
+## prop / shows hedgehog context for arbitrary failures
+
+```
+./ExampleSpec.hs
+╭── error: FAIL
+│ MyException
+╰───────────────────────────────────────────────────────────────────────────────
+```
+
 ## setDiscardLimit / sets discard limit
 
 ```

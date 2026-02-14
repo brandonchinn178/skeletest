@@ -37,7 +37,7 @@ import Control.Monad.Trans.Class qualified as Trans
 import Control.Monad.Trans.Reader qualified as Trans
 import Data.List qualified as List
 import Data.Map qualified as Map
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Text qualified as Text
 import GHC.Stack qualified as GHC
 import Hedgehog qualified
@@ -176,12 +176,10 @@ runProperty = \case
       Hedgehog.OK -> pure $ toTestResultPass report
       Hedgehog.GaveUp -> throwIO $ toGaveUpFailure testInfo report
       Hedgehog.Failed failureReport -> do
-        getException >>= \case
-          Nothing -> throwIO $ toAssertionFail testInfo failureReport
-          Just failure -> do
-            let info = getExtraTestContext report failureReport
-            -- N.B. testFailContext is reversed!
-            throwIO failure{testFailContext = failure.testFailContext <> reverse info}
+        failure <- fromMaybe (toAssertionFail testInfo failureReport) <$> getException
+        let info = getExtraTestContext report failureReport
+        -- N.B. testFailContext is reversed!
+        throwIO failure{testFailContext = failure.testFailContext <> reverse info}
  where
   size = 0
   reportProgress _ = pure ()
@@ -263,11 +261,10 @@ toAssertionFail testInfo Hedgehog.FailureReport{..} =
 
 getExtraTestContext :: Hedgehog.Report Hedgehog.Result -> Hedgehog.FailureReport -> FailContext
 getExtraTestContext report Hedgehog.FailureReport{..} =
-  map Text.pack . concat $
+  map Text.pack . concatSections $
     [
       [ "Failed after " <> show testCount <> " tests."
       , "Rerun with --seed=" <> seed <> " to reproduce."
-      , ""
       ]
     , [ let loc =
               case failedSpan of
@@ -287,6 +284,7 @@ getExtraTestContext report Hedgehog.FailureReport{..} =
   seed =
     let Hedgehog.Seed value gamma = report.reportSeed
      in show value <> ":" <> show gamma
+  concatSections = concat . List.intersperse [""] . filter (not . null)
 
 renderCoverage :: Hedgehog.Coverage Hedgehog.CoverCount -> Int -> [String]
 renderCoverage (Hedgehog.Coverage coverage) testCount =

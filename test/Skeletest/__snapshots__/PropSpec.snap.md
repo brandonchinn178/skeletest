@@ -43,6 +43,9 @@
 ```
 ./ExampleSpec.hs
 ╭── error: FAIL
+│ Failed after 1 tests.
+│ Rerun with --seed=0:0 to reproduce.
+│ 
 │ MyException
 ╰───────────────────────────────────────────────────────────────────────────────
 ```

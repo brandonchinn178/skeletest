@@ -25,7 +25,7 @@ spec = do
         , ""
         , "spec = do"
         , "  prop \"error\" $ do"
-        , "    x <- forAll Gen.bool"
+        , "    x <- forAll $ pure True"
         , "    if x then liftIO $ throwIO MyException else pure ()"
         , ""
         , "data MyException = MyException deriving (Show)"
@@ -91,6 +91,24 @@ spec = do
         , "spec = prop \"discards\" $ do"
         , "  FixtureTmpDir _ <- getFixture"
         , "  Prop.setDiscardLimit 10"
+        ]
+
+      (stdout, stderr) <- expectFailure $ runner.runTestsWith zeroSeed
+      stderr `shouldBe` ""
+      stdout `shouldSatisfy` P.matchesSnapshot
+
+    integration . it "supports MonadFail" $ do
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
+        [ "module ExampleSpec (spec) where"
+        , ""
+        , "import Skeletest"
+        , "import qualified Skeletest.Prop as Prop"
+        , "import qualified Skeletest.Prop.Gen as Gen"
+        , ""
+        , "spec = prop \"discards\" $ do"
+        , "  Just _ <- forAll $ pure (Nothing :: Maybe Int)"
+        , "  pure ()"
         ]
 
       (stdout, stderr) <- expectFailure $ runner.runTestsWith zeroSeed

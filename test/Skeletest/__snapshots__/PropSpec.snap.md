@@ -87,6 +87,23 @@
 ╰───────────────────────────────────────────────────────────────────────────────
 ```
 
+## prop / supports MonadFail
+
+```
+./ExampleSpec.hs
+╭── discards: ERROR
+│ ExampleSpec.hs:8:
+│ │
+│ │   Just _ <- forAll $ pure (Nothing :: Maybe Int)
+│ │   ^^^^^^
+│ 
+│ Pattern match failure in 'do' block
+│ 
+│ Failed after 1 tests.
+│ Rerun with --seed=0:0 to reproduce.
+╰───────────────────────────────────────────────────────────────────────────────
+```
+
 ## setDiscardLimit / sets discard limit
 
 ```

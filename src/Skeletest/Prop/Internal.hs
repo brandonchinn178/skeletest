@@ -104,6 +104,8 @@ instance Monad PropertyM where
         PropertyIO _ mb -> mb
 instance MonadIO PropertyM where
   liftIO = PropertyIO [] . liftIO
+instance MonadFail PropertyM where
+  fail = liftIO . fail
 
 instance Testable PropertyM where
   runTestable = runProperty

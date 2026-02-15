@@ -49,6 +49,7 @@ import Hedgehog.Internal.Runner qualified as Hedgehog
 import Hedgehog.Internal.Seed qualified as Hedgehog.Seed
 import Hedgehog.Internal.Source qualified as Hedgehog
 import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..), getFlag)
+import Skeletest.Internal.Error (SkeletestError (..))
 import Skeletest.Internal.TestInfo (TestInfo, getTestInfo)
 import Skeletest.Internal.TestRunner (
   AssertionFail (..),
@@ -62,7 +63,7 @@ import Skeletest.Internal.TestRunner (
  )
 import Skeletest.Internal.Utils.Color qualified as Color
 import Text.Read (readEither, readMaybe)
-import UnliftIO.Exception (SomeException, fromException, toException)
+import UnliftIO.Exception (SomeException, fromException, throwIO, toException)
 import UnliftIO.IORef (IORef, newIORef, readIORef, writeIORef)
 
 #if !MIN_VERSION_base(4, 20, 0)
@@ -98,7 +99,8 @@ instance Monad PropertyM where
     PropertyIO cfg1 $ do
       a <- fa
       case k a of
-        PropertyPure _ b -> pure b
+        PropertyPure [] b -> pure b
+        PropertyPure _ _ -> throwIO PropConfigAfterIO
         PropertyIO _ mb -> mb
 instance MonadIO PropertyM where
   liftIO = PropertyIO [] . liftIO

@@ -38,6 +38,30 @@
 ╰────────────────────────────────────────────────────────────────────────────────────────
 ```
 
+## prop / fails when configuration occurs after IO actions
+
+```
+./ExampleSpec.hs
+╭── discards: ERROR
+│ Property configuration function must be done before any forAll or IO actions
+│ 
+│ Failed after 1 tests.
+│ Rerun with --seed=0:0 to reproduce.
+╰───────────────────────────────────────────────────────────────────────────────
+```
+
+## prop / fails when configuration occurs after forAll
+
+```
+./ExampleSpec.hs
+╭── discards: ERROR
+│ Property configuration function must be done before any forAll or IO actions
+│ 
+│ Failed after 1 tests.
+│ Rerun with --seed=0:0 to reproduce.
+╰───────────────────────────────────────────────────────────────────────────────
+```
+
 ## prop / renders Skeletest errors well
 
 ```

@@ -33,7 +33,7 @@ spec = do
         , "  displayException MyException = \"this is MyException\""
         ]
 
-      (stdout, stderr) <- expectFailure $ runner.runTestsWith def{cliArgs = ["--seed=0:0"]}
+      (stdout, stderr) <- expectFailure $ runner.runTestsWith zeroSeed
       stderr `shouldBe` ""
       sanitizeTraceback stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -56,7 +56,44 @@ spec = do
         , "  flagSpec = RequiredFlag (const $ Right MyFlag)"
         ]
 
-      (stdout, stderr) <- expectFailure $ runner.runTestsWith def{cliArgs = ["--seed=0:0"]}
+      (stdout, stderr) <- expectFailure $ runner.runTestsWith zeroSeed
+      stderr `shouldBe` ""
+      stdout `shouldSatisfy` P.matchesSnapshot
+
+    integration . it "fails when configuration occurs after forAll" $ do
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
+        [ "module ExampleSpec (spec) where"
+        , ""
+        , "import Skeletest"
+        , "import qualified Skeletest.Prop as Prop"
+        , "import qualified Skeletest.Prop.Gen as Gen"
+        , ""
+        , "spec = prop \"discards\" $ do"
+        , "  x <- forAll Gen.bool"
+        , "  Prop.setDiscardLimit 10"
+        , "  x `shouldBe` x"
+        ]
+
+      (stdout, stderr) <- expectFailure $ runner.runTestsWith zeroSeed
+      stderr `shouldBe` ""
+      stdout `shouldSatisfy` P.matchesSnapshot
+
+    integration . it "fails when configuration occurs after IO actions" $ do
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
+        [ "module ExampleSpec (spec) where"
+        , ""
+        , "import Skeletest"
+        , "import qualified Skeletest.Prop as Prop"
+        , "import qualified Skeletest.Prop.Gen as Gen"
+        , ""
+        , "spec = prop \"discards\" $ do"
+        , "  FixtureTmpDir _ <- getFixture"
+        , "  Prop.setDiscardLimit 10"
+        ]
+
+      (stdout, stderr) <- expectFailure $ runner.runTestsWith zeroSeed
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
 
@@ -100,6 +137,9 @@ spec = do
         , "    (read . show) P.=== id `shouldNotSatisfy` P.isoWith (Gen.int $ Range.linear 0 10)"
         ]
 
-      (stdout, stderr) <- expectFailure $ runner.runTestsWith def{cliArgs = ["--seed=0:0"]}
+      (stdout, stderr) <- expectFailure $ runner.runTestsWith zeroSeed
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot
+
+zeroSeed :: TestArgs
+zeroSeed = def{cliArgs = ["--seed=0:0"]}

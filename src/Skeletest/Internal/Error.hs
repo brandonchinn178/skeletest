@@ -20,6 +20,7 @@ data SkeletestError
   | CliFlagNotFound Text
   | FixtureCircularDependency [Text]
   | SnapshotFileCorrupted FilePath
+  | PropConfigAfterIO
   deriving (Show)
 
 instance Exception SkeletestError where
@@ -42,6 +43,8 @@ instance Exception SkeletestError where
         "Found circular dependency when resolving fixtures: " <> Text.intercalate " -> " fixtures
       SnapshotFileCorrupted fp ->
         "Snapshot file was corrupted: " <> Text.pack fp
+      PropConfigAfterIO ->
+        "Property configuration function must be done before any forAll or IO actions"
 
 skeletestPluginError :: Maybe GHC.SrcSpan -> String -> a
 skeletestPluginError mloc = impureThrow . CompilationError mloc . Text.pack

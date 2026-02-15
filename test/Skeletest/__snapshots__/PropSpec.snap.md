@@ -38,6 +38,18 @@
 ╰────────────────────────────────────────────────────────────────────────────────────────
 ```
 
+## prop / renders Skeletest errors well
+
+```
+./ExampleSpec.hs
+╭── error: ERROR
+│ CLI flag 'my-flag' was not registered. Did you add it to cliFlags in Main.hs?
+│ 
+│ Failed after 1 tests.
+│ Rerun with --seed=0:0 to reproduce.
+╰───────────────────────────────────────────────────────────────────────────────
+```
+
 ## prop / shows hedgehog context for arbitrary failures
 
 ```

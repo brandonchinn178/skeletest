@@ -37,6 +37,29 @@ spec = do
       stderr `shouldBe` ""
       sanitizeTraceback stdout `shouldSatisfy` P.matchesSnapshot
 
+    integration . it "renders Skeletest errors well" $ do
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
+        [ "module ExampleSpec (spec) where"
+        , ""
+        , "import Skeletest"
+        , ""
+        , "spec = do"
+        , "  prop \"error\" $ do"
+        , "    _ <- getFlag @MyFlag"
+        , "    pure ()"
+        , ""
+        , "data MyFlag = MyFlag"
+        , "instance IsFlag MyFlag where"
+        , "  flagName = \"my-flag\""
+        , "  flagHelp = \"example\""
+        , "  flagSpec = RequiredFlag (const $ Right MyFlag)"
+        ]
+
+      (stdout, stderr) <- expectFailure $ runner.runTestsWith def{cliArgs = ["--seed=0:0"]}
+      stderr `shouldBe` ""
+      stdout `shouldSatisfy` P.matchesSnapshot
+
   describe "setDiscardLimit" $ do
     integration . it "sets discard limit" $ do
       runner <- getFixture @TestRunner

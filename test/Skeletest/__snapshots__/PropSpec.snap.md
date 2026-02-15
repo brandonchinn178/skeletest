@@ -42,11 +42,12 @@
 
 ```
 ./ExampleSpec.hs
-╭── error: FAIL
+╭── error: ERROR
+│ Got exception of type `MyException`:
+│ this is MyException
+│ 
 │ Failed after 1 tests.
 │ Rerun with --seed=0:0 to reproduce.
-│ 
-│ MyException
 ╰───────────────────────────────────────────────────────────────────────────────
 ```
 

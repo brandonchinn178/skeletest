@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Skeletest.Prop.Internal (
@@ -32,12 +33,13 @@ module Skeletest.Prop.Internal (
 ) where
 
 import Control.Monad (ap)
+import Control.Monad.Catch qualified as MonadCatch
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class qualified as Trans
 import Control.Monad.Trans.Reader qualified as Trans
 import Data.List qualified as List
 import Data.Map qualified as Map
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (catMaybes)
 import Data.Text qualified as Text
 import GHC.Stack qualified as GHC
 import Hedgehog qualified
@@ -54,11 +56,13 @@ import Skeletest.Internal.TestRunner (
   TestResult (..),
   TestResultMessage (..),
   Testable (..),
+  testResultFromAssertionFail,
+  testResultFromErrorWith,
   testResultPass,
  )
 import Skeletest.Internal.Utils.Color qualified as Color
 import Text.Read (readEither, readMaybe)
-import UnliftIO.Exception (throwIO)
+import UnliftIO.Exception (SomeException, fromException, toException)
 import UnliftIO.IORef (IORef, newIORef, readIORef, writeIORef)
 
 #if !MIN_VERSION_base(4, 20, 0)
@@ -75,7 +79,7 @@ data PropertyM a
   = PropertyPure [PropertyConfig] a
   | PropertyIO [PropertyConfig] (PropertyIO a)
 
-type FailureRef = IORef (Maybe AssertionFail)
+type FailureRef = IORef (Maybe SomeException)
 type PropertyIO a = Trans.ReaderT FailureRef (Hedgehog.PropertyT IO) a
 
 instance Functor PropertyM where
@@ -104,7 +108,7 @@ instance Testable PropertyM where
   context msg m = PropertyIO [] (Hedgehog.annotate msg) >> m
   throwFailure e = PropertyIO [] $ do
     failureRef <- Trans.ask
-    writeIORef failureRef (Just e)
+    writeIORef failureRef (Just $ toException e)
     Trans.lift Hedgehog.failure
 
 propConfig :: PropertyConfig -> Property
@@ -174,12 +178,24 @@ runProperty = \case
     testInfo <- getTestInfo
     case Hedgehog.reportStatus report of
       Hedgehog.OK -> pure $ toTestResultPass report
-      Hedgehog.GaveUp -> throwIO $ toGaveUpFailure testInfo report
+      Hedgehog.GaveUp -> testResultFromAssertionFail $ fromGaveUpFailure testInfo report
       Hedgehog.Failed failureReport -> do
-        failure <- fromMaybe (toAssertionFail testInfo failureReport) <$> getException
+        -- Get an 'Either AssertionFail SomeException'
+        let resolveException = \case
+              Nothing -> Left $ fromHedgehogFailure testInfo failureReport
+              Just e -> maybe (Right e) Left $ fromException e
+        exc <- resolveException <$> getException
+
+        -- Add hedgehog-specific context to the failure
         let info = getExtraTestContext report failureReport
-        -- N.B. testFailContext is reversed!
-        throwIO failure{testFailContext = failure.testFailContext <> reverse info}
+        case exc of
+          Left failure ->
+            testResultFromAssertionFail
+              -- N.B. testFailContext is reversed!
+              failure{testFailContext = failure.testFailContext <> reverse info}
+          Right err -> do
+            let addInfo msg = msg <> "\n\n" <> Text.unlines info
+            testResultFromErrorWith addInfo err
  where
   size = 0
   reportProgress _ = pure ()
@@ -196,12 +212,14 @@ loadPropFlags = do
         ]
   pure (seed, catMaybes extraConfig)
 
-fromPropertyIO :: PropertyIO a -> IO (Hedgehog.PropertyT IO a, IO (Maybe AssertionFail))
+fromPropertyIO :: PropertyIO a -> IO (Hedgehog.PropertyT IO a, IO (Maybe SomeException))
 fromPropertyIO m = do
   failureRef <- newIORef Nothing
-  let
-    run = Trans.runReaderT m failureRef
-    getException = readIORef failureRef
+  let run =
+        (`Trans.runReaderT` failureRef)
+          . (`MonadCatch.catch` \e -> writeIORef failureRef (Just e) *> Hedgehog.failure)
+          $ m
+      getException = readIORef failureRef
   pure (run, getException)
 
 toTestResultPass :: Hedgehog.Report Hedgehog.Result -> TestResult
@@ -217,8 +235,8 @@ toTestResultPass report =
   Hedgehog.TestCount testCount = report.reportTests
   Hedgehog.DiscardCount discards = report.reportDiscards
 
-toGaveUpFailure :: TestInfo -> Hedgehog.Report Hedgehog.Result -> AssertionFail
-toGaveUpFailure testInfo report =
+fromGaveUpFailure :: TestInfo -> Hedgehog.Report Hedgehog.Result -> AssertionFail
+fromGaveUpFailure testInfo report =
   AssertionFail
     { testInfo
     , testFailMessage =
@@ -233,8 +251,12 @@ toGaveUpFailure testInfo report =
   Hedgehog.TestCount testCount = report.reportTests
   Hedgehog.DiscardCount discards = report.reportDiscards
 
-toAssertionFail :: TestInfo -> Hedgehog.FailureReport -> AssertionFail
-toAssertionFail testInfo Hedgehog.FailureReport{..} =
+-- | Convert a Hedgehog failure to AssertionFail.
+--
+-- Only happens if one of Hedgehog's functions failed using the failure mode in
+-- PropertyT. All IO exceptions are handled in 'fromPropertyIO'.
+fromHedgehogFailure :: TestInfo -> Hedgehog.FailureReport -> AssertionFail
+fromHedgehogFailure testInfo Hedgehog.FailureReport{..} =
   AssertionFail
     { testInfo
     , testFailMessage = Text.pack failureMessage

@@ -5,11 +5,8 @@ module Skeletest.AssertionsSpec (spec) where
 
 import Skeletest
 import Skeletest.Predicate qualified as P
+import Skeletest.TestUtils.CallStack (sanitizeTraceback)
 import Skeletest.TestUtils.Integration
-
-#if __GLASGOW_HASKELL__ == 910
-import Data.Text qualified as Text
-#endif
 
 spec :: Spec
 spec = do
@@ -203,19 +200,3 @@ spec = do
     (stdout, stderr) <- expectFailure $ runner.runTestsWith def{cwd = Just "/"}
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
-
--- GHC 9.10 specifically added a backtrace to SomeException, which was reverted in 9.12
--- https://github.com/haskell/core-libraries-committee/issues/285
-sanitizeTraceback :: String -> String
-#if __GLASGOW_HASKELL__ == 910
-sanitizeTraceback s =
-  let (pre, post) = break (Text.pack "HasCallStack backtrace:" `Text.isInfixOf`) $ Text.lines $ Text.pack s
-      (_, post2) = break (Text.pack "╰" `Text.isPrefixOf`) $ drop 1 post
-      post2' =
-        case post2 of
-          [] -> []
-          l : ls -> Text.take 80 l : ls
-   in Text.unpack . Text.unlines $ pre ++ post2'
-#else
-sanitizeTraceback = id
-#endif

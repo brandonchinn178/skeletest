@@ -17,7 +17,6 @@ data SkeletestError
     CompilationError (Maybe GHC.SrcSpan) Text
   | -- | An error in a situation that should never happen, and indicates a bug.
     InvariantViolation Text
-  | TestInfoNotFound
   | CliFlagNotFound Text
   | FixtureCircularDependency [Text]
   | SnapshotFileCorrupted FilePath
@@ -37,8 +36,6 @@ instance Exception SkeletestError where
           [ "Invariant violation: " <> msg
           , "**** This is a skeletest bug. Please report it at https://github.com/brandonchinn178/skeletest/issues"
           ]
-      TestInfoNotFound ->
-        "Could not find test info"
       CliFlagNotFound name ->
         "CLI flag '" <> name <> "' was not registered. Did you add it to cliFlags in Main.hs?"
       FixtureCircularDependency fixtures ->

@@ -1,5 +1,8 @@
 ## Unreleased
 
+Runtime changes:
+* Render exceptions in property tests the same as unit tests
+
 ## v0.3.5
 
 Runtime changes:

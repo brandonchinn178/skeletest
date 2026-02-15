@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Skeletest.Prop.Internal (
@@ -32,6 +33,7 @@ module Skeletest.Prop.Internal (
 ) where
 
 import Control.Monad (ap)
+import Control.Monad.Catch qualified as MonadCatch
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class qualified as Trans
 import Control.Monad.Trans.Reader qualified as Trans
@@ -47,17 +49,20 @@ import Hedgehog.Internal.Runner qualified as Hedgehog
 import Hedgehog.Internal.Seed qualified as Hedgehog.Seed
 import Hedgehog.Internal.Source qualified as Hedgehog
 import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..), getFlag)
-import Skeletest.Internal.TestInfo (getTestInfo)
+import Skeletest.Internal.TestInfo (TestInfo, getTestInfo)
 import Skeletest.Internal.TestRunner (
   AssertionFail (..),
+  FailContext,
   TestResult (..),
   TestResultMessage (..),
   Testable (..),
+  testResultFromAssertionFail,
+  testResultFromErrorWith,
   testResultPass,
  )
 import Skeletest.Internal.Utils.Color qualified as Color
 import Text.Read (readEither, readMaybe)
-import UnliftIO.Exception (throwIO)
+import UnliftIO.Exception (SomeException, fromException, toException)
 import UnliftIO.IORef (IORef, newIORef, readIORef, writeIORef)
 
 #if !MIN_VERSION_base(4, 20, 0)
@@ -72,9 +77,10 @@ type Property = PropertyM ()
 
 data PropertyM a
   = PropertyPure [PropertyConfig] a
-  | PropertyIO [PropertyConfig] (Trans.ReaderT FailureRef (Hedgehog.PropertyT IO) a)
+  | PropertyIO [PropertyConfig] (PropertyIO a)
 
-type FailureRef = IORef (Maybe AssertionFail)
+type FailureRef = IORef (Maybe SomeException)
+type PropertyIO a = Trans.ReaderT FailureRef (Hedgehog.PropertyT IO) a
 
 instance Functor PropertyM where
   fmap f = \case
@@ -102,7 +108,7 @@ instance Testable PropertyM where
   context msg m = PropertyIO [] (Hedgehog.annotate msg) >> m
   throwFailure e = PropertyIO [] $ do
     failureRef <- Trans.ask
-    writeIORef failureRef (Just e)
+    writeIORef failureRef (Just $ toException e)
     Trans.lift Hedgehog.failure
 
 propConfig :: PropertyConfig -> Property
@@ -164,125 +170,100 @@ runProperty :: Property -> IO TestResult
 runProperty = \case
   PropertyPure cfg () -> runProperty $ PropertyIO cfg (pure ())
   PropertyIO cfg m -> do
-    failureRef <- newIORef Nothing
     (seed, extraConfig) <- loadPropFlags
-    report <-
-      Hedgehog.checkReport
-        (resolveConfig $ cfg <> extraConfig)
-        0
-        seed
-        (Trans.runReaderT m failureRef)
-        reportProgress
+    let cfg' = resolveConfig $ cfg <> extraConfig
+    (prop, getException) <- fromPropertyIO m
+    report <- Hedgehog.checkReport cfg' size seed prop reportProgress
 
-    let
-      Hedgehog.TestCount testCount = Hedgehog.reportTests report
-      Hedgehog.DiscardCount discards = Hedgehog.reportDiscards report
-      Hedgehog.Coverage coverage = Hedgehog.reportCoverage report
-
+    testInfo <- getTestInfo
     case Hedgehog.reportStatus report of
-      Hedgehog.OK ->
-        pure
-          testResultPass
-            { testResultMessage =
-                TestResultMessageInline . Color.gray . Text.pack . List.intercalate "\n" . concat $
-                  [ [show testCount <> " tests, " <> show discards <> " discards"]
-                  , renderCoverage coverage testCount
-                  ]
-            }
-      Hedgehog.GaveUp -> do
-        testInfo <- getTestInfo
-        throwIO
-          AssertionFail
-            { testInfo
-            , testFailMessage =
-                Text.pack . List.intercalate "\n" $
-                  [ "Gave up after " <> show discards <> " discards."
-                  , "Passed " <> show testCount <> " tests."
-                  ]
-            , testFailContext = []
-            , callStack = GHC.fromCallSiteList []
-            }
-      Hedgehog.Failed Hedgehog.FailureReport{..} ->
-        readIORef failureRef >>= \case
-          Nothing -> do
-            testInfo <- getTestInfo
-            throwIO
-              AssertionFail
-                { testInfo
-                , testFailMessage = Text.pack failureMessage
-                , testFailContext = []
-                , callStack = toCallStack failureLocation
-                }
-          Just failure -> do
-            let
-              info =
-                map Text.pack . concat $
-                  [
-                    [ "Failed after " <> show testCount <> " tests."
-                    , "Rerun with --seed=" <> renderSeed report <> " to reproduce."
-                    , ""
-                    ]
-                  , [ let loc =
-                            case failedSpan of
-                              Just Hedgehog.Span{..} ->
-                                List.intercalate ":" $
-                                  [ spanFile
-                                  , show . Hedgehog.unLineNo $ spanStartLine
-                                  , show . Hedgehog.unColumnNo $ spanStartColumn
-                                  ]
-                              Nothing -> "<unknown loc>"
-                       in loc <> " ==> " <> failedValue
-                    | Hedgehog.FailedAnnotation{..} <- failureAnnotations
-                    ]
-                  ]
+      Hedgehog.OK -> pure $ toTestResultPass report
+      Hedgehog.GaveUp -> testResultFromAssertionFail $ fromGaveUpFailure testInfo report
+      Hedgehog.Failed failureReport -> do
+        -- Get an 'Either AssertionFail SomeException'
+        let resolveException = \case
+              Nothing -> Left $ fromHedgehogFailure testInfo failureReport
+              Just e -> maybe (Right e) Left $ fromException e
+        exc <- resolveException <$> getException
 
-            throwIO
-              failure
-                { testFailContext =
-                    -- N.B. testFailContext is reversed!
-                    failure.testFailContext <> reverse info
-                }
+        -- Add hedgehog-specific context to the failure
+        let info = getExtraTestContext report failureReport
+        case exc of
+          Left failure ->
+            testResultFromAssertionFail
+              -- N.B. testFailContext is reversed!
+              failure{testFailContext = failure.testFailContext <> reverse info}
+          Right err -> do
+            let addInfo msg = msg <> "\n\n" <> Text.unlines info
+            testResultFromErrorWith addInfo err
  where
+  size = 0
   reportProgress _ = pure ()
-  renderSeed report =
-    let Hedgehog.Seed value gamma = Hedgehog.reportSeed report
-     in show value <> ":" <> show gamma
-  renderCoverage coverage testCount =
-    let columns =
-          [ (name, percentStr, percentBar)
-          | Hedgehog.MkLabel{..} <- List.sortOn Hedgehog.labelLocation $ Map.elems coverage
-          , let
-              Hedgehog.LabelName name = labelName
-              Hedgehog.CoverCount count = labelAnnotation
-              percent = round $ fromIntegral count / fromIntegral testCount * (100 :: Double)
-              percentStr = show percent <> "%"
-              percentBar = renderPercentBar percent
-          ]
-        (maxNameLen, maxPercentLen) =
-          foldr
-            ( \(name, percent, _) (nameAcc, percentAcc) ->
-                (max (length name) nameAcc, max (length percent) percentAcc)
-            )
-            (0, 0)
-            columns
-     in [ rjust maxNameLen name <> " " <> rjust maxPercentLen percentStr <> " " <> percentBar
-        | (name, percentStr, percentBar) <- columns
+
+loadPropFlags :: IO (Hedgehog.Seed, [PropertyConfig])
+loadPropFlags = do
+  PropSeedFlag mSeed <- getFlag
+  seed <- maybe Hedgehog.Seed.random pure mSeed
+
+  PropLimitFlag mLimit <- getFlag
+
+  let extraConfig =
+        [ SetTestLimit <$> mLimit
         ]
-  rjust n s = replicate (n - length s) ' ' <> s
-  renderPercentBar percent =
-    -- render percentage bar 20 characters wide
-    let (n, r) = percent `divMod` 5
-     in concat
-          [ replicate n '█'
-          , case r of
-              0 -> ""
-              1 -> "▏"
-              2 -> "▍"
-              3 -> "▌"
-              4 -> "▊"
-              _ -> "" -- unreachable
-          , replicate (20 - n - (if r == 0 then 0 else 1)) '·'
+  pure (seed, catMaybes extraConfig)
+
+fromPropertyIO :: PropertyIO a -> IO (Hedgehog.PropertyT IO a, IO (Maybe SomeException))
+fromPropertyIO m = do
+  failureRef <- newIORef Nothing
+  let run =
+        (`Trans.runReaderT` failureRef)
+          . (`MonadCatch.catch` \e -> writeIORef failureRef (Just e) *> Hedgehog.failure)
+          $ m
+      getException = readIORef failureRef
+  pure (run, getException)
+
+toTestResultPass :: Hedgehog.Report Hedgehog.Result -> TestResult
+toTestResultPass report =
+  testResultPass
+    { testResultMessage =
+        TestResultMessageInline . Color.gray . Text.pack . List.intercalate "\n" . concat $
+          [ [show testCount <> " tests, " <> show discards <> " discards"]
+          , renderCoverage report.reportCoverage testCount
           ]
+    }
+ where
+  Hedgehog.TestCount testCount = report.reportTests
+  Hedgehog.DiscardCount discards = report.reportDiscards
+
+fromGaveUpFailure :: TestInfo -> Hedgehog.Report Hedgehog.Result -> AssertionFail
+fromGaveUpFailure testInfo report =
+  AssertionFail
+    { testInfo
+    , testFailMessage =
+        Text.pack . List.intercalate "\n" $
+          [ "Gave up after " <> show discards <> " discards."
+          , "Passed " <> show testCount <> " tests."
+          ]
+    , testFailContext = []
+    , callStack = GHC.fromCallSiteList []
+    }
+ where
+  Hedgehog.TestCount testCount = report.reportTests
+  Hedgehog.DiscardCount discards = report.reportDiscards
+
+-- | Convert a Hedgehog failure to AssertionFail.
+--
+-- Only happens if one of Hedgehog's functions failed using the failure mode in
+-- PropertyT. All IO exceptions are handled in 'fromPropertyIO'.
+fromHedgehogFailure :: TestInfo -> Hedgehog.FailureReport -> AssertionFail
+fromHedgehogFailure testInfo Hedgehog.FailureReport{..} =
+  AssertionFail
+    { testInfo
+    , testFailMessage = Text.pack failureMessage
+    , testFailContext = []
+    , callStack = toCallStack failureLocation
+    }
+ where
   toCallStack mSpan =
     GHC.fromCallSiteList $
       case mSpan of
@@ -300,17 +281,71 @@ runProperty = \case
                   }
            in [("<unknown>", loc)]
 
-loadPropFlags :: IO (Hedgehog.Seed, [PropertyConfig])
-loadPropFlags = do
-  PropSeedFlag mSeed <- getFlag
-  seed <- maybe Hedgehog.Seed.random pure mSeed
+getExtraTestContext :: Hedgehog.Report Hedgehog.Result -> Hedgehog.FailureReport -> FailContext
+getExtraTestContext report Hedgehog.FailureReport{..} =
+  map Text.pack . concatSections $
+    [
+      [ "Failed after " <> show testCount <> " tests."
+      , "Rerun with --seed=" <> seed <> " to reproduce."
+      ]
+    , [ let loc =
+              case failedSpan of
+                Just Hedgehog.Span{..} ->
+                  List.intercalate ":" $
+                    [ spanFile
+                    , show . Hedgehog.unLineNo $ spanStartLine
+                    , show . Hedgehog.unColumnNo $ spanStartColumn
+                    ]
+                Nothing -> "<unknown loc>"
+         in loc <> " ==> " <> failedValue
+      | Hedgehog.FailedAnnotation{..} <- failureAnnotations
+      ]
+    ]
+ where
+  Hedgehog.TestCount testCount = report.reportTests
+  seed =
+    let Hedgehog.Seed value gamma = report.reportSeed
+     in show value <> ":" <> show gamma
+  concatSections = concat . List.intersperse [""] . filter (not . null)
 
-  PropLimitFlag mLimit <- getFlag
-
-  let extraConfig =
-        [ SetTestLimit <$> mLimit
+renderCoverage :: Hedgehog.Coverage Hedgehog.CoverCount -> Int -> [String]
+renderCoverage (Hedgehog.Coverage coverage) testCount =
+  let columns =
+        [ (name, percentStr, percentBar)
+        | Hedgehog.MkLabel{..} <- List.sortOn Hedgehog.labelLocation $ Map.elems coverage
+        , let
+            Hedgehog.LabelName name = labelName
+            Hedgehog.CoverCount count = labelAnnotation
+            percent = round $ fromIntegral count / fromIntegral testCount * (100 :: Double)
+            percentStr = show percent <> "%"
+            percentBar = renderPercentBar percent
         ]
-  pure (seed, catMaybes extraConfig)
+      (maxNameLen, maxPercentLen) =
+        foldr
+          ( \(name, percent, _) (nameAcc, percentAcc) ->
+              (max (length name) nameAcc, max (length percent) percentAcc)
+          )
+          (0, 0)
+          columns
+   in [ rjust maxNameLen name <> " " <> rjust maxPercentLen percentStr <> " " <> percentBar
+      | (name, percentStr, percentBar) <- columns
+      ]
+ where
+  rjust n s = replicate (n - length s) ' ' <> s
+  renderPercentBar percent =
+    -- render percentage bar 20 characters wide
+    let (n, r) = percent `divMod` 5
+     in concat
+          [ replicate n '█'
+          , case r of
+              0 -> ""
+              1 -> "▏"
+              2 -> "▍"
+              3 -> "▌"
+              4 -> "▊"
+              _ -> "" -- unreachable
+          , replicate (20 - n - (if r == 0 then 0 else 1)) '·'
+          ]
 
 {----- Test -----}
 

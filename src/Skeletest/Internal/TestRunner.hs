@@ -13,6 +13,7 @@ module Skeletest.Internal.TestRunner (
   testResultPass,
   testResultFromAssertionFail,
   testResultFromError,
+  testResultFromErrorWith,
 
   -- * AssertionFail
   AssertionFail (..),
@@ -88,8 +89,11 @@ testResultFromAssertionFail e = do
       }
 
 testResultFromError :: SomeException -> IO TestResult
-testResultFromError e = do
-  msg <- renderMsg
+testResultFromError = testResultFromErrorWith id
+
+testResultFromErrorWith :: (Text -> Text) -> SomeException -> IO TestResult
+testResultFromErrorWith f e = do
+  msg <- f <$> renderMsg
   pure
     TestResult
       { testResultSuccess = False

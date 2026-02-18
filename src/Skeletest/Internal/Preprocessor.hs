@@ -45,12 +45,13 @@ encodeOptions :: Options -> Text
 encodeOptions = Text.pack . show
 
 decodeOptions :: Text -> Either Text Options
-decodeOptions =
-  maybe (Left "Could not decode skeletest-preprocessor options") Right
-    . readMaybe
-    . Text.unpack
-    . unquote
+decodeOptions = readEither . unquote
  where
+  readEither s =
+    maybe (Left $ "Could not decode skeletest-preprocessor options: " <> s) Right
+      . readMaybe
+      . Text.unpack
+      $ s
   unquote s =
     case Text.stripPrefix "\"" s >>= Text.stripSuffix "\"" of
       Just s' -> Text.replace "\\\"" "\"" s'

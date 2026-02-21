@@ -1,5 +1,7 @@
 ## Unreleased
 
+## v0.3.6
+
 Runtime changes:
 * Render exceptions in property tests the same as unit tests
 * If property configuration (e.g. `Prop.setDiscardLimit`) occurs after `forAll` or IO actions, it now errors instead of silently being ignored

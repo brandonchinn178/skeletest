@@ -437,6 +437,15 @@ Skeletest accepts the following options, which may be added as `-optF=<name>:<va
 
 * `main`: Specify the main module/function, as either `OtherMain.otherMainFunc`, `OtherMain` (equivalent to `OtherMain.main`), or `otherMainFunc` (equivalent to `Main.otherMainFunc`). Generally only useful with the `-main-is` GHC option.
 
+### Environment variables
+
+Skeletest respects the following environment variables at runtime:
+
+* `SKELETEST_TEST_ROOT`: How to derive the root of the test tree, used for reading files during test execution (e.g. snapshot files). Can be set to one of the following:
+  * `BUILD_DIR`: (default) The CWD when running the preprocessor
+  * `CWD`: The CWD at runtime
+  * Otherwise, the path to use as the root
+
 ### Hooks
 
 Skeletest lets you hook into specific parts of test execution. Skeletest currently supports the following hooks:

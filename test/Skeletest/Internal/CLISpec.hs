@@ -136,7 +136,7 @@ spec_parseCliArgs = do
         parseCliArgs [flag @ToggleFlag] []
           `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (ToggleFlag False)}
 
-      xfail "broken" . it "errors if argument is set" $ do
+      it "errors if argument is set" $ do
         parseCliArgs [flag @ToggleFlag] ["--toggle=asdf"]
           `shouldSatisfy` parseFailure "Flag '--toggle' does not take arguments, got: asdf"
 

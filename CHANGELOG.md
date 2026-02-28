@@ -1,5 +1,9 @@
 ## Unreleased
 
+Runtime changes:
+* Fix `--foo=bar` to error when `--foo` is a `SwitchFlag`
+  * Previously, it would silently add `bar` as a positional argument
+
 ## v0.3.6
 
 Runtime changes:

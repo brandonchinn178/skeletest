@@ -331,7 +331,9 @@ collectCLIArgs longFlags shortFlags args0 = first CLIParseFailure $ do
         (Just arg, _) -> pure (arg, rest)
         (Nothing, arg : rest') -> pure (arg, rest')
         (Nothing, []) -> Left $ "Flag '" <> name <> "' requires argument"
-      else pure ("", rest)
+      else case (mArg, rest) of
+        (Just arg, _) -> Left $ "Flag '" <> name <> "' does not take arguments, got: " <> arg
+        _ -> pure ("", rest)
 
   addFlag :: Map Flag (Seq Text) -> Flag -> Text -> Map Flag (Seq Text)
   addFlag flagMap flag_ arg =

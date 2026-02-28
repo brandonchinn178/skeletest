@@ -106,7 +106,7 @@ spec_parseCliArgs = do
 
       it "errors if no argument" $ do
         parseCliArgs [flag @OptFlag] ["--opt"]
-          `shouldSatisfy` parseFailure "Flag requires argument: --opt"
+          `shouldSatisfy` parseFailure "Flag '--opt' requires argument"
 
   reqFlagSpec = do
     describe "RequiredFlag" $ do
@@ -116,11 +116,11 @@ spec_parseCliArgs = do
 
       it "errors if not set" $ do
         parseCliArgs [flag @ReqFlag] []
-          `shouldSatisfy` parseFailure "Required flag not set: --req"
+          `shouldSatisfy` parseFailure "Flag '--req' is required"
 
       it "errors if no argument" $ do
         parseCliArgs [flag @ReqFlag] ["--req"]
-          `shouldSatisfy` parseFailure "Flag requires argument: --req"
+          `shouldSatisfy` parseFailure "Flag '--req' requires argument"
 
   switchFlagSpec = do
     describe "SwitchFlag" $ do

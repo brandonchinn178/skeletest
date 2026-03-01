@@ -1,5 +1,8 @@
 ## Unreleased
 
+New features:
+* Support repeated CLI flags with `MultiFlag`
+
 Runtime changes:
 * Fix `--foo=bar` to error when `--foo` is a `SwitchFlag`
   * Previously, it would silently add `bar` as a positional argument

@@ -1,7 +1,9 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeAbstractions #-}
 {-# LANGUAGE NoFieldSelectors #-}
 
@@ -10,6 +12,8 @@ module Skeletest.Internal.CLI (
   flag,
   IsFlag (..),
   FlagSpec (..),
+  MultiFlagType (..),
+  FlagType (..),
   getFlag,
   loadCliArgs,
 
@@ -28,6 +32,7 @@ import Data.Foldable (foldlM)
 import Data.Foldable qualified as Seq (toList)
 import Data.Foldable1 qualified as Foldable1
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -111,6 +116,19 @@ data FlagSpec a
       { flagDefault :: a
       , flagParse :: String -> Either String a
       }
+  | forall x.
+    MultiFlag
+      { type_ :: MultiFlagType x
+      , parseMulti :: x -> Either String a
+      }
+
+data MultiFlagType x where
+  ManyFlag :: FlagType x -> MultiFlagType [x]
+  SomeFlag :: FlagType x -> MultiFlagType (NonEmpty x)
+
+data FlagType x where
+  FlagType_Switch :: FlagType Bool
+  FlagType_Arg :: FlagType String
 
 getFlag :: forall a m. (MonadIO m, IsFlag a) => m a
 getFlag =
@@ -194,6 +212,7 @@ getHelpText builtinFlags customFlags =
               SwitchFlag{} -> Nothing
               RequiredFlag{} -> Just $ Text.pack (flagMetaVar @a)
               OptionalFlag{} -> Just $ Text.pack (flagMetaVar @a)
+              MultiFlag{} -> Just $ Text.pack (flagMetaVar @a)
     ]
 
   renderSection title body =
@@ -322,12 +341,7 @@ collectCLIArgs flagInfos args0 = first CLIParseFailure $ do
 
   validateArg :: FlagSpec a -> Text -> Maybe Text -> [Text] -> Either Text (Text, [Text])
   validateArg spec name mArg rest = do
-    let expectsArg =
-          case spec of
-            SwitchFlag{} -> False
-            RequiredFlag{} -> True
-            OptionalFlag{} -> True
-    if expectsArg
+    if expectsArg spec
       then case (mArg, rest) of
         (Just arg, _) -> pure (arg, rest)
         (Nothing, arg : rest') -> pure (arg, rest')
@@ -335,6 +349,22 @@ collectCLIArgs flagInfos args0 = first CLIParseFailure $ do
       else case (mArg, rest) of
         (Just arg, _) -> Left $ "Flag '" <> name <> "' does not take arguments, got: " <> arg
         _ -> pure ("", rest)
+
+  expectsArg :: FlagSpec a -> Bool
+  expectsArg = \case
+    SwitchFlag{} -> False
+    RequiredFlag{} -> True
+    OptionalFlag{} -> True
+    MultiFlag{type_} ->
+      withMultiFlagType type_ $ \case
+        FlagType_Switch -> False
+        FlagType_Arg -> True
+
+  withMultiFlagType :: MultiFlagType a -> (forall x. FlagType x -> r) -> r
+  withMultiFlagType multiFlagType f =
+    case multiFlagType of
+      ManyFlag ty -> f ty
+      SomeFlag ty -> f ty
 
   addFlag :: Map Text (Seq Text) -> Text -> Text -> Map Text (Seq Text)
   addFlag flagVals name arg =
@@ -348,21 +378,36 @@ parseCLIFlags flagInfos flagVals = first CLIParseFailure $ foldlM go Map.empty f
  where
   go flagStore (name, _, SomeFlagSpec spec0) = do
     let vals = Map.findWithDefault [] name flagVals
-        parseWith f = first Text.pack . f . Text.unpack
-    val <-
-      case spec0 of
-        spec@SwitchFlag{} ->
-          pure (spec.flagFromBool $ (not . null) vals)
-        spec@RequiredFlag{} ->
-          case getLast vals of
-            Nothing -> Left $ "Flag '" <> renderLongFlag name <> "' is required"
-            Just val -> parseWith spec.flagParse val
-        spec@OptionalFlag{} ->
-          case getLast vals of
-            Nothing -> pure spec.flagDefault
-            Just val -> parseWith spec.flagParse val
+    val <- first Text.pack . parse name spec0 . map Text.unpack $ vals
     pure $ insertFlagStore val flagStore
 
+  parse :: Text -> FlagSpec a -> [String] -> Either String a
+  parse name spec0 vals =
+    case spec0 of
+      spec@SwitchFlag{} -> do
+        pure (spec.flagFromBool $ (not . null) vals)
+      spec@RequiredFlag{} -> do
+        val <- maybe (throwRequired name) pure $ getLast vals
+        spec.flagParse val
+      spec@OptionalFlag{} -> do
+        case getLast vals of
+          Nothing -> pure spec.flagDefault
+          Just val -> spec.flagParse val
+      MultiFlag{type_, parseMulti} -> do
+        vals' <-
+          case type_ of
+            ManyFlag ty ->
+              case ty of
+                FlagType_Switch -> pure (True <$ vals)
+                FlagType_Arg -> pure vals
+            SomeFlag ty -> do
+              valsNE <- maybe (throwRequired name) pure $ NonEmpty.nonEmpty vals
+              case ty of
+                FlagType_Switch -> pure (True <$ valsNE)
+                FlagType_Arg -> pure valsNE
+        parseMulti vals'
+
+  throwRequired name = Left $ "Flag '" <> (Text.unpack . renderLongFlag) name <> "' is required"
   getLast = fmap NonEmpty.last . NonEmpty.nonEmpty
 
 renderLongFlag :: Text -> Text

@@ -13,7 +13,6 @@ module Skeletest.Internal.CLI (
   flag,
   IsFlag (..),
   FlagSpec (..),
-  MultiFlagType (..),
   FlagType (..),
   getFlag,
   loadCliArgs,
@@ -33,7 +32,6 @@ import Data.Foldable (foldlM)
 import Data.Foldable qualified as Seq (toList)
 import Data.Foldable1 qualified as Foldable1
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
-import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -123,13 +121,9 @@ data FlagSpec a
       }
   | forall x.
     MultiFlag
-      { type_ :: MultiFlagType x
-      , parseMulti :: x -> Either String a
+      { type_ :: FlagType x
+      , parseMulti :: [x] -> Either String a
       }
-
-data MultiFlagType x where
-  ManyFlag :: FlagType x -> MultiFlagType [x]
-  SomeFlag :: FlagType x -> MultiFlagType (NonEmpty x)
 
 data FlagType x where
   FlagType_Switch :: FlagType Bool
@@ -371,15 +365,9 @@ collectCLIArgs flagInfos args0 = first CLIParseFailure $ do
     RequiredFlag{} -> True
     OptionalFlag{} -> True
     MultiFlag{type_} ->
-      withMultiFlagType type_ $ \case
+      case type_ of
         FlagType_Switch -> False
         FlagType_Arg -> True
-
-  withMultiFlagType :: MultiFlagType a -> (forall x. FlagType x -> r) -> r
-  withMultiFlagType multiFlagType f =
-    case multiFlagType of
-      ManyFlag ty -> f ty
-      SomeFlag ty -> f ty
 
   addFlag :: Map Text (Seq Text) -> (Text, Text) -> Map Text (Seq Text)
   addFlag flagVals (name, arg) =
@@ -409,18 +397,10 @@ parseCLIFlags flagInfos flagVals = first CLIParseFailure $ foldlM go Map.empty f
           Nothing -> pure spec.flagDefault
           Just val -> spec.flagParse val
       MultiFlag{type_, parseMulti} -> do
-        vals' <-
+        parseMulti $
           case type_ of
-            ManyFlag ty ->
-              case ty of
-                FlagType_Switch -> pure (True <$ vals)
-                FlagType_Arg -> pure vals
-            SomeFlag ty -> do
-              valsNE <- maybe (throwRequired name) pure $ NonEmpty.nonEmpty vals
-              case ty of
-                FlagType_Switch -> pure (True <$ valsNE)
-                FlagType_Arg -> pure valsNE
-        parseMulti vals'
+            FlagType_Switch -> True <$ vals
+            FlagType_Arg -> vals
 
   throwRequired name = Left $ "Flag '" <> (Text.unpack . renderLongFlag) name <> "' is required"
   getLast = fmap NonEmpty.last . NonEmpty.nonEmpty

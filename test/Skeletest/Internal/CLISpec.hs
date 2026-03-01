@@ -144,7 +144,7 @@ spec_parseCliArgsWith = do
           `shouldSatisfy` parseFailure "Flag '--foo' does not take arguments, got: asdf"
 
   multiFlagSpec = do
-    let mkMultiFlags :: (Show a) => MultiFlagType a -> FlagInfos
+    let mkMultiFlags :: (Show a) => FlagType a -> FlagInfos
         mkMultiFlags type_ =
           mkFlagInfos "foo" (Just 'f') $
             MultiFlag
@@ -152,46 +152,36 @@ spec_parseCliArgsWith = do
               , parseMulti = pure . MyFlag . show
               }
     describe "MultiFlag" $ do
-      describe "ManyFlag" $ do
-        let flags = mkMultiFlags $ ManyFlag FlagType_Arg
-        it "parses none" $ do
-          parseCliArgsWith flags []
-            `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (MyFlag "[]")}
-        it "parses one" $ do
-          parseCliArgsWith flags ["--foo", "1"]
-            `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (MyFlag "[\"1\"]")}
-        it "parses multiple" $ do
-          parseCliArgsWith flags ["--foo", "1", "--foo", "2"]
-            `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (MyFlag "[\"1\",\"2\"]")}
-      describe "SomeFlag" $ do
-        let flags = mkMultiFlags $ SomeFlag FlagType_Arg
-        it "errors if not provided" $ do
-          parseCliArgsWith flags []
-            `shouldSatisfy` parseFailure "Flag '--foo' is required"
-        it "parses one" $ do
-          parseCliArgsWith flags ["--foo", "1"]
-            `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (MyFlag "\"1\" :| []")}
-        it "parses multiple" $ do
-          parseCliArgsWith flags ["--foo", "1", "--foo", "2"]
-            `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (MyFlag "\"1\" :| [\"2\"]")}
+      let flags = mkMultiFlags FlagType_Arg
+      it "parses none" $ do
+        parseCliArgsWith flags []
+          `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (MyFlag "[]")}
+      it "parses one" $ do
+        parseCliArgsWith flags ["--foo", "1"]
+          `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (MyFlag "[\"1\"]")}
+      it "parses multiple" $ do
+        parseCliArgsWith flags ["--foo", "1", "--foo", "2"]
+          `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (MyFlag "[\"1\",\"2\"]")}
+
       describe "FlagType_Switch" $ do
-        let flags = mkMultiFlags $ ManyFlag FlagType_Switch
+        let switchFlags = mkMultiFlags FlagType_Switch
         it "parses" $ do
-          parseCliArgsWith flags ["--foo", "--foo"]
+          parseCliArgsWith switchFlags ["--foo", "--foo"]
             `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (MyFlag "[True,True]")}
         it "parses multiple short flags" $ do
-          parseCliArgsWith flags ["-fff"]
+          parseCliArgsWith switchFlags ["-fff"]
             `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (MyFlag "[True,True,True]")}
         it "errors if argument provided" $ do
-          parseCliArgsWith flags ["--foo=asdf"]
+          parseCliArgsWith switchFlags ["--foo=asdf"]
             `shouldSatisfy` parseFailure "Flag '--foo' does not take arguments, got: asdf"
+
       describe "FlagType_Arg" $ do
-        let flags = mkMultiFlags $ ManyFlag FlagType_Arg
+        let argFlags = mkMultiFlags FlagType_Arg
         it "parses" $ do
-          parseCliArgsWith flags ["--foo", "1", "--foo", "2"]
+          parseCliArgsWith argFlags ["--foo", "1", "--foo", "2"]
             `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (MyFlag "[\"1\",\"2\"]")}
         it "errors if no argument" $ do
-          parseCliArgsWith flags ["--foo"]
+          parseCliArgsWith argFlags ["--foo"]
             `shouldSatisfy` parseFailure "Flag '--foo' requires argument"
 
   containsFlag f = (Map.lookup (typeOf f) >=> fromDynamic) P.>>> P.just (P.eq f)

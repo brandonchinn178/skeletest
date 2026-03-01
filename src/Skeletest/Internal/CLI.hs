@@ -14,9 +14,10 @@ module Skeletest.Internal.CLI (
   loadCliArgs,
 
   -- * Internal
-  parseCliArgs,
+  parseCliArgsWith,
+  FlagInfos,
+  SomeFlagSpec (..),
   CLIParseResult (..),
-  CLIFlagStore,
 ) where
 
 import Control.Monad (when)
@@ -26,7 +27,6 @@ import Data.Dynamic (Dynamic, fromDynamic, toDyn)
 import Data.Foldable (foldlM)
 import Data.Foldable qualified as Seq (toList)
 import Data.Foldable1 qualified as Foldable1
-import Data.Function (on)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map (Map)
@@ -35,7 +35,6 @@ import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy (..))
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
-import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
@@ -81,11 +80,6 @@ import UnliftIO.Exception (throwIO)
 --   ]
 -- @
 data Flag = forall a. (IsFlag a) => Flag (Proxy a)
-
-instance Eq Flag where
-  (==) = (==) `on` (\(Flag proxy) -> typeRep proxy)
-instance Ord Flag where
-  compare = compare `on` (\(Flag proxy) -> typeRep proxy)
 
 flag :: forall a. (IsFlag a) => Flag
 flag = Flag (Proxy @a)
@@ -245,84 +239,91 @@ data CLIParseResult
       , flagStore :: CLIFlagStore
       }
 
+type FlagInfos = [(Text, Maybe Char, SomeFlagSpec)]
+data SomeFlagSpec = forall a. (Typeable a) => SomeFlagSpec (FlagSpec a)
+
 parseCliArgs :: [Flag] -> [String] -> CLIParseResult
 parseCliArgs flags args = either id id $ do
-  longFlags <- extractLongFlags
-  shortFlags <- extractShortFlags
+  flagInfos <- getFlagInfos flags
+  pure $ parseCliArgsWith flagInfos args
 
-  -- quick sweep for --help/-h after flag validation; skip parsing flags if so
+getFlagInfos :: [Flag] -> Either CLIParseResult FlagInfos
+getFlagInfos flags = do
+  let infos = map fromFlag flags
+  checkDups [renderLongFlag name | (name, _, _) <- infos]
+  checkDups [renderShortFlag c | (_, Just c, _) <- infos]
+  pure infos
+ where
+  fromFlag (Flag (Proxy @a)) =
+    let name = Text.pack $ flagName @a
+        spec = SomeFlagSpec (flagSpec @a)
+     in (name, flagShort @a, spec)
+
+  checkDups vals =
+    case Map.keys . Map.filter (> 1) . Map.fromListWith (+) . map (,1 :: Int) $ vals of
+      [] -> pure ()
+      dup : _ -> Left . CLISetupFailure $ "Flag registered multiple times: " <> dup
+
+parseCliArgsWith :: FlagInfos -> [String] -> CLIParseResult
+parseCliArgsWith flagInfos args = either id id $ do
+  -- quick sweep for --help/-h; skip parsing flags if so
   when (any (`elem` ["--help", "-h"]) args) $ Left CLIHelpRequested
 
-  (rawFlags, args') <- collectCLIArgs longFlags shortFlags $ map Text.pack args
+  (flagVals, args') <- collectCLIArgs flagInfos $ map Text.pack args
   testTargets <- first CLIParseFailure $ parseTestTargets args'
-  flagStore <- parseCLIFlags flags rawFlags
+  flagStore <- parseCLIFlags flagInfos flagVals
   pure CLIParseSuccess{testTargets, flagStore}
- where
-  extractLongFlags =
-    toFlagMap renderLongFlag $
-      [ (Text.pack $ flagName @a, f)
-      | f@(Flag (Proxy :: Proxy a)) <- flags
-      ]
-
-  extractShortFlags =
-    toFlagMap renderShortFlag $
-      [ (shortFlag, f)
-      | f@(Flag (Proxy :: Proxy a)) <- flags
-      , Just shortFlag <- pure $ flagShort @a
-      ]
-
-  toFlagMap :: (Ord name) => (name -> Text) -> [(name, a)] -> Either CLIParseResult (Map name a)
-  toFlagMap renderFlag vals =
-    let go seen = \case
-          [] -> Right $ Map.fromList vals
-          (name, _) : xs
-            | name `Set.member` seen -> Left . CLISetupFailure $ "Flag registered multiple times: " <> renderFlag name
-            | otherwise -> go (Set.insert name seen) xs
-     in go Set.empty vals
 
 collectCLIArgs ::
-  Map Text Flag ->
-  Map Char Flag ->
+  FlagInfos ->
   [Text] ->
-  Either CLIParseResult (Map Flag [Text], [Text])
-collectCLIArgs longFlags shortFlags args0 = first CLIParseFailure $ do
-  (flagMap, posArgs) <- go Map.empty Seq.empty args0
-  pure (Map.map Seq.toList flagMap, Seq.toList posArgs)
+  Either CLIParseResult (Map Text [Text], [Text])
+collectCLIArgs flagInfos args0 = first CLIParseFailure $ do
+  (flagVals, posArgs) <- go Map.empty Seq.empty args0
+  pure (Map.map Seq.toList flagVals, Seq.toList posArgs)
  where
-  go :: Map Flag (Seq Text) -> Seq Text -> [Text] -> Either Text (Map Flag (Seq Text), Seq Text)
-  go flagMap posArgs = \case
-    [] -> Right (flagMap, posArgs)
-    "--" : rest -> Right (flagMap, posArgs <> Seq.fromList rest)
+  go :: Map Text (Seq Text) -> Seq Text -> [Text] -> Either Text (Map Text (Seq Text), Seq Text)
+  go flagVals posArgs = \case
+    [] -> Right (flagVals, posArgs)
+    "--" : rest -> Right (flagVals, posArgs <> Seq.fromList rest)
     curr : rest
-      | Just name0 <- Text.stripPrefix "--" curr -> do
-          let (name, mArg) =
-                case Text.breakOn "=" name0 of
-                  (_, "") -> (name0, Nothing)
-                  (n, post) -> (n, Just $ Text.drop 1 post)
-          flag_ <- lookupFlag renderLongFlag longFlags name
-          (arg, rest') <- validateArg flag_ (renderLongFlag name) mArg rest
-          go (addFlag flagMap flag_ arg) posArgs rest'
-      | Just chars <- Text.stripPrefix "-" curr -> do
-          char <-
-            case Text.unpack chars of
-              [c] -> pure c
-              _ -> Left $ "Invalid flag: -" <> chars
-          flag_ <- lookupFlag renderShortFlag shortFlags char
-          (arg, rest') <- validateArg flag_ (renderShortFlag char) Nothing rest
-          go (addFlag flagMap flag_ arg) posArgs rest'
+      | Just rawFlag <- Text.stripPrefix "--" curr -> do
+          (name, arg, rest') <- parseLongFlag rawFlag rest
+          go (addFlag flagVals name arg) posArgs rest'
+      | Just rawFlag <- Text.stripPrefix "-" curr -> do
+          (name, arg, rest') <- parseShortFlag rawFlag rest
+          go (addFlag flagVals name arg) posArgs rest'
       | otherwise -> do
-          go flagMap (posArgs Seq.|> curr) rest
+          go flagVals (posArgs Seq.|> curr) rest
 
-  lookupFlag :: (Ord name) => (name -> Text) -> Map name Flag -> name -> Either Text Flag
-  lookupFlag renderFlag flags name =
-    case Map.lookup name flags of
-      Nothing -> Left $ "Unknown flag: " <> renderFlag name
-      Just f -> pure f
+  longFlags = Map.fromList [(name, spec) | (name, _, spec) <- flagInfos]
+  parseLongFlag rawFlag rest = do
+    let (name, mArg) =
+          case Text.breakOn "=" rawFlag of
+            (_, "") -> (rawFlag, Nothing)
+            (n, post) -> (n, Just $ Text.drop 1 post)
+    SomeFlagSpec spec <-
+      maybe (Left $ "Unknown flag: " <> renderLongFlag name) pure $
+        Map.lookup name longFlags
+    (arg, rest') <- validateArg spec (renderLongFlag name) mArg rest
+    pure (name, arg, rest')
 
-  validateArg :: Flag -> Text -> Maybe Text -> [Text] -> Either Text (Text, [Text])
-  validateArg (Flag (Proxy @a)) name mArg rest = do
+  shortFlags = Map.fromList [(c, (name, spec)) | (name, Just c, spec) <- flagInfos]
+  parseShortFlag rawFlag rest = do
+    char <-
+      case Text.unpack rawFlag of
+        [c] -> pure c
+        _ -> Left $ "Invalid flag: -" <> rawFlag
+    (name, SomeFlagSpec spec) <-
+      maybe (Left $ "Unknown flag: " <> renderShortFlag char) pure $
+        Map.lookup char shortFlags
+    (arg, rest') <- validateArg spec (renderShortFlag char) Nothing rest
+    pure (name, arg, rest')
+
+  validateArg :: FlagSpec a -> Text -> Maybe Text -> [Text] -> Either Text (Text, [Text])
+  validateArg spec name mArg rest = do
     let expectsArg =
-          case flagSpec @a of
+          case spec of
             SwitchFlag{} -> False
             RequiredFlag{} -> True
             OptionalFlag{} -> True
@@ -335,27 +336,26 @@ collectCLIArgs longFlags shortFlags args0 = first CLIParseFailure $ do
         (Just arg, _) -> Left $ "Flag '" <> name <> "' does not take arguments, got: " <> arg
         _ -> pure ("", rest)
 
-  addFlag :: Map Flag (Seq Text) -> Flag -> Text -> Map Flag (Seq Text)
-  addFlag flagMap flag_ arg =
+  addFlag :: Map Text (Seq Text) -> Text -> Text -> Map Text (Seq Text)
+  addFlag flagVals name arg =
     Map.alter
       (Just . (Seq.|> arg) . fromMaybe Seq.empty)
-      flag_
-      flagMap
+      name
+      flagVals
 
-parseCLIFlags :: [Flag] -> Map Flag [Text] -> Either CLIParseResult CLIFlagStore
-parseCLIFlags flags flagMap = first CLIParseFailure $ foldlM go Map.empty flags
+parseCLIFlags :: FlagInfos -> Map Text [Text] -> Either CLIParseResult CLIFlagStore
+parseCLIFlags flagInfos flagVals = first CLIParseFailure $ foldlM go Map.empty flagInfos
  where
-  go flagStore flag_@(Flag (Proxy @a)) = do
-    let vals = Map.findWithDefault [] flag_ flagMap
-        name = renderLongFlag . Text.pack $ flagName @a
+  go flagStore (name, _, SomeFlagSpec spec0) = do
+    let vals = Map.findWithDefault [] name flagVals
         parseWith f = first Text.pack . f . Text.unpack
     val <-
-      case flagSpec @a of
+      case spec0 of
         spec@SwitchFlag{} ->
           pure (spec.flagFromBool $ (not . null) vals)
         spec@RequiredFlag{} ->
           case getLast vals of
-            Nothing -> Left $ "Flag '" <> name <> "' is required"
+            Nothing -> Left $ "Flag '" <> renderLongFlag name <> "' is required"
             Just val -> parseWith spec.flagParse val
         spec@OptionalFlag{} ->
           case getLast vals of

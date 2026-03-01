@@ -51,6 +51,8 @@ module Skeletest (
   Flag (..),
   IsFlag (..),
   FlagSpec (..),
+  MultiFlagType (..),
+  FlagType (..),
   getFlag,
 ) where
 

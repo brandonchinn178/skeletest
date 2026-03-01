@@ -1,5 +1,15 @@
 ## Unreleased
 
+New features:
+* Support repeated CLI flags with `MultiFlag`
+
+Runtime changes:
+* Fix `--foo=bar` to error when `--foo` is a `SwitchFlag`
+  * Previously, it would silently add `bar` as a positional argument
+* Allow multiple short CLI flags in one option
+  * `-abc` would be parsed as `-a -b -c` if all are switch flags
+  * `-abc` would be parsed as `-a -b c` if `-a` is a switch flag and `-b` is an argument flag
+
 ## v0.3.6
 
 Runtime changes:

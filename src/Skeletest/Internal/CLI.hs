@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
@@ -51,6 +52,10 @@ import System.Exit (exitFailure, exitSuccess)
 import System.IO (stderr)
 import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.Exception (throwIO)
+
+#if !MIN_VERSION_base(4, 20, 0)
+import Data.Foldable (foldl')
+#endif
 
 -- | Register a CLI flag.
 --
@@ -308,10 +313,11 @@ collectCLIArgs flagInfos args0 = first CLIParseFailure $ do
     curr : rest
       | Just rawFlag <- Text.stripPrefix "--" curr -> do
           (name, arg, rest') <- parseLongFlag rawFlag rest
-          go (addFlag flagVals name arg) posArgs rest'
+          go (addFlag flagVals (name, arg)) posArgs rest'
       | Just rawFlag <- Text.stripPrefix "-" curr -> do
-          (name, arg, rest') <- parseShortFlag rawFlag rest
-          go (addFlag flagVals name arg) posArgs rest'
+          (args, rest') <- parseShortFlags rawFlag rest
+          let flagVals' = foldl' addFlag flagVals args
+          go flagVals' posArgs rest'
       | otherwise -> do
           go flagVals (posArgs Seq.|> curr) rest
 
@@ -321,33 +327,42 @@ collectCLIArgs flagInfos args0 = first CLIParseFailure $ do
           case Text.breakOn "=" rawFlag of
             (_, "") -> (rawFlag, Nothing)
             (n, post) -> (n, Just $ Text.drop 1 post)
+        flagDisp = renderLongFlag name
     SomeFlagSpec spec <-
-      maybe (Left $ "Unknown flag: " <> renderLongFlag name) pure $
+      maybe (Left $ "Unknown flag: " <> flagDisp) pure $
         Map.lookup name longFlags
-    (arg, rest') <- validateArg spec (renderLongFlag name) mArg rest
+    (arg, rest') <- validateArg spec flagDisp mArg rest
     pure (name, arg, rest')
 
   shortFlags = Map.fromList [(c, (name, spec)) | (name, Just c, spec) <- flagInfos]
-  parseShortFlag rawFlag rest = do
-    char <-
-      case Text.unpack rawFlag of
-        [c] -> pure c
-        _ -> Left $ "Invalid flag: -" <> rawFlag
+  parseShortFlags rawFlag rest = do
+    (char, rawFlag') <-
+      maybe (Left "Invalid flag: -") pure $
+        Text.uncons rawFlag
+    let flagDisp = renderShortFlag char
     (name, SomeFlagSpec spec) <-
-      maybe (Left $ "Unknown flag: " <> renderShortFlag char) pure $
+      maybe (Left $ "Unknown flag: " <> flagDisp) pure $
         Map.lookup char shortFlags
-    (arg, rest') <- validateArg spec (renderShortFlag char) Nothing rest
-    pure (name, arg, rest')
+    let mArg =
+          if (not . Text.null) rawFlag' && expectsArg spec
+            then Just rawFlag'
+            else Nothing
+        parseNext =
+          if (not . Text.null) rawFlag' && (not . expectsArg) spec
+            then parseShortFlags rawFlag'
+            else \rest' -> pure ([], rest')
+    (arg, rest') <- validateArg spec flagDisp mArg rest
+    (args, rest'') <- parseNext rest'
+    pure ((name, arg) : args, rest'')
 
-  validateArg :: FlagSpec a -> Text -> Maybe Text -> [Text] -> Either Text (Text, [Text])
-  validateArg spec name mArg rest = do
+  validateArg spec flagDisp mArg rest = do
     if expectsArg spec
       then case (mArg, rest) of
         (Just arg, _) -> pure (arg, rest)
         (Nothing, arg : rest') -> pure (arg, rest')
-        (Nothing, []) -> Left $ "Flag '" <> name <> "' requires argument"
+        (Nothing, []) -> Left $ "Flag '" <> flagDisp <> "' requires argument"
       else case (mArg, rest) of
-        (Just arg, _) -> Left $ "Flag '" <> name <> "' does not take arguments, got: " <> arg
+        (Just arg, _) -> Left $ "Flag '" <> flagDisp <> "' does not take arguments, got: " <> arg
         _ -> pure ("", rest)
 
   expectsArg :: FlagSpec a -> Bool
@@ -366,8 +381,8 @@ collectCLIArgs flagInfos args0 = first CLIParseFailure $ do
       ManyFlag ty -> f ty
       SomeFlag ty -> f ty
 
-  addFlag :: Map Text (Seq Text) -> Text -> Text -> Map Text (Seq Text)
-  addFlag flagVals name arg =
+  addFlag :: Map Text (Seq Text) -> (Text, Text) -> Map Text (Seq Text)
+  addFlag flagVals (name, arg) =
     Map.alter
       (Just . (Seq.|> arg) . fromMaybe Seq.empty)
       name

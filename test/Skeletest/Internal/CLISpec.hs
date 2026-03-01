@@ -19,6 +19,8 @@ spec = do
 
 newtype MyFlag = MyFlag String
   deriving (Eq)
+newtype MyFlag2 = MyFlag2 String
+  deriving (Eq)
 
 spec_parseCliArgsWith :: Spec
 spec_parseCliArgsWith = do
@@ -62,9 +64,26 @@ spec_parseCliArgsWith = do
       it "parses" $ do
         parseCliArgsWith flags ["-f", "123"]
           `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (MyFlag "123")}
-      it "errors if argument has multiple characters" $ do
-        parseCliArgsWith flags ["-fasdf"]
-          `shouldSatisfy` parseFailure "Invalid flag: -fasdf"
+      it "parses multiple switches at once" $ do
+        let flags' =
+              [ ("flag-a", Just 'a', SomeFlagSpec $ SwitchFlag (MyFlag . show))
+              , ("flag-b", Just 'b', SomeFlagSpec $ SwitchFlag (MyFlag2 . show))
+              ]
+            expected =
+              P.and
+                [ containsFlag (MyFlag "True")
+                , containsFlag (MyFlag2 "True")
+                ]
+        parseCliArgsWith flags' ["-ab"]
+          `shouldSatisfy` P.con CLIParseSuccess{flagStore = expected}
+      it "parses short flag with arg without space" $ do
+        let flags' =
+              mkFlagInfos "foo" (Just 'f') $
+                RequiredFlag
+                  { flagParse = pure . MyFlag
+                  }
+        parseCliArgsWith flags' ["-fasdf"]
+          `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (MyFlag "asdf")}
       it "errors if unknown" $ do
         parseCliArgsWith [] ["-x"]
           `shouldSatisfy` parseFailure "Unknown flag: -x"
@@ -127,7 +146,7 @@ spec_parseCliArgsWith = do
   multiFlagSpec = do
     let mkMultiFlags :: (Show a) => MultiFlagType a -> FlagInfos
         mkMultiFlags type_ =
-          mkFlagInfos "foo" Nothing $
+          mkFlagInfos "foo" (Just 'f') $
             MultiFlag
               { type_
               , parseMulti = pure . MyFlag . show
@@ -160,6 +179,9 @@ spec_parseCliArgsWith = do
         it "parses" $ do
           parseCliArgsWith flags ["--foo", "--foo"]
             `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (MyFlag "[True,True]")}
+        it "parses multiple short flags" $ do
+          parseCliArgsWith flags ["-fff"]
+            `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (MyFlag "[True,True,True]")}
         it "errors if argument provided" $ do
           parseCliArgsWith flags ["--foo=asdf"]
             `shouldSatisfy` parseFailure "Flag '--foo' does not take arguments, got: asdf"

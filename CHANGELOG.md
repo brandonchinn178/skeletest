@@ -1,5 +1,7 @@
 ## Unreleased
 
+## v0.3.7
+
 New features:
 * Support repeated CLI flags with `MultiFlag`
 

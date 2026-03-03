@@ -44,6 +44,7 @@ module Skeletest.Predicate (
   hasPrefix,
   hasInfix,
   hasSuffix,
+  empty,
 
   -- * IO
   returns,

@@ -61,6 +61,7 @@ module Skeletest.Internal.Predicate (
   hasPrefix,
   hasInfix,
   hasSuffix,
+  empty,
 
   -- * IO
   returns,
@@ -82,6 +83,7 @@ import Data.Maybe (isJust, isNothing, listToMaybe)
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Text.Lazy qualified as LazyText
 import Debug.RecoverRTTI (anythingToString)
 import GHC.Generics ((:*:) (..))
 import Skeletest.Internal.Error (invariantViolation)
@@ -586,14 +588,22 @@ class HasSubsequences a where
   isPrefixOf :: a -> a -> Bool
   isInfixOf :: a -> a -> Bool
   isSuffixOf :: a -> a -> Bool
+  isEmpty :: a -> Bool
 instance (Eq a) => HasSubsequences [a] where
   isPrefixOf = List.isPrefixOf
   isInfixOf = List.isInfixOf
   isSuffixOf = List.isSuffixOf
+  isEmpty = List.null
 instance HasSubsequences Text where
   isPrefixOf = Text.isPrefixOf
   isInfixOf = Text.isInfixOf
   isSuffixOf = Text.isSuffixOf
+  isEmpty = Text.null
+instance HasSubsequences LazyText.Text where
+  isPrefixOf = LazyText.isPrefixOf
+  isInfixOf = LazyText.isInfixOf
+  isSuffixOf = LazyText.isSuffixOf
+  isEmpty = LazyText.null
 
 -- | A predicate checking if the input has the given prefix
 --
@@ -669,6 +679,31 @@ hasSuffix suffix =
  where
   disp = "has suffix " <> render suffix
   dispNeg = "does not have suffix " <> render suffix
+
+-- | A predicate checking if the input is empty.
+--
+-- >>> [] `shouldSatisfy` P.empty
+-- >>> "" `shouldSatisfy` P.empty
+empty :: (HasSubsequences a, Monad m) => Predicate m a
+empty =
+  Predicate
+    { predicateFunc = \val -> do
+        let success = isEmpty val
+        pure
+          PredicateFuncResult
+            { predicateSuccess = success
+            , predicateExplain =
+                if success
+                  then render val <> " " <> disp
+                  else render val <> " " <> dispNeg
+            , predicateShowFailCtx = noCtx
+            }
+    , predicateDisp = disp
+    , predicateDispNeg = dispNeg
+    }
+ where
+  disp = "is empty"
+  dispNeg = "is not empty"
 
 {----- IO -----}
 

@@ -825,14 +825,9 @@ matchesSnapshot =
     { predicateFunc = \actual -> do
         SnapshotUpdateFlag doUpdate <- getFlag
         testInfo <- getTestInfo
-        snapshotIndex <- getAndIncSnapshotIndex
+        index <- getAndIncSnapshotIndex
         renderers <- getSnapshotRenderers
-        let ctx =
-              SnapshotContext
-                { snapshotRenderers = renderers
-                , snapshotTestInfo = testInfo
-                , snapshotIndex
-                }
+        let ctx = SnapshotContext{renderers, testInfo, index}
 
         result <-
           if doUpdate

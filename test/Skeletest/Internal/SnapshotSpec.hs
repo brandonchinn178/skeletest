@@ -180,8 +180,8 @@ genSnapshotFileRaw = do
     pure (ident, vals)
 
   genSnapshotVal = do
-    snapshotContent <- Gen.text rangeSnapshotSize Gen.unicode
-    snapshotLang <- Gen.maybe $ Gen.text (Range.linear 1 5) Gen.unicode
+    content <- Gen.text rangeSnapshotSize Gen.unicode
+    lang <- Gen.maybe $ Gen.text (Range.linear 1 5) Gen.unicode
     pure SnapshotValue{..}
 
 genSnapshotFile :: Gen SnapshotFile

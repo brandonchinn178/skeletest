@@ -1,6 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoFieldSelectors #-}
@@ -132,33 +133,27 @@ instance IsFlag SnapshotUpdateFlag where
 {----- Running snapshot -----}
 
 data SnapshotContext = SnapshotContext
-  { snapshotRenderers :: [SnapshotRenderer]
-  , snapshotTestInfo :: TestInfo
-  , snapshotIndex :: Int
+  { renderers :: [SnapshotRenderer]
+  , testInfo :: TestInfo
+  , index :: Int
   }
 
 updateSnapshot :: (Typeable a, MonadIO m) => SnapshotContext -> a -> m ()
-updateSnapshot snapshotContext testResult = do
+updateSnapshot context testResult = do
   SnapshotFileFixture{snapshotFileRef} <- getFixture
   modifyIORef' snapshotFileRef (Just . setSnapshot . fromMaybe emptySnapshotFile)
  where
-  SnapshotContext
-    { snapshotRenderers = renderers
-    , snapshotTestInfo = testInfo@TestInfo{file}
-    , snapshotIndex
-    } = snapshotContext
-
   emptySnapshotFile =
     SnapshotFile
-      { testFile = Text.pack file
+      { testFile = Text.pack context.testInfo.file
       , snapshots = Map.empty
       }
 
-  testIdentifier = toTestIdentifier testInfo
-  renderedTestResult = renderVal renderers testResult
-  setSnapshot snapshotFile@SnapshotFile{snapshots} =
-    let setForTest = Map.Utils.adjustNested (setAt snapshotIndex renderedTestResult) testIdentifier
-     in snapshotFile{snapshots = setForTest snapshots}
+  testIdentifier = toTestIdentifier context.testInfo
+  renderedTestResult = renderVal context.renderers testResult
+  setSnapshot file =
+    let setForTest = Map.Utils.adjustNested (setAt context.index renderedTestResult) testIdentifier
+     in file{snapshots = setForTest file.snapshots}
 
   -- Set the given snapshot at the given index. If the index is too large,
   -- fill in with empty snapshots.
@@ -172,7 +167,7 @@ updateSnapshot snapshotContext testResult = do
      in if i0 < 0
           then invariantViolation $ "Got negative snapshot index: " <> show i0
           else go i0
-  emptySnapshotVal = SnapshotValue{snapshotContent = "", snapshotLang = Nothing}
+  emptySnapshotVal = SnapshotValue{content = "", lang = Nothing}
 
 data SnapshotResult
   = SnapshotMissing
@@ -184,7 +179,7 @@ data SnapshotResult
   deriving (Show, Eq)
 
 checkSnapshot :: (Typeable a, MonadIO m) => SnapshotContext -> a -> m SnapshotResult
-checkSnapshot snapshotContext testResult =
+checkSnapshot context testResult =
   fmap (either id absurd) . runExceptT $ do
     SnapshotFileFixture{snapshotFileRef} <- getFixture
     fileSnapshots <-
@@ -192,23 +187,17 @@ checkSnapshot snapshotContext testResult =
         Nothing -> returnE SnapshotMissing
         Just SnapshotFile{snapshots} -> pure snapshots
 
-    let snapshots = Map.Utils.findOrEmpty (toTestIdentifier testInfo) fileSnapshots
-    snapshot <- maybe (returnE SnapshotMissing) pure $ safeIndex snapshots snapshotIndex
+    let snapshots = Map.Utils.findOrEmpty (toTestIdentifier context.testInfo) fileSnapshots
+    snapshot <- maybe (returnE SnapshotMissing) pure $ safeIndex snapshots context.index
 
-    let (snapshotContent, renderedTestResult) = (getContent snapshot, getContent renderedTestResultVal)
+    let (snapshotContent, renderedTestResult) = (snapshot.content, renderedTestResultVal.content)
     returnE $
       if snapshotContent == renderedTestResult
         then SnapshotMatches
         else SnapshotDiff{snapshotContent, renderedTestResult}
  where
-  SnapshotContext
-    { snapshotRenderers = renderers
-    , snapshotTestInfo = testInfo
-    , snapshotIndex
-    } = snapshotContext
-
   returnE = throwE
-  renderedTestResultVal = renderVal renderers testResult
+  renderedTestResultVal = renderVal context.renderers testResult
 
   safeIndex xs0 i0 =
     let go = \cases
@@ -228,13 +217,10 @@ data SnapshotFile = SnapshotFile
   deriving (Show, Eq)
 
 data SnapshotValue = SnapshotValue
-  { snapshotContent :: Text
-  , snapshotLang :: Maybe Text
+  { content :: Text
+  , lang :: Maybe Text
   }
   deriving (Show, Eq)
-
-getContent :: SnapshotValue -> Text
-getContent SnapshotValue{snapshotContent} = snapshotContent
 
 type TestIdentifier = [Text]
 
@@ -245,7 +231,7 @@ getSnapshotPath testFile = testDir </> "__snapshots__" </> snapshotFileName
   snapshotFileName = replaceExtension testFileName ".snap.md"
 
 toTestIdentifier :: TestInfo -> TestIdentifier
-toTestIdentifier TestInfo{contexts, name} = contexts <> [name]
+toTestIdentifier testInfo = testInfo.contexts <> [testInfo.name]
 
 decodeSnapshotFile :: Text -> Maybe SnapshotFile
 decodeSnapshotFile = parseFile . Text.lines
@@ -262,14 +248,11 @@ decodeSnapshotFile = parseFile . Text.lines
     _ -> Nothing
 
   parseSections ::
-    SnapshotFile ->
-    -- \^ The parsed snapshot file so far
-    Maybe [Text] ->
-    -- \^ The current test identifier, if one is set
-    [Text] ->
-    -- \^ The rest of the lines to process
+    SnapshotFile -> -- The parsed snapshot file so far
+    Maybe [Text] -> -- The current test identifier, if one is set
+    [Text] -> -- The rest of the lines to process
     Maybe SnapshotFile
-  parseSections snapshotFile@SnapshotFile{snapshots} mTest = \case
+  parseSections snapshotFile mTest = \case
     [] -> pure snapshotFile
     line : rest
       -- ignore empty lines
@@ -277,7 +260,7 @@ decodeSnapshotFile = parseFile . Text.lines
       -- found a test section
       | Just sectionName <- Text.stripPrefix "## " line -> do
           let testIdentifier = map Text.strip $ Text.splitOn " / " sectionName
-          let snapshotFile' = snapshotFile{snapshots = Map.insert testIdentifier [] snapshots}
+          let snapshotFile' = snapshotFile{snapshots = Map.insert testIdentifier [] snapshotFile.snapshots}
           parseSections snapshotFile' (Just testIdentifier) rest
       -- found the beginning of a snapshot
       | Just lang <- (Text.stripPrefix "```" . Text.strip) line -> do
@@ -286,10 +269,10 @@ decodeSnapshotFile = parseFile . Text.lines
           let
             snapshotVal =
               SnapshotValue
-                { snapshotContent = snapshot
-                , snapshotLang = if Text.null lang then Nothing else Just lang
+                { content = snapshot
+                , lang = if Text.null lang then Nothing else Just lang
                 }
-            snapshotFile' = snapshotFile{snapshots = Map.adjust (<> [snapshotVal]) testIdentifier snapshots}
+            snapshotFile' = snapshotFile{snapshots = Map.adjust (<> [snapshotVal]) testIdentifier snapshotFile.snapshots}
           parseSections snapshotFile' mTest rest'
       -- anything else is invalid
       | otherwise -> Nothing
@@ -301,26 +284,26 @@ decodeSnapshotFile = parseFile . Text.lines
       | otherwise -> parseSnapshot (snapshot <> [line]) rest
 
 encodeSnapshotFile :: SnapshotFile -> Text
-encodeSnapshotFile SnapshotFile{..} =
+encodeSnapshotFile snapshotFile =
   Text.intercalate "\n" $
-    h1 testFile : concatMap toSection (Map.toList snapshots)
+    h1 snapshotFile.testFile : concatMap toSection (Map.toList snapshotFile.snapshots)
  where
   toSection (testIdentifier, snaps) =
     h2 (Text.intercalate " / " testIdentifier) : map codeBlock snaps
 
   h1 s = "# " <> s <> "\n"
   h2 s = "## " <> s <> "\n"
-  codeBlock SnapshotValue{..} =
+  codeBlock snapshot =
     Text.concat
-      [ "```" <> fromMaybe "" snapshotLang <> "\n"
-      , snapshotContent
+      [ "```" <> fromMaybe "" snapshot.lang <> "\n"
+      , snapshot.content
       , "```\n"
       ]
 
 normalizeSnapshotFile :: SnapshotFile -> SnapshotFile
-normalizeSnapshotFile file@SnapshotFile{snapshots} =
+normalizeSnapshotFile file =
   file
-    { snapshots = Map.fromList . map normalize . Map.toList $ snapshots
+    { snapshots = Map.fromList . map normalize . Map.toList $ file.snapshots
     }
  where
   normalize (testIdentifier, vals) =
@@ -373,20 +356,20 @@ renderVal renderers a =
     case mapMaybe tryRender renderers of
       [] ->
         SnapshotValue
-          { snapshotContent = Text.pack $ anythingToString a
-          , snapshotLang = Nothing
+          { content = Text.pack $ anythingToString a
+          , lang = Nothing
           }
       rendered : _ -> rendered
  where
-  tryRender SnapshotRenderer{..} =
-    let toValue v = SnapshotValue{snapshotContent = render v, snapshotLang}
+  tryRender renderer@SnapshotRenderer{render} =
+    let toValue v = SnapshotValue{content = render v, lang = renderer.snapshotLang}
      in toValue <$> Typeable.cast a
 
 normalizeSnapshotVal :: SnapshotValue -> SnapshotValue
-normalizeSnapshotVal SnapshotValue{..} =
+normalizeSnapshotVal snapshot =
   SnapshotValue
-    { snapshotContent = normalizeTrailingNewlines snapshotContent
-    , snapshotLang = collapse $ Text.filter isAlpha <$> snapshotLang
+    { content = normalizeTrailingNewlines snapshot.content
+    , lang = collapse $ Text.filter isAlpha <$> snapshot.lang
     }
  where
   collapse = \case

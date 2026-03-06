@@ -22,6 +22,7 @@ module Skeletest.Main (
 ) where
 
 import Control.Monad (when)
+import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Skeletest.Internal.CLI (Flag, flag, loadCliArgs)
 import Skeletest.Internal.Capture (CaptureOutputFlag)
@@ -40,6 +41,7 @@ import Skeletest.Internal.Spec (
   applyTestSelectionsHook,
   focusHook,
   manualTestsHook,
+  newTestSummary,
   runSpecs,
   skipHook,
   xfailHook,
@@ -59,12 +61,15 @@ runSkeletest' Plugin{hooks = hooks0, ..} testModules = handleUnknownErrors $ do
   setSnapshotRenderers (snapshotRenderers <> defaultSnapshotRenderers)
 
   let initialSpecs = map mkSpec testModules
+  testSummary <- newTestSummary initialSpecs
+
   specs <- hooks.modifySpecRegistry selections pure initialSpecs
   when (null $ concatMap (getSpecTests . (.specSpec)) specs) $ do
     Text.hPutStrLn IO.stderr $ Color.red "ERROR: No tests selected!"
     exitWith ExitNoTests
 
-  exitCode <- hooks.runSpecs (runSpecs hooks) specs
+  exitCode <- hooks.runSpecs (runSpecs hooks testSummary) specs
+  testSummary.render >>= hooks.modifyTestSummary >>= displaySummary
   exitWith exitCode
  where
   hooks = mconcat builtinHooks <> hooks0
@@ -90,3 +95,8 @@ runSkeletest' Plugin{hooks = hooks0, ..} testModules = handleUnknownErrors $ do
       { specPath
       , specSpec
       }
+
+  displaySummary summary = do
+    let colorize = Text.unlines . map Color.yellow . Text.lines
+    Text.putStrLn ""
+    Text.putStrLn . colorize . Text.strip $ summary

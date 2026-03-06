@@ -6,6 +6,9 @@
 ./ExampleSpec.hs
     before: OK
     test: OK
+
+═════ Test report ═════
+➤ 2 tests ran in 0.00s
 ```
 
 ## stdout / is rendered on test failure
@@ -25,6 +28,10 @@
 │ line1
 │ line2
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 2 tests ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## stdout / is rendered on test error
@@ -44,6 +51,10 @@
 │ line1
 │ line2
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 2 tests ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## stdout / is not captured with --capture-output=off
@@ -58,6 +69,9 @@ OK
 line2
 OK
 
+═════ Test report ═════
+➤ 2 tests ran in 0.00s
+
 >>> stderr
 ```
 
@@ -67,6 +81,9 @@ OK
 ./ExampleSpec.hs
     before: OK
     test: OK
+
+═════ Test report ═════
+➤ 2 tests ran in 0.00s
 ```
 
 ## stderr / is rendered on test failure
@@ -86,6 +103,10 @@ OK
 │ line1
 │ line2
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 2 tests ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## stderr / is rendered on test error
@@ -105,6 +126,10 @@ OK
 │ line1
 │ line2
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 2 tests ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## stderr / is not captured with --capture-output=off
@@ -115,6 +140,9 @@ OK
 ./ExampleSpec.hs
     before: OK
     test: OK
+
+═════ Test report ═════
+➤ 2 tests ran in 0.00s
 
 >>> stderr
 

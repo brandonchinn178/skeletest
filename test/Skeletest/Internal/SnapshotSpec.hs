@@ -319,11 +319,14 @@ spec = do
       ]
     let expected6 = Nothing
 
-    (stdout, stderr) <- expectCode 5 $ runner.runTestsWith def
-    stderr `shouldBe` ""
-    stdout `shouldSatisfy` P.matchesSnapshot
+    (stdout1, stderr1) <- expectCode 5 $ runner.runTestsWith def
+    stderr1 `shouldBe` ""
+    stdout1 `shouldSatisfy` P.matchesSnapshot
 
-    _ <- expectSuccess $ runner.runTestsWith def{cliArgs = ["-u"]}
+    (stdout2, stderr2) <- expectSuccess $ runner.runTestsWith def{cliArgs = ["-u"]}
+    stderr2 `shouldBe` ""
+    stdout2 `shouldSatisfy` P.matchesSnapshot
+
     runner.lookupTestFile "__snapshots__/Test1Spec.snap.md"
       `shouldReturn` expected1
     runner.lookupTestFile "__snapshots__/Test2Spec.snap.md"

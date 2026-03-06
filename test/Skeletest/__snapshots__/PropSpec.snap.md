@@ -11,6 +11,10 @@
 │ Failed after 1 tests.
 │ Rerun with --seed=0:0 to reproduce.
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## prop / renders Skeletest errors well
@@ -23,6 +27,10 @@
 │ Failed after 1 tests.
 │ Rerun with --seed=0:0 to reproduce.
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## prop / fails when configuration occurs after forAll
@@ -35,6 +43,10 @@
 │ Failed after 1 tests.
 │ Rerun with --seed=0:0 to reproduce.
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## prop / fails when configuration occurs after IO actions
@@ -47,6 +59,10 @@
 │ Failed after 1 tests.
 │ Rerun with --seed=0:0 to reproduce.
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## prop / supports MonadFail
@@ -64,6 +80,10 @@
 │ Failed after 1 tests.
 │ Rerun with --seed=0:0 to reproduce.
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## setDiscardLimit / sets discard limit
@@ -74,6 +94,10 @@
 │ Gave up after 10 discards.
 │ Passed 0 tests.
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## === / shows a helpful failure message
@@ -112,4 +136,8 @@
 │   0 = (read . show) 0
 │   0 = id 0
 ╰────────────────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 2 tests ran in 0.00s
+  • 2 tests failed ✘
 ```

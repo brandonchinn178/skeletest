@@ -8,6 +8,10 @@
         broken tests
     should not run either: SKIP
         broken tests
+
+═════ Test report ═════
+➤ 2 tests ran in 0.00s
+  • 2 tests skipped ≫
 ```
 
 ## xfail / checks for expected failures
@@ -18,6 +22,9 @@
         broken tests
     should fail too: XFAIL
         broken tests
+
+═════ Test report ═════
+➤ 2 tests ran in 0.00s
 ```
 
 ## xfail / errors on unexpected passes
@@ -28,6 +35,10 @@
         broken tests
     should fail too: XPASS
         broken tests
+
+═════ Test report ═════
+➤ 2 tests ran in 0.00s
+  • 2 tests failed ✘
 ```
 
 ## focus / only runs focused test
@@ -35,6 +46,10 @@
 ```
 ./ExampleSpec.hs
     in progress: OK
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test deselected
 ```
 
 ## focus / fails with -Werror

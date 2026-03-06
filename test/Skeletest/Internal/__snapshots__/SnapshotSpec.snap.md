@@ -16,6 +16,10 @@
 │ @@ --0,0 +1 @@
 │ +example result
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## updates an existing snapshot
@@ -39,6 +43,10 @@
 │ -old2
 │ +new2
 ╰─────────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## detects corrupted snapshot files
@@ -54,6 +62,10 @@
 ║
 ║  Update/remove these files with --update.
 ╙─────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## renders JSON values
@@ -92,4 +104,26 @@
 ║
 ║  Update/remove these files with --update.
 ╙─────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 6 tests ran in 0.00s
+```
+
+```
+./Test1Spec.hs
+    test other: OK
+./Test2Spec.hs
+    test other: OK
+./Test3Spec.hs
+    test: OK
+    test other: OK
+./Test4Spec.hs
+    test: OK
+./Test5Spec.hs
+    test: OK
+
+═════ Test report ═════
+➤ 6 tests ran in 0.00s
+➤ 5 snapshots updated
+➤ 1 snapshot file cleaned up
 ```

@@ -24,6 +24,7 @@ module Skeletest.TestUtils.Integration (
 ) where
 
 import Control.Monad (guard)
+import Data.Char (isDigit)
 import Data.Default (Default (..))
 import Data.IORef (IORef, modifyIORef, newIORef, readIORef)
 import Data.Text (Text)
@@ -140,7 +141,27 @@ instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, S
       (code, stdout, stderr) <- Process.readCreateProcessWithExitCode proc ""
       pure (code, sanitize stdout, sanitize stderr)
 
-    sanitize = Text.unpack . stripOverwrites . stripControlChars . Text.strip . Text.pack
+    sanitize =
+      Text.unpack
+        . scrubDurations
+        . stripOverwrites
+        . stripControlChars
+        . Text.strip
+        . Text.pack
+    scrubDurations s =
+      case Text.break isDigit s of
+        (pre, post)
+          -- Check if it's of the form `#.##s`
+          | (duration, post') <- Text.splitAt 5 post
+          , [c0, '.', c1, c2, 's'] <- Text.unpack duration
+          , all isDigit [c0, c1, c2] ->
+              pre <> "0.00s" <> scrubDurations post'
+          -- Consume the digit, continue on the rest of the string
+          | Just (c, post') <- Text.uncons post ->
+              pre <> Text.cons c (scrubDurations post')
+          -- 'post' is empty; we've checked the whole string
+          | otherwise ->
+              pre
     stripOverwrites s =
       case Text.breakOn "\r" s of
         (_, "") -> s

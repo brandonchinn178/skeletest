@@ -3,51 +3,46 @@
 
 module Skeletest.Internal.Error (
   SkeletestError (..),
+  skeletestError,
   skeletestPluginError,
   invariantViolation,
 ) where
 
+import Control.Monad.IO.Class (MonadIO)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import GHC qualified
-import UnliftIO.Exception (Exception (..), impureThrow)
+import UnliftIO.Exception (Exception (..), impureThrow, throwIO)
 
 data SkeletestError
-  = -- | A user error during compilation, e.g. during the preprocessor or plugin phases.
+  = -- | Thrown for most errors, unless an error needs to be specially caught.
+    SkeletestError Text
+  | -- | A user error during compilation, e.g. during the preprocessor or plugin phases.
     CompilationError (Maybe GHC.SrcSpan) Text
-  | -- | An error in a situation that should never happen, and indicates a bug.
-    InvariantViolation Text
-  | CliFlagNotFound Text
-  | FixtureCircularDependency [Text]
-  | SnapshotFileCorrupted FilePath
-  | PropConfigAfterIO
   deriving (Show)
 
 instance Exception SkeletestError where
   displayException =
     Text.unpack . \case
+      SkeletestError msg -> msg
       CompilationError _ msg ->
         Text.unlines
           [ ""
           , "******************** skeletest failure ********************"
           , msg
           ]
-      InvariantViolation msg ->
-        Text.unlines
-          [ "Invariant violation: " <> msg
-          , "**** This is a skeletest bug. Please report it at https://github.com/brandonchinn178/skeletest/issues"
-          ]
-      CliFlagNotFound name ->
-        "CLI flag '" <> name <> "' was not registered. Did you add it to cliFlags in Main.hs?"
-      FixtureCircularDependency fixtures ->
-        "Found circular dependency when resolving fixtures: " <> Text.intercalate " -> " fixtures
-      SnapshotFileCorrupted fp ->
-        "Snapshot file was corrupted: " <> Text.pack fp
-      PropConfigAfterIO ->
-        "Property configuration function must be done before any forAll or IO actions"
+
+skeletestError :: (MonadIO m) => Text -> m a
+skeletestError = throwIO . SkeletestError
 
 skeletestPluginError :: Maybe GHC.SrcSpan -> String -> a
 skeletestPluginError mloc = impureThrow . CompilationError mloc . Text.pack
 
 invariantViolation :: String -> a
-invariantViolation = impureThrow . InvariantViolation . Text.pack
+invariantViolation = impureThrow . SkeletestError . Text.pack . toMessage
+ where
+  toMessage msg =
+    unlines
+      [ "Invariant violation: " <> msg
+      , "**** This is a skeletest bug. Please report it at https://github.com/brandonchinn178/skeletest/issues"
+      ]

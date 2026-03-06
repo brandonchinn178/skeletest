@@ -2,6 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoFieldSelectors #-}
 
 module Skeletest.Internal.Fixtures (
@@ -33,7 +34,7 @@ import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy (..))
 import Data.Text qualified as Text
 import Data.Typeable (TypeRep, Typeable, eqT, typeOf, typeRep, (:~:) (Refl))
-import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
+import Skeletest.Internal.Error (invariantViolation, skeletestError)
 import Skeletest.Internal.TestInfo (getTestInfo)
 import Skeletest.Internal.TestInfo qualified as TestInfo
 import Skeletest.Internal.Utils.Map qualified as Map.Utils
@@ -110,11 +111,16 @@ getFixture = liftIO $ do
         Just FixtureInProgress ->
           -- get list of fixtures causing a circular dependency
           let fixtures = map fst . filter (isInProgress . snd) . OMap.assocs $ getScopedFixtures registry
-           in (registry, Left $ FixtureCircularDependency $ map (Text.pack . show) (fixtures <> [rep]))
+              msg =
+                Text.unwords
+                  [ "Found circular dependency when resolving fixtures:"
+                  , Text.intercalate " -> " $ map (Text.pack . show) (fixtures <> [rep])
+                  ]
+           in (registry, Left msg)
 
   case cachedFixture of
     -- error when getting fixture
-    Left e -> throwIO e
+    Left msg -> skeletestError msg
     -- fixture was cached, return it
     Right (Just fixture) -> pure fixture
     -- otherwise, execute it (allowing it to request other fixtures) and cache the result.

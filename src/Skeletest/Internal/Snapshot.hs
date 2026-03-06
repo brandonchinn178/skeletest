@@ -50,7 +50,7 @@ import Data.Typeable qualified as Typeable
 import Data.Void (absurd)
 import Debug.RecoverRTTI (anythingToString)
 import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..))
-import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
+import Skeletest.Internal.Error (invariantViolation, skeletestError)
 import Skeletest.Internal.Fixtures (
   Fixture (..),
   FixtureScope (..),
@@ -109,7 +109,7 @@ instance Fixture SnapshotFileFixture where
         Right contents ->
           case decodeSnapshotFile contents of
             Just snapshotFile -> pure $ Just snapshotFile
-            Nothing -> throwIO $ SnapshotFileCorrupted snapshotPath
+            Nothing -> skeletestError $ "Snapshot file was corrupted: " <> Text.pack snapshotPath
     let snapshotChanged newSnapshot = mSnapshotFile /= Just newSnapshot
 
     snapshotFileRef <- newIORef mSnapshotFile

@@ -31,6 +31,64 @@ spec = do
     let normalizeSnapshotFile' = foldr (.) id $ replicate n normalizeSnapshotFile
     normalizeSnapshotFile' file `shouldBe` normalizeSnapshotFile file
 
+  integration . it "creates a new snapshot" $ do
+    runner <- getFixture @TestRunner
+    runner.addTestFile "ExampleSpec.hs" $
+      [ "module ExampleSpec (spec) where"
+      , ""
+      , "import Skeletest"
+      , "import qualified Skeletest.Predicate as P"
+      , ""
+      , "spec = it \"test\" $ do"
+      , "  \"example result\" `shouldSatisfy` P.matchesSnapshot"
+      ]
+
+    (stdout, stderr) <- expectFailure $ runner.runTestsWith def{cliArgs = []}
+    stderr `shouldBe` ""
+    stdout `shouldSatisfy` P.matchesSnapshot
+
+    _ <- expectSuccess $ runner.runTestsWith def{cliArgs = ["-u"]}
+    snapshot <- runner.readTestFile "__snapshots__/ExampleSpec.snap.md"
+    snapshot `shouldSatisfy` P.hasInfix "example result"
+
+    _ <- expectSuccess $ runner.runTestsWith def{cliArgs = []}
+    pure ()
+
+  integration . it "updates an existing snapshot" $ do
+    runner <- getFixture @TestRunner
+    runner.addTestFile "ExampleSpec.hs" $
+      [ "module ExampleSpec (spec) where"
+      , ""
+      , "import Skeletest"
+      , "import qualified Skeletest.Predicate as P"
+      , ""
+      , "spec = it \"fails\" $ do"
+      , "  unlines [\"new1\", \"same1\", \"same2\", \"new2\"] `shouldSatisfy` P.matchesSnapshot"
+      ]
+    runner.addTestFile "__snapshots__/ExampleSpec.snap.md" $
+      [ "# Example"
+      , ""
+      , "## fails"
+      , ""
+      , "```"
+      , "same1"
+      , "old1"
+      , "same2"
+      , "old2"
+      , "```"
+      ]
+
+    (stdout, stderr) <- expectFailure $ runner.runTestsWith def{cliArgs = []}
+    stderr `shouldBe` ""
+    stdout `shouldSatisfy` P.matchesSnapshot
+
+    _ <- expectSuccess $ runner.runTestsWith def{cliArgs = ["-u"]}
+    snapshot <- runner.readTestFile "__snapshots__/ExampleSpec.snap.md"
+    snapshot `shouldSatisfy` P.hasInfix "new1\nsame1\nsame2\nnew2"
+
+    _ <- expectSuccess $ runner.runTestsWith def{cliArgs = []}
+    pure ()
+
   integration . it "detects corrupted snapshot files" $ do
     runner <- getFixture @TestRunner
     runner.addTestFile "ExampleSpec.hs" $
@@ -80,34 +138,6 @@ spec = do
   it "renders JSON values" $ do
     let result = Aeson.decode $ fromString "{\"hello\": [\"world\", 1]}"
     (result :: Maybe Aeson.Value) `shouldSatisfy` P.just P.matchesSnapshot
-
-  integration . it "shows helpful failure messages" $ do
-    runner <- getFixture @TestRunner
-    runner.addTestFile "ExampleSpec.hs" $
-      [ "module ExampleSpec (spec) where"
-      , ""
-      , "import Skeletest"
-      , "import qualified Skeletest.Predicate as P"
-      , ""
-      , "spec = it \"fails\" $ do"
-      , "  unlines [\"new1\", \"same1\", \"same2\", \"new2\"] `shouldSatisfy` P.matchesSnapshot"
-      ]
-    runner.addTestFile "__snapshots__/ExampleSpec.snap.md" $
-      [ "# Example"
-      , ""
-      , "## fails"
-      , ""
-      , "```"
-      , "same1"
-      , "old1"
-      , "same2"
-      , "old2"
-      , "```"
-      ]
-
-    (stdout, stderr) <- expectFailure runner.runTests
-    stderr `shouldBe` ""
-    stdout `shouldSatisfy` P.matchesSnapshot
 
   integration . it "works when test changes directories" $ do
     runner <- getFixture @TestRunner

@@ -265,9 +265,9 @@ decodeSnapshotFile = parseFile . Text.lines
           let snapshotFile' = snapshotFile{snapshots = Map.insert testIdentifier [] snapshotFile.snapshots}
           parseSections snapshotFile' (Just testIdentifier) rest
       -- found the beginning of a snapshot
-      | Just lang <- (Text.stripPrefix "```" . Text.strip) line -> do
+      | Just lang <- Text.stripPrefix "```" line -> do
           testIdentifier <- mTest
-          (snapshot, rest') <- parseSnapshot [] rest
+          (snapshot, rest') <- parseSnapshot Seq.empty rest
           let
             snapshotVal =
               SnapshotValue
@@ -282,8 +282,8 @@ decodeSnapshotFile = parseFile . Text.lines
   parseSnapshot snapshot = \case
     [] -> Nothing
     line : rest
-      | "```" <- Text.strip line -> pure (Text.unlines snapshot, rest)
-      | otherwise -> parseSnapshot (snapshot <> [line]) rest
+      | "```" <- line -> pure (Text.unlines $ Seq.toList snapshot, rest)
+      | otherwise -> parseSnapshot (snapshot Seq.|> line) rest
 
 encodeSnapshotFile :: SnapshotFile -> Text
 encodeSnapshotFile snapshotFile =
@@ -370,7 +370,10 @@ renderVal renderers a =
 normalizeSnapshotVal :: SnapshotValue -> SnapshotValue
 normalizeSnapshotVal snapshot =
   SnapshotValue
-    { content = normalizeTrailingNewlines snapshot.content
+    { content =
+        normalizeTrailingNewlines
+          . sanitizeBackTicks
+          $ snapshot.content
     , lang = collapse $ Text.filter isAlpha <$> snapshot.lang
     }
  where
@@ -378,6 +381,7 @@ normalizeSnapshotVal snapshot =
     Just "" -> Nothing
     m -> m
 
+  sanitizeBackTicks = Text.replace "```" "\\`\\`\\`"
   -- Ensure there's exactly one trailing newline.
   normalizeTrailingNewlines s = Text.dropWhileEnd (== '\n') s <> "\n"
 

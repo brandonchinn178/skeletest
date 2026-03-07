@@ -5,7 +5,9 @@
 module Skeletest.Internal.SnapshotSpec (spec) where
 
 import Data.Aeson qualified as Aeson
+import Data.Map qualified as Map
 import Data.String (fromString)
+import Data.Text (Text)
 import Data.Text qualified as Text
 import Skeletest
 import Skeletest.Internal.Snapshot (
@@ -30,6 +32,12 @@ spec = do
     n <- forAll $ Gen.int (Range.linear 1 10)
     let normalizeSnapshotFile' = foldr (.) id $ replicate n normalizeSnapshotFile
     normalizeSnapshotFile' file `shouldBe` normalizeSnapshotFile file
+
+  it "sanitizes literal ``` lines" $ do
+    let roundtrip x = (decodeSnapshotFile . encodeSnapshotFile) x `shouldBe` Just x
+    roundtrip $ mkSnapshot "```"
+    roundtrip $ mkSnapshot "    ```"
+    roundtrip $ mkSnapshot "a```b"
 
   integration . it "creates a new snapshot" $ do
     runner <- getFixture @TestRunner
@@ -186,3 +194,16 @@ genSnapshotFileRaw = do
 
 genSnapshotFile :: Gen SnapshotFile
 genSnapshotFile = normalizeSnapshotFile <$> genSnapshotFileRaw
+
+mkSnapshot :: Text -> SnapshotFile
+mkSnapshot content =
+  normalizeSnapshotFile
+    SnapshotFile
+      { testFile = "FooSpec.hs"
+      , snapshots =
+          Map.singleton ["test"] . (: []) $
+            SnapshotValue
+              { content
+              , lang = Nothing
+              }
+      }

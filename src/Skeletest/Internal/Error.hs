@@ -12,6 +12,7 @@ import Control.Monad.IO.Class (MonadIO)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import GHC qualified
+import GHC.Stack (HasCallStack, callStack, prettyCallStack)
 import UnliftIO.Exception (Exception (..), impureThrow, throwIO)
 
 data SkeletestError
@@ -38,11 +39,13 @@ skeletestError = throwIO . SkeletestError
 skeletestPluginError :: Maybe GHC.SrcSpan -> String -> a
 skeletestPluginError mloc = impureThrow . CompilationError mloc . Text.pack
 
-invariantViolation :: String -> a
+invariantViolation :: (HasCallStack) => String -> a
 invariantViolation = impureThrow . SkeletestError . Text.pack . toMessage
  where
   toMessage msg =
     unlines
       [ "Invariant violation: " <> msg
       , "**** This is a skeletest bug. Please report it at https://github.com/brandonchinn178/skeletest/issues"
+      , ""
+      , prettyCallStack callStack
       ]

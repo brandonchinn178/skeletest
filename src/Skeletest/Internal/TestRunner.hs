@@ -102,8 +102,6 @@ testResultFromErrorWith f e = do
       }
  where
   renderMsg
-    -- In GHC 9.10+, SomeException shows the callstack, which we don't
-    -- want to see for known Skeletest errors
     | Just (err :: SkeletestError) <- fromException e = do
         pure $ Text.pack $ displayException err
     -- Handle pattern match fail in a do-block

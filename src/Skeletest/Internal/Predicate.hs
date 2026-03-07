@@ -90,18 +90,11 @@ import Data.Typeable (Typeable)
 import Debug.RecoverRTTI (anythingToString)
 import GHC.Generics ((:*:) (..))
 import GHC.Stack qualified as GHC
-import Skeletest.Internal.CLI (getFlag)
 import Skeletest.Internal.Error (invariantViolation)
 import Skeletest.Internal.Snapshot (
-  SnapshotContext (..),
   SnapshotResult (..),
-  SnapshotUpdateFlag (..),
   checkSnapshot,
-  getAndIncSnapshotIndex,
-  getSnapshotRenderers,
-  updateSnapshot,
  )
-import Skeletest.Internal.TestInfo (getTestInfo)
 import Skeletest.Internal.Utils.Diff (showLineDiff)
 import Skeletest.Internal.Utils.HList (HList (..))
 import Skeletest.Internal.Utils.HList qualified as HList
@@ -823,17 +816,7 @@ matchesSnapshot :: (Typeable a, MonadIO m) => Predicate m a
 matchesSnapshot =
   Predicate
     { predicateFunc = \actual -> do
-        SnapshotUpdateFlag doUpdate <- getFlag
-        testInfo <- getTestInfo
-        index <- getAndIncSnapshotIndex
-        renderers <- getSnapshotRenderers
-        let ctx = SnapshotContext{renderers, testInfo, index}
-
-        result <-
-          if doUpdate
-            then updateSnapshot ctx actual >> pure SnapshotMatches
-            else checkSnapshot ctx actual
-
+        result <- checkSnapshot actual
         pure
           PredicateFuncResult
             { predicateSuccess = result == SnapshotMatches

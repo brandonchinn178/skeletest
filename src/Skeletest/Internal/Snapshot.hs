@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
@@ -8,9 +9,7 @@
 
 module Skeletest.Internal.Snapshot (
   -- * Running snapshot
-  SnapshotContext (..),
   SnapshotResult (..),
-  updateSnapshot,
   checkSnapshot,
 
   -- * Rendering
@@ -29,18 +28,22 @@ module Skeletest.Internal.Snapshot (
   normalizeSnapshotFile,
 
   -- * Infrastructure
-  getAndIncSnapshotIndex,
   SnapshotUpdateFlag (..),
 ) where
 
-import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Trans.Except (runExceptT, throwE)
+import Control.Monad (guard, when)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Trans.Except qualified as Except
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Encode.Pretty qualified as Aeson
 import Data.Char (isAlpha, isPrint)
+import Data.Foldable qualified as Seq (toList)
+import Data.List.NonEmpty qualified as NonEmpty
+import Data.Map.Merge.Strict qualified as Map.Merge
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
@@ -50,23 +53,21 @@ import Data.Typeable (Typeable)
 import Data.Typeable qualified as Typeable
 import Data.Void (absurd)
 import Debug.RecoverRTTI (anythingToString)
-import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..))
-import Skeletest.Internal.Error (invariantViolation, skeletestError)
+import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..), getFlag)
+import Skeletest.Internal.Error (skeletestError)
 import Skeletest.Internal.Fixtures (
   Fixture (..),
   FixtureScope (..),
   getFixture,
-  noCleanup,
   withCleanup,
  )
 import Skeletest.Internal.Paths (readTestFile)
-import Skeletest.Internal.TestInfo (TestInfo (..), getTestInfo)
-import Skeletest.Internal.Utils.Map qualified as Map.Utils
+import Skeletest.Internal.TestInfo (TestId, TestInfo (..), getTestInfo)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (replaceExtension, splitFileName, takeDirectory, (</>))
 import System.IO.Error (isDoesNotExistError)
 import System.IO.Unsafe (unsafePerformIO)
-import UnliftIO.Exception (throwIO, try)
+import UnliftIO.Exception (handleJust)
 import UnliftIO.IORef (
   IORef,
   atomicModifyIORef',
@@ -78,49 +79,21 @@ import UnliftIO.IORef (
 
 {----- Infrastructure -----}
 
-data SnapshotTestFixture = SnapshotTestFixture
-  { snapshotIndexRef :: IORef Int
-  }
+data SnapshotChecker = SnapshotChecker (forall a. (Typeable a) => a -> IO SnapshotResult)
 
-instance Fixture SnapshotTestFixture where
-  fixtureAction = do
-    snapshotIndexRef <- newIORef 0
-    pure . noCleanup $ SnapshotTestFixture{..}
-
-getAndIncSnapshotIndex :: (MonadIO m) => m Int
-getAndIncSnapshotIndex = do
-  SnapshotTestFixture{snapshotIndexRef} <- getFixture
-  atomicModifyIORef' snapshotIndexRef $ \i -> (i + 1, i)
-
-data SnapshotFileFixture = SnapshotFileFixture
-  { snapshotFileRef :: IORef (Maybe SnapshotFile)
-  }
-
-instance Fixture SnapshotFileFixture where
+instance Fixture SnapshotChecker where
   fixtureScope = PerFileFixture
   fixtureAction = do
-    TestInfo{file} <- getTestInfo
-    let snapshotPath = getSnapshotPath file
+    testInfo <- getTestInfo
+    let snapshotPath = getSnapshotPath testInfo.file
 
-    mSnapshotFile <-
-      try (readTestFile snapshotPath) >>= \case
-        Left e
-          | isDoesNotExistError e -> pure Nothing
-          | otherwise -> throwIO e
-        Right contents ->
-          case decodeSnapshotFile contents of
-            Just snapshotFile -> pure $ Just snapshotFile
-            Nothing -> skeletestError $ "Snapshot file was corrupted: " <> Text.pack snapshotPath
-    let snapshotChanged newSnapshot = mSnapshotFile /= Just newSnapshot
+    SnapshotUpdateFlag doUpdate <- getFlag
+    (checker, onCleanup) <-
+      if doUpdate
+        then initSnapshotChecker_Update (Text.pack testInfo.file) snapshotPath
+        else initSnapshotChecker_Check snapshotPath
 
-    snapshotFileRef <- newIORef mSnapshotFile
-    pure . withCleanup SnapshotFileFixture{..} $
-      -- write snapshot back out when file is done
-      readIORef snapshotFileRef >>= \case
-        Just snapshotFile | snapshotChanged snapshotFile -> do
-          createDirectoryIfMissing True (takeDirectory snapshotPath)
-          Text.writeFile snapshotPath $ encodeSnapshotFile $ normalizeSnapshotFile snapshotFile
-        _ -> pure ()
+    pure $ withCleanup checker onCleanup
 
 newtype SnapshotUpdateFlag = SnapshotUpdateFlag Bool
 
@@ -132,43 +105,6 @@ instance IsFlag SnapshotUpdateFlag where
 
 {----- Running snapshot -----}
 
-data SnapshotContext = SnapshotContext
-  { renderers :: [SnapshotRenderer]
-  , testInfo :: TestInfo
-  , index :: Int
-  }
-
-updateSnapshot :: (Typeable a, MonadIO m) => SnapshotContext -> a -> m ()
-updateSnapshot context testResult = do
-  SnapshotFileFixture{snapshotFileRef} <- getFixture
-  modifyIORef' snapshotFileRef (Just . setSnapshot . fromMaybe emptySnapshotFile)
- where
-  emptySnapshotFile =
-    SnapshotFile
-      { testFile = Text.pack context.testInfo.file
-      , snapshots = Map.empty
-      }
-
-  testIdentifier = toTestIdentifier context.testInfo
-  renderedTestResult = renderVal context.renderers testResult
-  setSnapshot file =
-    let setForTest = Map.Utils.adjustNested (setAt context.index renderedTestResult) testIdentifier
-     in file{snapshots = setForTest file.snapshots}
-
-  -- Set the given snapshot at the given index. If the index is too large,
-  -- fill in with empty snapshots.
-  --
-  -- >>> setAt 3 "x" ["a"] == ["a", "", "", "x"]
-  setAt i0 v =
-    let go = \cases
-          i [] -> replicate i emptySnapshotVal <> [v]
-          0 (_ : xs) -> v : xs
-          i (x : xs) -> x : go (i - 1) xs
-     in if i0 < 0
-          then invariantViolation $ "Got negative snapshot index: " <> show i0
-          else go i0
-  emptySnapshotVal = SnapshotValue{content = "", lang = Nothing}
-
 data SnapshotResult
   = SnapshotMissing
   | SnapshotMatches
@@ -178,39 +114,103 @@ data SnapshotResult
       }
   deriving (Show, Eq)
 
-checkSnapshot :: (Typeable a, MonadIO m) => SnapshotContext -> a -> m SnapshotResult
-checkSnapshot context testResult =
-  fmap (either id absurd) . runExceptT $ do
-    SnapshotFileFixture{snapshotFileRef} <- getFixture
-    fileSnapshots <-
-      readIORef snapshotFileRef >>= \case
-        Nothing -> returnE SnapshotMissing
-        Just SnapshotFile{snapshots} -> pure snapshots
+checkSnapshot :: (Typeable a, MonadIO m) => a -> m SnapshotResult
+checkSnapshot actual = do
+  SnapshotChecker check <- getFixture
+  liftIO $ check actual
 
-    let snapshots = Map.Utils.findOrEmpty (toTestIdentifier context.testInfo) fileSnapshots
-    snapshot <- maybe (returnE SnapshotMissing) pure $ safeIndex snapshots context.index
+initSnapshotChecker_Update :: Text -> FilePath -> IO (SnapshotChecker, IO ())
+initSnapshotChecker_Update testFile snapshotPath = do
+  newSnapshotsRef <- newIORef Map.empty
+  renderers <- getSnapshotRenderers
 
-    let (snapshotContent, renderedTestResult) = (snapshot.content, renderedTestResultVal.content)
-    returnE $
-      if snapshotContent == renderedTestResult
-        then SnapshotMatches
-        else SnapshotDiff{snapshotContent, renderedTestResult}
+  let checker = SnapshotChecker $ \val -> do
+        testId <- (.testId) <$> getTestInfo
+        let newSnapshotVal = renderVal renderers val
+        modifyIORef' newSnapshotsRef $ \newSnapshots ->
+          Map.alter
+            (Just . (Seq.|> newSnapshotVal) . fromMaybe Seq.empty)
+            testId
+            newSnapshots
+        pure SnapshotMatches
+
+  let onCleanup = do
+        snapshotFile <- fromMaybe (emptySnapshotFile testFile) <$> loadSnapshotFile snapshotPath
+        newSnapshots <- Map.map Seq.toList <$> readIORef newSnapshotsRef
+        let updatedSnapshots = mergeSnapshots snapshotFile.snapshots newSnapshots
+        when (updatedSnapshots /= snapshotFile.snapshots) $ do
+          createDirectoryIfMissing True (takeDirectory snapshotPath)
+          Text.writeFile snapshotPath . encodeSnapshotFile . normalizeSnapshotFile $
+            snapshotFile{snapshots = updatedSnapshots}
+
+  pure (checker, onCleanup)
  where
-  returnE = throwE
-  renderedTestResultVal = renderVal context.renderers testResult
+  -- TODO: Clean up outdated snapshots in file (#24)
+  mergeSnapshots old new =
+    Map.Merge.merge
+      Map.Merge.preserveMissing
+      Map.Merge.preserveMissing
+      (Map.Merge.zipWithMatched mergeSnapshotVals)
+      old
+      new
+  mergeSnapshotVals _ old new =
+    -- If test has extra snapshots, keep them, in case the test failed and didn't
+    -- make it to all the snapshot assertions.
+    -- TODO: Don't save when test fails (#25)
+    -- TODO: Clean up outdated snapshots in test (#24)
+    new <> drop (length new) old
 
-  safeIndex xs0 i0 =
-    let go = \cases
-          _ [] -> Nothing
-          0 (x : _) -> Just x
-          i (_ : xs) -> go (i - 1) xs
-     in if i0 < 0 then Nothing else go i0 xs0
+initSnapshotChecker_Check :: FilePath -> IO (SnapshotChecker, IO ())
+initSnapshotChecker_Check snapshotPath = do
+  mSnapshotFile <- loadSnapshotFile snapshotPath
+  renderers <- getSnapshotRenderers
+  snapshotIndexesRef <- newIORef Map.empty
+
+  let checker = SnapshotChecker $ \val -> runReturnE $ do
+        testId <- (.testId) <$> getTestInfo
+
+        index <- atomicModifyIORef' snapshotIndexesRef $ \snapshotIndexes ->
+          let index = Map.findWithDefault 0 testId snapshotIndexes
+           in (Map.insert testId (index + 1) snapshotIndexes, index)
+
+        snapshotFile <- maybe (returnE SnapshotMissing) pure mSnapshotFile
+        let testSnapshots = Map.findWithDefault [] testId snapshotFile.snapshots
+        snapshot <-
+          maybe (returnE SnapshotMissing) (pure . NonEmpty.head) $
+            (NonEmpty.nonEmpty . drop index) testSnapshots
+
+        let newSnapshotVal = renderVal renderers val
+        returnE $
+          if snapshot.content == newSnapshotVal.content
+            then SnapshotMatches
+            else
+              SnapshotDiff
+                { snapshotContent = snapshot.content
+                , renderedTestResult = newSnapshotVal.content
+                }
+
+  let onCleanup = pure ()
+
+  pure (checker, onCleanup)
+ where
+  runReturnE = fmap (either id absurd) . Except.runExceptT
+  returnE = Except.throwE
+
+loadSnapshotFile :: FilePath -> IO (Maybe SnapshotFile)
+loadSnapshotFile path =
+  handleDNE (\_ -> pure Nothing) . fmap Just $ do
+    contents <- readTestFile path
+    case decodeSnapshotFile contents of
+      Just file -> pure file
+      Nothing -> skeletestError $ "Snapshot file was corrupted: " <> Text.pack path
+ where
+  handleDNE = handleJust (\e -> guard (isDoesNotExistError e) *> Just e)
 
 {----- Snapshot file -----}
 
 data SnapshotFile = SnapshotFile
   { testFile :: Text
-  , snapshots :: Map TestIdentifier [SnapshotValue]
+  , snapshots :: Map TestId [SnapshotValue]
   -- ^ full test identifier => snapshots
   -- e.g. ["group1", "group2", "returns val1 and val2"] => ["val1", "val2"]
   }
@@ -222,16 +222,18 @@ data SnapshotValue = SnapshotValue
   }
   deriving (Show, Eq)
 
-type TestIdentifier = [Text]
-
 getSnapshotPath :: FilePath -> FilePath
 getSnapshotPath testFile = testDir </> "__snapshots__" </> snapshotFileName
  where
   (testDir, testFileName) = splitFileName testFile
   snapshotFileName = replaceExtension testFileName ".snap.md"
 
-toTestIdentifier :: TestInfo -> TestIdentifier
-toTestIdentifier testInfo = testInfo.contexts <> [testInfo.name]
+emptySnapshotFile :: Text -> SnapshotFile
+emptySnapshotFile testFile =
+  SnapshotFile
+    { testFile
+    , snapshots = Map.empty
+    }
 
 decodeSnapshotFile :: Text -> Maybe SnapshotFile
 decodeSnapshotFile = parseFile . Text.lines

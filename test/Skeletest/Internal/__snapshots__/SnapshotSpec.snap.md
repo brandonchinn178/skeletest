@@ -1,5 +1,35 @@
 # test/Skeletest/Internal/SnapshotSpec.hs
 
+## cleans up outdated snapshots
+
+```
+./Test1Spec.hs
+    test other: OK
+./Test2Spec.hs
+    test other: OK
+./Test3Spec.hs
+╭── test: ERROR
+│ Test has outdated snapshots. Remove them with --update.
+╰───────────────────────────────────────────────────────────────────────────────
+    test other: OK
+./Test4Spec.hs
+╭── test: ERROR
+│ Test has outdated snapshots. Remove them with --update.
+╰───────────────────────────────────────────────────────────────────────────────
+./Test5Spec.hs
+╭── test: ERROR
+│ Test has outdated snapshots. Remove them with --update.
+╰───────────────────────────────────────────────────────────────────────────────
+
+╓─ 🚨 Outdated snapshots detected ────────────────
+║  * __snapshots__/Test1Spec.snap.md
+║  * __snapshots__/Test2Spec.snap.md
+║  * __snapshots__/Test6Spec.snap.md
+║
+║  Update/remove these files with --update.
+╙─────────────────────────────────────────────────
+```
+
 ## creates a new snapshot
 
 ```

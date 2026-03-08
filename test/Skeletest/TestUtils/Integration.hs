@@ -23,6 +23,7 @@ module Skeletest.TestUtils.Integration (
   def,
 ) where
 
+import Control.Monad (guard)
 import Data.Default (Default (..))
 import Data.IORef (IORef, modifyIORef, newIORef, readIORef)
 import Data.Text (Text)
@@ -33,7 +34,9 @@ import Skeletest
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode (..))
 import System.FilePath (takeDirectory, (</>))
+import System.IO.Error (isDoesNotExistError)
 import System.Process qualified as Process
+import UnliftIO.Exception (handleJust)
 
 data MarkerIntegration = MarkerIntegration
   deriving (Show)
@@ -79,6 +82,13 @@ instance HasField "addTestFile" TestRunner (FilePath -> FileContents -> IO ()) w
     let path = runner.dir </> fp
     createDirectoryIfMissing True (takeDirectory path)
     writeFile path (unlines contents)
+
+instance HasField "lookupTestFile" TestRunner (FilePath -> IO (Maybe Text)) where
+  getField runner fp =
+    handleDNE (\_ -> pure Nothing) . fmap Just $
+      runner.readTestFile fp
+   where
+    handleDNE = handleJust (\e -> guard (isDoesNotExistError e) *> Just e)
 
 instance HasField "readTestFile" TestRunner (FilePath -> IO Text) where
   getField runner fp = Text.readFile $ runner.dir </> fp

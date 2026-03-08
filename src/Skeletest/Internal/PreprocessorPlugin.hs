@@ -103,6 +103,7 @@ transformTestModule :: Ctx -> HsExpr GhcRn -> HsExpr GhcRn
 transformTestModule ctx =
   foldl' (.) id $
     [ replaceConMatch ctx
+    , replaceCheck ctx
     , replaceIsoChecker ctx
     ]
 
@@ -221,6 +222,36 @@ replaceConMatch ctx e =
   mkNamesList = mkHList $ \name -> hsExprApps (hsExprCon $ hsName 'Const) [hsExprLitString $ getHsName name]
   mkValsList = mkHList $ \val -> hsExprApps (hsExprVar $ hsName 'pure) [hsExprVar val]
   mkPredList = mkHList id
+
+-- | Replace all uses of P.check with P.checkImpl. See P.check.
+--
+-- P.check (isValid . normalize)
+-- ====>
+-- P.checkImpl "(isValid . normalize)" (isValid . normalize)
+replaceCheck :: Ctx -> HsExpr GhcRn -> HsExpr GhcRn
+replaceCheck ctx e =
+  case getExpr e of
+    -- Matches:
+    --   P.check isValid
+    --   P.check (isValid . normalize)
+    HsExprApps (getExpr -> HsExprVar name) [arg]
+      | isCheck name ->
+          convertCheck arg
+    -- Matches:
+    --   P.check $ isValid . normalize
+    HsExprOp (getExpr -> HsExprVar name) (getExpr -> HsExprVar dollar) arg
+      | ctx.matchesName (hsName '($)) dollar
+      , isCheck name ->
+          convertCheck arg
+    -- Check if P.check is by itself
+    HsExprVar name
+      | isCheck name ->
+          skeletestPluginError (getLoc e) "P.check must be applied to a constructor"
+    -- Check if P.check is being applied to more than one argument
+    HsExprApps (getExpr -> HsExprVar name) (_ : _ : _)
+      | isCheck name ->
+          skeletestPluginError (getLoc e) "P.check must be applied to exactly one argument"
+    _ -> e
 
 -- | Replace all uses of P.=== with inlined IsoChecker value, with
 -- function name filled in.

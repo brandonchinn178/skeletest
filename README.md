@@ -193,6 +193,7 @@ When multiple targets are specified, they are joined with `or`.
 |     1     | Tests failed, general errors |
 |     3     | No tests ran                 |
 |     4     | CLI argument-related failure |
+|     5     | Outdated snapshots           |
 |    10     | Preprocessor failure         |
 |    99     | Some unknown error           |
 

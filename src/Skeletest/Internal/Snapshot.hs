@@ -38,13 +38,16 @@ import Control.Monad.Trans.Except qualified as Except
 import Control.Monad.Trans.Maybe qualified as Maybe
 import Data.Char (isAlpha, isPrint)
 import Data.Foldable qualified as Seq (toList)
+import Data.List (sort)
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map.Merge.Strict qualified as Map.Merge
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, isNothing, mapMaybe)
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
@@ -54,6 +57,7 @@ import Data.Void (absurd)
 import Debug.RecoverRTTI (anythingToString)
 import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..), getFlag)
 import Skeletest.Internal.Error (skeletestError)
+import Skeletest.Internal.Exit (TestExitCode (..))
 import Skeletest.Internal.Fixtures (
   Fixture (..),
   FixtureScope (..),
@@ -61,7 +65,7 @@ import Skeletest.Internal.Fixtures (
   noCleanup,
   withCleanup,
  )
-import Skeletest.Internal.Paths (readTestFile)
+import Skeletest.Internal.Paths (listTestFiles, readTestFile)
 import Skeletest.Internal.Predicate (
   Predicate (..),
   PredicateFuncResult (..),
@@ -75,16 +79,11 @@ import Skeletest.Internal.Snapshot.Renderer qualified as X
 import Skeletest.Internal.TestInfo (TestId, TestInfo (..), getTestInfo)
 import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Internal.Utils.Diff (showLineDiff)
-import Skeletest.Plugin (
-  BoxSpecContent (..),
-  Hooks (..),
-  TestResult (..),
-  TestResultMessage (..),
-  defaultHooks,
- )
+import Skeletest.Plugin (BoxSpecContent (..), Hooks (..), Spec, SpecInfo (..), SpecTest (..), SpecTree (..), TestResult (..), TestResultMessage (..), defaultHooks, getSpecTrees)
 import System.Directory (createDirectoryIfMissing)
-import System.FilePath (replaceExtension, splitFileName, takeDirectory, (</>))
+import System.FilePath (replaceExtension, splitFileName, takeDirectory, takeExtensions, (</>))
 import System.IO.Error (isDoesNotExistError)
+import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.Exception (handleJust)
 import UnliftIO.IORef (
   IORef,
@@ -92,6 +91,7 @@ import UnliftIO.IORef (
   modifyIORef',
   newIORef,
   readIORef,
+  writeIORef,
  )
 
 -- | A predicate checking if the input matches the snapshot.
@@ -157,14 +157,74 @@ data SnapshotResult
 snapshotsHook :: Hooks
 snapshotsHook =
   defaultHooks
-    { runTest = \testInfo getResult -> do
+    { modifySpecRegistry = \_ modify registry -> do
+        -- Collect before the applyTestSelections hook to check for snapshots
+        -- that don't correspond to any tests anymore
+        writeIORef allTestsRef . Map.fromList $
+          [ (getSnapshotPath specPath, getTestIds specSpec)
+          | SpecInfo{..} <- registry
+          ]
+        modify registry
+    , runTest = \testInfo getResult -> do
         result <- getResult
         SnapshotUpdateFlag isUpdate <- getFlag
         if
           | not result.testResultSuccess -> pure result
           | isUpdate -> copySnapshotsToFile testInfo *> pure result
-          | otherwise -> checkOutdatedSnapshots testInfo result
+          | otherwise -> checkExtraTestSnapshots testInfo result
+    , runSpecs = \run specs -> do
+        code <- run specs
+        SnapshotUpdateFlag isUpdate <- getFlag
+        if isUpdate
+          then pure code -- FIXME(bchinn)
+          else checkOutdatedSnapshots code
     }
+
+-- | Map from "Test file's snapshot path" => "All test ids in the test file"
+allTestsRef :: IORef (Map FilePath (Set TestId))
+allTestsRef = unsafePerformIO $ newIORef Map.empty
+{-# NOINLINE allTestsRef #-}
+
+getTestIds :: Spec -> Set TestId
+getTestIds = Set.fromList . concatMap (go Seq.empty) . getSpecTrees
+ where
+  go context = \case
+    group@SpecTree_Group{} -> concatMap (go (context Seq.|> group.label)) group.trees
+    SpecTree_Test test -> [Seq.toList $ context Seq.|> test.name]
+
+checkOutdatedSnapshots :: TestExitCode -> IO TestExitCode
+checkOutdatedSnapshots code = do
+  allSnapshotFiles <- filter isSnapshotFile <$> listTestFiles
+  allTests <- readIORef allTestsRef
+  outdated <- filterM (isOutdated allTests) allSnapshotFiles
+  if null outdated
+    then pure code
+    else do
+      mapM_ putStrLn . concat $
+        [ [""]
+        , ["╓─ 🚨 Outdated snapshots detected ────────────────"]
+        , ["║  * " <> fp | fp <- sort outdated]
+        , ["║"]
+        , ["║  Update/remove these files with --update."]
+        , ["╙─────────────────────────────────────────────────"]
+        ]
+      pure ExitOutdatedSnapshots
+ where
+  isSnapshotFile fp = takeExtensions fp == ".snap.md"
+
+  isOutdated allTests snapshotFile = runCheckOutdated $ do
+    -- If Nothing, snapshot file does not correspond to any tests
+    testIds <- maybe returnOutdated pure $ Map.lookup snapshotFile allTests
+    contents <- liftIO $ Text.readFile snapshotFile
+    -- If Nothing, snapshot file is corrupted; we'll treat it the same as outdated
+    SnapshotFile{snapshots} <- maybe returnOutdated pure $ decodeSnapshotFile contents
+    when (not $ Map.keysSet snapshots `Set.isSubsetOf` testIds) $
+      returnOutdated
+
+  runCheckOutdated = fmap isNothing . Maybe.runMaybeT
+  returnOutdated = Maybe.hoistMaybe Nothing
+
+  filterM f = fmap catMaybes . mapM (\x -> (\p -> if p then Just x else Nothing) <$> f x)
 
 {----- Update snapshot -----}
 
@@ -297,8 +357,8 @@ runCheckSnapshot testInfo snapshotIndexRef val = runReturnE $ do
   returnE = Except.throwE
 
 -- | Check if the snapshot file contains any extra snapshots for the current test
-checkOutdatedSnapshots :: TestInfo -> TestResult -> IO TestResult
-checkOutdatedSnapshots testInfo result = do
+checkExtraTestSnapshots :: TestInfo -> TestResult -> IO TestResult
+checkExtraTestSnapshots testInfo result = do
   CheckSnapshotFixture_File{mSnapshotFile} <- getFixture
   outdated <- fmap (fromMaybe False) . Maybe.runMaybeT $ do
     snapshotFile <- Maybe.hoistMaybe mSnapshotFile
@@ -335,9 +395,10 @@ data SnapshotValue = SnapshotValue
   deriving (Show, Eq)
 
 getSnapshotPath :: FilePath -> FilePath
-getSnapshotPath testFile = testDir </> "__snapshots__" </> snapshotFileName
+getSnapshotPath testFile = testDir' </> "__snapshots__" </> snapshotFileName
  where
   (testDir, testFileName) = splitFileName testFile
+  testDir' = if testDir == "./" then "" else testDir
   snapshotFileName = replaceExtension testFileName ".snap.md"
 
 emptySnapshotFile :: Text -> SnapshotFile

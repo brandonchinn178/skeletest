@@ -3,13 +3,15 @@
 module Skeletest.Internal.Paths (
   setOriginalDirectory,
   readTestFile,
+  listTestFiles,
 ) where
 
+import Control.Monad (forM)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Text (Text)
 import Data.Text.IO qualified as Text
 import Skeletest.Internal.Error (invariantViolation)
-import System.Directory (getCurrentDirectory)
+import System.Directory (doesDirectoryExist, getCurrentDirectory, listDirectory)
 import System.Environment (lookupEnv)
 import System.FilePath ((</>))
 import System.IO.Unsafe (unsafePerformIO)
@@ -39,3 +41,23 @@ readTestFile :: FilePath -> IO Text
 readTestFile fp = do
   dir <- readIORef originalDirectoryRef
   Text.readFile $ dir </> fp
+
+listTestFiles :: IO [FilePath]
+listTestFiles = do
+  dir <- readIORef originalDirectoryRef
+  listDirectoryRecursive dir
+ where
+  listDirectoryRecursive dir = do
+    entries <- filter (`notElem` ignoredDirs) <$> listDirectory dir
+    fmap concat . forM entries $ \entry -> do
+      isDir <- doesDirectoryExist entry
+      if isDir
+        then map (entry </>) <$> listDirectoryRecursive entry
+        else pure [entry]
+
+  -- Hardcode some paths to ignore
+  ignoredDirs =
+    [ ".git"
+    , "dist-newstyle"
+    , ".stack-work"
+    ]

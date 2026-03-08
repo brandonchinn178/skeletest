@@ -100,6 +100,7 @@ library
     , template-haskell
     , terminal-size >= 0.2.0
     , text
+    , time
     , transformers
     , unliftio >= 0.2.17
   default-language: GHC2021

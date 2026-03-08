@@ -43,8 +43,11 @@ module Skeletest.Internal.Spec (
 
 import Control.Concurrent (myThreadId)
 import Control.Monad (forM)
+import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
+import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
+import Numeric (showFFloat)
 import Skeletest.Internal.Capture (addCapturedOutput, withCaptureOutput)
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.Markers (
@@ -126,7 +129,14 @@ runSpecs hooks specs =
       TestResult{..} <-
         withTestInfo testInfo $ do
           tid <- myThreadId
-          runTest testInfo test.action `finally` cleanupFixtures (PerTestFixtureKey tid)
+          (result, duration) <-
+            (`finally` cleanupFixtures (PerTestFixtureKey tid)) $ do
+              withTimer $ runTest testInfo test.action
+          let durationLabel =
+                if duration < 0.1
+                  then ""
+                  else " " <> Color.gray ("(" <> renderDuration duration <> ")")
+          pure result{testResultLabel = result.testResultLabel <> durationLabel}
 
       case testResultMessage of
         TestResultMessageNone -> do
@@ -150,6 +160,18 @@ runSpecs hooks specs =
               Nothing -> testResultFromError e
 
   getIndentLevel testInfo = length testInfo.contexts + 1 -- +1 to include the module name
+
+withTimer :: IO a -> IO (a, NominalDiffTime)
+withTimer m = do
+  start <- getCurrentTime
+  a <- m
+  end <- getCurrentTime
+  pure (a, end `diffUTCTime` start)
+
+renderDuration :: NominalDiffTime -> Text
+renderDuration duration = (Text.pack . showRounded) duration <> "s"
+ where
+  showRounded n = showFFloat (Just 2) (realToFrac n :: Double) ""
 
 {----- Built-in hooks -----}
 

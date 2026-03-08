@@ -45,9 +45,9 @@ library
     Skeletest.Internal.GHC.Compat
     Skeletest.Internal.Markers
     Skeletest.Internal.Paths
-    Skeletest.Internal.Plugin
     Skeletest.Internal.Predicate
     Skeletest.Internal.Preprocessor
+    Skeletest.Internal.PreprocessorPlugin
     Skeletest.Internal.Snapshot
     Skeletest.Internal.Snapshot.Renderer
     Skeletest.Internal.Spec

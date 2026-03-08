@@ -72,7 +72,7 @@ processFile options path file = do
   addLine line f = line <> "\n" <> f
   quoted s = "\"" <> s <> "\""
 
-  pluginMod = "Skeletest.Internal.Plugin"
+  pluginMod = "Skeletest.Internal.PreprocessorPlugin"
   quote s = "\"" <> Text.replace "\"" "\\\"" s <> "\""
   pluginPragma =
     Text.unwords

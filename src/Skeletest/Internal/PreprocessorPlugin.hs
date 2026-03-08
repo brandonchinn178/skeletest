@@ -5,7 +5,7 @@
 {-# LANGUAGE TemplateHaskellQuotes #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Skeletest.Internal.Plugin (
+module Skeletest.Internal.PreprocessorPlugin (
   plugin,
 ) where
 

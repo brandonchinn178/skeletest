@@ -43,13 +43,12 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Data.Typeable (TypeRep, Typeable, typeOf, typeRep)
-import Skeletest.Internal.Error (SkeletestError (..), invariantViolation)
+import Skeletest.Internal.Error (invariantViolation, skeletestError)
 import Skeletest.Internal.TestTargets (TestTargets, parseTestTargets)
 import System.Environment (getArgs)
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (stderr)
 import System.IO.Unsafe (unsafePerformIO)
-import UnliftIO.Exception (throwIO)
 
 #if !MIN_VERSION_base(4, 20, 0)
 import Data.Foldable (foldl')
@@ -142,7 +141,11 @@ getFlag =
               , "Expected: " <> show rep <> "."
               , "Got: " <> show dyn
               ]
-      Nothing -> throwIO $ CliFlagNotFound (Text.pack $ flagName @a)
+      Nothing ->
+        skeletestError . Text.unwords $
+          [ "CLI flag '" <> Text.pack (flagName @a) <> "' was not registered."
+          , "Did you add it to cliFlags in Main.hs?"
+          ]
  where
   rep = typeRep (Proxy @a)
 

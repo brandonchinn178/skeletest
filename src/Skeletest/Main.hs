@@ -24,6 +24,7 @@ module Skeletest.Main (
 import Control.Monad (unless, (<=<))
 import Skeletest.Internal.CLI (Flag, flag, loadCliArgs)
 import Skeletest.Internal.Capture (CaptureOutputFlag)
+import Skeletest.Internal.Error (SkeletestError)
 import Skeletest.Internal.Snapshot (
   SnapshotRenderer (..),
   SnapshotUpdateFlag,
@@ -44,12 +45,14 @@ import Skeletest.Internal.Spec (
 import Skeletest.Plugin (Hooks (..), Plugin (..))
 import Skeletest.Prop.Internal (PropLimitFlag, PropSeedFlag)
 import System.Exit (exitFailure)
+import System.IO qualified as IO
+import UnliftIO.Exception (displayException, handle)
 
 runSkeletest :: [Plugin] -> [(FilePath, Spec)] -> IO ()
 runSkeletest = runSkeletest' . mconcat
 
 runSkeletest' :: Plugin -> [(FilePath, Spec)] -> IO ()
-runSkeletest' Plugin{hooks = hooks0, ..} testModules = do
+runSkeletest' Plugin{hooks = hooks0, ..} testModules = handleErrors $ do
   selections <- loadCliArgs builtinFlags cliFlags
   setSnapshotRenderers (snapshotRenderers <> defaultSnapshotRenderers)
 
@@ -79,3 +82,11 @@ runSkeletest' Plugin{hooks = hooks0, ..} testModules = do
       { specPath
       , specSpec
       }
+
+handleErrors :: IO a -> IO a
+handleErrors = handle $ \(e :: SkeletestError) -> do
+  IO.hPutStrLn IO.stderr . unlines $
+    [ "================ Skeletest error ================"
+    , displayException e
+    ]
+  exitFailure

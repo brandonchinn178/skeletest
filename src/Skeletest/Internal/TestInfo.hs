@@ -12,6 +12,7 @@ import Control.Monad.IO.Class (MonadIO)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Text (Text)
+import GHC.Stack (HasCallStack)
 import Skeletest.Internal.Error (invariantViolation)
 import Skeletest.Internal.Markers (SomeMarker)
 import System.IO.Unsafe (unsafePerformIO)
@@ -48,7 +49,7 @@ lookupTestInfo = do
   tid <- myThreadId
   Map.lookup tid <$> readIORef testInfoMapRef
 
-getTestInfo :: (MonadIO m) => m TestInfo
+getTestInfo :: (MonadIO m, HasCallStack) => m TestInfo
 getTestInfo =
   lookupTestInfo >>= \case
     Just info -> pure info

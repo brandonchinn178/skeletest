@@ -25,7 +25,9 @@ module Skeletest.TestUtils.Integration (
 
 import Data.Default (Default (..))
 import Data.IORef (IORef, modifyIORef, newIORef, readIORef)
+import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Text.IO qualified as Text
 import GHC.Records (HasField (..))
 import Skeletest
 import System.Directory (createDirectoryIfMissing)
@@ -51,7 +53,6 @@ data TestRunner = TestRunner
 
 data TestRunnerSettings = TestRunnerSettings
   { mainFileContents :: FileContents
-  , testFiles :: [(FilePath, FileContents)]
   }
 
 -- | File contents as a list of lines.
@@ -66,7 +67,6 @@ instance Fixture TestRunner where
     defaultSettings =
       TestRunnerSettings
         { mainFileContents = ["import Skeletest.Main"]
-        , testFiles = []
         }
 
 instance HasField "setMainFile" TestRunner (FileContents -> IO ()) where
@@ -75,12 +75,13 @@ instance HasField "setMainFile" TestRunner (FileContents -> IO ()) where
       settings{mainFileContents = contents}
 
 instance HasField "addTestFile" TestRunner (FilePath -> FileContents -> IO ()) where
-  getField runner fp contents =
-    modifyIORef runner.settingsRef $ \settings ->
-      settings{testFiles = (fp, contents) : settings.testFiles}
+  getField runner fp contents = do
+    let path = runner.dir </> fp
+    createDirectoryIfMissing True (takeDirectory path)
+    writeFile path (unlines contents)
 
-instance HasField "readTestFile" TestRunner (FilePath -> IO String) where
-  getField runner fp = readFile $ runner.dir </> fp
+instance HasField "readTestFile" TestRunner (FilePath -> IO Text) where
+  getField runner fp = Text.readFile $ runner.dir </> fp
 
 data TestArgs = TestArgs
   { cwd :: Maybe FilePath
@@ -104,8 +105,7 @@ instance HasField "runTests" TestRunner (IO (ExitCode, String, String)) where
 instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, String)) where
   getField runner args = do
     settings <- readIORef runner.settingsRef
-    addFile args.mainFile settings.mainFileContents
-    mapM_ (uncurry addFile) settings.testFiles
+    runner.addTestFile args.mainFile settings.mainFileContents
 
     let ghcArgs =
           concat
@@ -124,11 +124,6 @@ instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, S
           args.cliArgs
       result -> pure result
    where
-    addFile fp contents = do
-      let path = runner.dir </> fp
-      createDirectoryIfMissing True (takeDirectory path)
-      writeFile path (unlines contents)
-
     setCWD dir p = p{Process.cwd = Just dir}
     runProcWith f cmd args_ = do
       let proc = f . setCWD runner.dir $ Process.proc cmd args_

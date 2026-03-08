@@ -31,6 +31,7 @@ import Skeletest.Internal.Snapshot (
   defaultSnapshotRenderers,
   renderWithShow,
   setSnapshotRenderers,
+  snapshotsHook,
  )
 import Skeletest.Internal.Spec (
   Spec,
@@ -68,6 +69,7 @@ runSkeletest' Plugin{hooks = hooks0, ..} testModules = handleErrors $ do
     , focusHook
     , applyTestSelectionsHook
     , manualTestsHook
+    , snapshotsHook
     ]
 
   builtinFlags =

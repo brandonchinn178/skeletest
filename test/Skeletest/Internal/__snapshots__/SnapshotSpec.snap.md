@@ -1,5 +1,23 @@
 # test/Skeletest/Internal/SnapshotSpec.hs
 
+## creates a new snapshot
+
+```
+./ExampleSpec.hs
+╭── test: FAIL
+│ ./ExampleSpec.hs:7:
+│ │
+│ │   "example result" `shouldSatisfy` P.matchesSnapshot
+│ │                    ^^^^^^^^^^^^^^^
+│ 
+│ Snapshot does not exist. Update snapshot with --update.
+│ --- expected
+│ +++ actual
+│ @@ --0,0 +1 @@
+│ +example result
+╰───────────────────────────────────────────────────────────────────────────────
+```
+
 ## detects corrupted snapshot files
 
 ```
@@ -20,7 +38,7 @@
 }
 ```
 
-## shows helpful failure messages
+## updates an existing snapshot
 
 ```
 ./ExampleSpec.hs

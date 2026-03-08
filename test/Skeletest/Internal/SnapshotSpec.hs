@@ -5,7 +5,9 @@
 module Skeletest.Internal.SnapshotSpec (spec) where
 
 import Data.Aeson qualified as Aeson
+import Data.Map qualified as Map
 import Data.String (fromString)
+import Data.Text (Text)
 import Data.Text qualified as Text
 import Skeletest
 import Skeletest.Internal.Snapshot (
@@ -19,6 +21,7 @@ import Skeletest.Predicate qualified as P
 import Skeletest.Prop.Gen qualified as Gen
 import Skeletest.Prop.Range qualified as Range
 import Skeletest.TestUtils.Integration
+import UnliftIO.Exception (IOException)
 
 spec :: Spec
 spec = do
@@ -30,6 +33,87 @@ spec = do
     n <- forAll $ Gen.int (Range.linear 1 10)
     let normalizeSnapshotFile' = foldr (.) id $ replicate n normalizeSnapshotFile
     normalizeSnapshotFile' file `shouldBe` normalizeSnapshotFile file
+
+  it "sanitizes literal ``` lines" $ do
+    let roundtrip x = (decodeSnapshotFile . encodeSnapshotFile) x `shouldBe` Just x
+    roundtrip $ mkSnapshot "```"
+    roundtrip $ mkSnapshot "    ```"
+    roundtrip $ mkSnapshot "a```b"
+
+  integration . it "creates a new snapshot" $ do
+    runner <- getFixture @TestRunner
+    runner.addTestFile "ExampleSpec.hs" $
+      [ "module ExampleSpec (spec) where"
+      , ""
+      , "import Skeletest"
+      , "import qualified Skeletest.Predicate as P"
+      , ""
+      , "spec = it \"test\" $ do"
+      , "  \"example result\" `shouldSatisfy` P.matchesSnapshot"
+      ]
+
+    (stdout, stderr) <- expectFailure $ runner.runTestsWith def{cliArgs = []}
+    stderr `shouldBe` ""
+    stdout `shouldSatisfy` P.matchesSnapshot
+
+    _ <- expectSuccess $ runner.runTestsWith def{cliArgs = ["-u"]}
+    snapshot <- runner.readTestFile "__snapshots__/ExampleSpec.snap.md"
+    snapshot `shouldSatisfy` P.hasInfix "example result"
+
+    _ <- expectSuccess $ runner.runTestsWith def{cliArgs = []}
+    pure ()
+
+  integration . it "updates an existing snapshot" $ do
+    runner <- getFixture @TestRunner
+    runner.addTestFile "ExampleSpec.hs" $
+      [ "module ExampleSpec (spec) where"
+      , ""
+      , "import Skeletest"
+      , "import qualified Skeletest.Predicate as P"
+      , ""
+      , "spec = it \"fails\" $ do"
+      , "  unlines [\"new1\", \"same1\", \"same2\", \"new2\"] `shouldSatisfy` P.matchesSnapshot"
+      ]
+    runner.addTestFile "__snapshots__/ExampleSpec.snap.md" $
+      [ "# Example"
+      , ""
+      , "## fails"
+      , ""
+      , "```"
+      , "same1"
+      , "old1"
+      , "same2"
+      , "old2"
+      , "```"
+      ]
+
+    (stdout, stderr) <- expectFailure $ runner.runTestsWith def{cliArgs = []}
+    stderr `shouldBe` ""
+    stdout `shouldSatisfy` P.matchesSnapshot
+
+    _ <- expectSuccess $ runner.runTestsWith def{cliArgs = ["-u"]}
+    snapshot <- runner.readTestFile "__snapshots__/ExampleSpec.snap.md"
+    snapshot `shouldSatisfy` P.hasInfix "new1\nsame1\nsame2\nnew2"
+
+    _ <- expectSuccess $ runner.runTestsWith def{cliArgs = []}
+    pure ()
+
+  integration . it "only updates if test passes" $ do
+    runner <- getFixture @TestRunner
+    runner.addTestFile "ExampleSpec.hs" $
+      [ "module ExampleSpec (spec) where"
+      , ""
+      , "import Skeletest"
+      , "import qualified Skeletest.Predicate as P"
+      , ""
+      , "spec = it \"fails\" $ do"
+      , "  \"content\" `shouldSatisfy` P.matchesSnapshot"
+      , "  failTest \"failure\""
+      ]
+
+    _ <- expectFailure $ runner.runTestsWith def{cliArgs = ["-u"]}
+    runner.readTestFile "__snapshots__/ExampleSpec.snap.md"
+      `shouldSatisfy` P.throws (P.anything @IOException)
 
   integration . it "detects corrupted snapshot files" $ do
     runner <- getFixture @TestRunner
@@ -81,34 +165,6 @@ spec = do
     let result = Aeson.decode $ fromString "{\"hello\": [\"world\", 1]}"
     (result :: Maybe Aeson.Value) `shouldSatisfy` P.just P.matchesSnapshot
 
-  integration . it "shows helpful failure messages" $ do
-    runner <- getFixture @TestRunner
-    runner.addTestFile "ExampleSpec.hs" $
-      [ "module ExampleSpec (spec) where"
-      , ""
-      , "import Skeletest"
-      , "import qualified Skeletest.Predicate as P"
-      , ""
-      , "spec = it \"fails\" $ do"
-      , "  unlines [\"new1\", \"same1\", \"same2\", \"new2\"] `shouldSatisfy` P.matchesSnapshot"
-      ]
-    runner.addTestFile "__snapshots__/ExampleSpec.snap.md" $
-      [ "# Example"
-      , ""
-      , "## fails"
-      , ""
-      , "```"
-      , "same1"
-      , "old1"
-      , "same2"
-      , "old2"
-      , "```"
-      ]
-
-    (stdout, stderr) <- expectFailure runner.runTests
-    stderr `shouldBe` ""
-    stdout `shouldSatisfy` P.matchesSnapshot
-
   integration . it "works when test changes directories" $ do
     runner <- getFixture @TestRunner
     runner.addTestFile "ExampleSpec.hs" $
@@ -150,9 +206,22 @@ genSnapshotFileRaw = do
     pure (ident, vals)
 
   genSnapshotVal = do
-    snapshotContent <- Gen.text rangeSnapshotSize Gen.unicode
-    snapshotLang <- Gen.maybe $ Gen.text (Range.linear 1 5) Gen.unicode
+    content <- Gen.text rangeSnapshotSize Gen.unicode
+    lang <- Gen.maybe $ Gen.text (Range.linear 1 5) Gen.unicode
     pure SnapshotValue{..}
 
 genSnapshotFile :: Gen SnapshotFile
 genSnapshotFile = normalizeSnapshotFile <$> genSnapshotFileRaw
+
+mkSnapshot :: Text -> SnapshotFile
+mkSnapshot content =
+  normalizeSnapshotFile
+    SnapshotFile
+      { testFile = "FooSpec.hs"
+      , snapshots =
+          Map.singleton ["test"] . (: []) $
+            SnapshotValue
+              { content
+              , lang = Nothing
+              }
+      }

@@ -2,6 +2,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -34,6 +35,7 @@ module Skeletest.Internal.Snapshot (
 import Control.Monad (guard, unless, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Except qualified as Except
+import Control.Monad.Trans.Maybe qualified as Maybe
 import Data.Char (isAlpha, isPrint)
 import Data.Foldable qualified as Seq (toList)
 import Data.List.NonEmpty qualified as NonEmpty
@@ -71,8 +73,15 @@ import Skeletest.Internal.Snapshot.Renderer (
  )
 import Skeletest.Internal.Snapshot.Renderer qualified as X
 import Skeletest.Internal.TestInfo (TestId, TestInfo (..), getTestInfo)
+import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Internal.Utils.Diff (showLineDiff)
-import Skeletest.Plugin (Hooks (..), TestResult (..), defaultHooks)
+import Skeletest.Plugin (
+  BoxSpecContent (..),
+  Hooks (..),
+  TestResult (..),
+  TestResultMessage (..),
+  defaultHooks,
+ )
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (replaceExtension, splitFileName, takeDirectory, (</>))
 import System.IO.Error (isDoesNotExistError)
@@ -150,12 +159,11 @@ snapshotsHook =
   defaultHooks
     { runTest = \testInfo getResult -> do
         result <- getResult
-        when result.testResultSuccess $ do
-          -- TODO: Allow checking if test used this fixture?
-          -- Currently, we're always doing this even for non-snapshot tests.
-          UpdateSnapshotFixture{newSnapshotsRef} <- getFixture
-          copySnapshotsToFile testInfo newSnapshotsRef
-        pure result
+        SnapshotUpdateFlag isUpdate <- getFlag
+        if
+          | not result.testResultSuccess -> pure result
+          | isUpdate -> copySnapshotsToFile testInfo *> pure result
+          | otherwise -> checkOutdatedSnapshots testInfo result
     }
 
 {----- Update snapshot -----}
@@ -196,11 +204,14 @@ recordSnapshot newSnapshotsRef val = do
   pure SnapshotMatches
 
 -- | Copy snapshots to the file fixture when test is over.
-copySnapshotsToFile :: TestInfo -> IORef (Seq SnapshotValue) -> IO ()
-copySnapshotsToFile testInfo newSnapshotsRef = do
-  UpdateSnapshotFixture_File{newFileSnapshotsRef} <- getFixture
+copySnapshotsToFile :: TestInfo -> IO ()
+copySnapshotsToFile testInfo = do
+  -- TODO: Allow checking if test used this fixture?
+  -- Currently, we're always doing this even for non-snapshot tests.
+  UpdateSnapshotFixture{newSnapshotsRef} <- getFixture
   newSnapshots <- Seq.toList <$> readIORef newSnapshotsRef
   unless (null newSnapshots) $ do
+    UpdateSnapshotFixture_File{newFileSnapshotsRef} <- getFixture
     modifyIORef' newFileSnapshotsRef (Map.insert testInfo.testId (Seq.toList newSnapshots))
 
 saveSnapshotFile :: TestInfo -> IORef (Map TestId [SnapshotValue]) -> IO ()
@@ -244,8 +255,9 @@ instance Fixture CheckSnapshotFixture_File where
     mSnapshotFile <- loadSnapshotFile snapshotPath
     pure $ noCleanup CheckSnapshotFixture_File{mSnapshotFile}
 
-newtype CheckSnapshotFixture = CheckSnapshotFixture
+data CheckSnapshotFixture = CheckSnapshotFixture
   { checker :: SnapshotChecker
+  , snapshotIndexRef :: IORef Int
   }
 
 instance Fixture CheckSnapshotFixture where
@@ -254,7 +266,7 @@ instance Fixture CheckSnapshotFixture where
     testInfo <- getTestInfo
     snapshotIndexRef <- newIORef 0
     let checker = SnapshotChecker (runCheckSnapshot testInfo snapshotIndexRef)
-    pure $ noCleanup CheckSnapshotFixture{checker}
+    pure $ noCleanup CheckSnapshotFixture{checker, snapshotIndexRef}
 
 runCheckSnapshot :: (Typeable a) => TestInfo -> IORef Int -> a -> IO SnapshotResult
 runCheckSnapshot testInfo snapshotIndexRef val = runReturnE $ do
@@ -283,6 +295,28 @@ runCheckSnapshot testInfo snapshotIndexRef val = runReturnE $ do
  where
   runReturnE = fmap (either id absurd) . Except.runExceptT
   returnE = Except.throwE
+
+-- | Check if the snapshot file contains any extra snapshots for the current test
+checkOutdatedSnapshots :: TestInfo -> TestResult -> IO TestResult
+checkOutdatedSnapshots testInfo result = do
+  CheckSnapshotFixture_File{mSnapshotFile} <- getFixture
+  outdated <- fmap (fromMaybe False) . Maybe.runMaybeT $ do
+    snapshotFile <- Maybe.hoistMaybe mSnapshotFile
+    testSnapshots <- Maybe.hoistMaybe $ Map.lookup testInfo.testId snapshotFile.snapshots
+    CheckSnapshotFixture{snapshotIndexRef} <- getFixture
+    index <- readIORef snapshotIndexRef
+    pure $ length testSnapshots > index
+  pure $ if outdated then outdatedResult else result
+ where
+  outdatedResult =
+    TestResult
+      { testResultSuccess = False
+      , testResultLabel = Color.red "ERROR"
+      , testResultMessage =
+          TestResultMessageBox
+            [ BoxText "Test has outdated snapshots. Remove them with --update."
+            ]
+      }
 
 {----- Snapshot file -----}
 

@@ -21,6 +21,7 @@ import Skeletest.Predicate qualified as P
 import Skeletest.Prop.Gen qualified as Gen
 import Skeletest.Prop.Range qualified as Range
 import Skeletest.TestUtils.Integration
+import UnliftIO.Exception (IOException)
 
 spec :: Spec
 spec = do
@@ -96,6 +97,23 @@ spec = do
 
     _ <- expectSuccess $ runner.runTestsWith def{cliArgs = []}
     pure ()
+
+  integration . it "only updates if test passes" $ do
+    runner <- getFixture @TestRunner
+    runner.addTestFile "ExampleSpec.hs" $
+      [ "module ExampleSpec (spec) where"
+      , ""
+      , "import Skeletest"
+      , "import qualified Skeletest.Predicate as P"
+      , ""
+      , "spec = it \"fails\" $ do"
+      , "  \"content\" `shouldSatisfy` P.matchesSnapshot"
+      , "  failTest \"failure\""
+      ]
+
+    _ <- expectFailure $ runner.runTestsWith def{cliArgs = ["-u"]}
+    runner.readTestFile "__snapshots__/ExampleSpec.snap.md"
+      `shouldSatisfy` P.throws (P.anything @IOException)
 
   integration . it "detects corrupted snapshot files" $ do
     runner <- getFixture @TestRunner

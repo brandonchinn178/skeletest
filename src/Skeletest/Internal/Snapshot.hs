@@ -28,9 +28,10 @@ module Skeletest.Internal.Snapshot (
 
   -- * Infrastructure
   SnapshotUpdateFlag (..),
+  snapshotsHook,
 ) where
 
-import Control.Monad (guard, when)
+import Control.Monad (guard, unless, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Except qualified as Except
 import Data.Char (isAlpha, isPrint)
@@ -71,6 +72,7 @@ import Skeletest.Internal.Snapshot.Renderer (
 import Skeletest.Internal.Snapshot.Renderer qualified as X
 import Skeletest.Internal.TestInfo (TestId, TestInfo (..), getTestInfo)
 import Skeletest.Internal.Utils.Diff (showLineDiff)
+import Skeletest.Plugin (Hooks (..), TestResult (..), defaultHooks)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (replaceExtension, splitFileName, takeDirectory, (</>))
 import System.IO.Error (isDoesNotExistError)
@@ -143,6 +145,19 @@ data SnapshotResult
       }
   deriving (Show, Eq)
 
+snapshotsHook :: Hooks
+snapshotsHook =
+  defaultHooks
+    { runTest = \testInfo getResult -> do
+        result <- getResult
+        when result.testResultSuccess $ do
+          -- TODO: Allow checking if test used this fixture?
+          -- Currently, we're always doing this even for non-snapshot tests.
+          UpdateSnapshotFixture{newSnapshotsRef} <- getFixture
+          copySnapshotsToFile testInfo newSnapshotsRef
+        pure result
+    }
+
 {----- Update snapshot -----}
 
 -- | Collect snapshots for all tests in a file.
@@ -160,18 +175,17 @@ instance Fixture UpdateSnapshotFixture_File where
     pure . withCleanup UpdateSnapshotFixture_File{newFileSnapshotsRef} $ do
       saveSnapshotFile testInfo newFileSnapshotsRef
 
-newtype UpdateSnapshotFixture = UpdateSnapshotFixture
+data UpdateSnapshotFixture = UpdateSnapshotFixture
   { checker :: SnapshotChecker
+  , newSnapshotsRef :: IORef (Seq SnapshotValue)
   }
 
 instance Fixture UpdateSnapshotFixture where
   fixtureScope = PerTestFixture
   fixtureAction = do
-    testInfo <- getTestInfo
     newSnapshotsRef <- newIORef Seq.empty
     let checker = SnapshotChecker (recordSnapshot newSnapshotsRef)
-    pure . withCleanup UpdateSnapshotFixture{checker} $ do
-      copySnapshotsToFile testInfo newSnapshotsRef
+    pure $ noCleanup UpdateSnapshotFixture{checker, newSnapshotsRef}
 
 -- | Collect `P.matchesSnapshot` results into a list per test.
 recordSnapshot :: (Typeable a) => IORef (Seq SnapshotValue) -> a -> IO SnapshotResult
@@ -186,7 +200,8 @@ copySnapshotsToFile :: TestInfo -> IORef (Seq SnapshotValue) -> IO ()
 copySnapshotsToFile testInfo newSnapshotsRef = do
   UpdateSnapshotFixture_File{newFileSnapshotsRef} <- getFixture
   newSnapshots <- Seq.toList <$> readIORef newSnapshotsRef
-  modifyIORef' newFileSnapshotsRef (Map.insert testInfo.testId newSnapshots)
+  unless (null newSnapshots) $ do
+    modifyIORef' newFileSnapshotsRef (Map.insert testInfo.testId (Seq.toList newSnapshots))
 
 saveSnapshotFile :: TestInfo -> IORef (Map TestId [SnapshotValue]) -> IO ()
 saveSnapshotFile testInfo newFileSnapshotsRef = do

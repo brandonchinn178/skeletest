@@ -49,6 +49,7 @@ library
     Skeletest.Internal.Predicate
     Skeletest.Internal.Preprocessor
     Skeletest.Internal.Snapshot
+    Skeletest.Internal.Snapshot.Renderer
     Skeletest.Internal.Spec
     Skeletest.Internal.Spec.Output
     Skeletest.Internal.Spec.Tree

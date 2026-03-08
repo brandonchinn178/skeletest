@@ -9,8 +9,10 @@
 {-# LANGUAGE NoFieldSelectors #-}
 
 module Skeletest.Internal.Predicate (
-  Predicate,
+  Predicate (..),
   PredicateResult (..),
+  PredicateFuncResult (..),
+  ShowFailCtx (..),
   runPredicate,
   renderPredicate,
 
@@ -69,9 +71,6 @@ module Skeletest.Internal.Predicate (
   IsoChecker (..),
   (===),
   isoWith,
-
-  -- * Snapshot testing
-  matchesSnapshot,
 ) where
 
 import Control.Monad.IO.Class (MonadIO)
@@ -86,16 +85,10 @@ import Data.Maybe (isJust, isNothing, listToMaybe)
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Typeable (Typeable)
 import Debug.RecoverRTTI (anythingToString)
 import GHC.Generics ((:*:) (..))
 import GHC.Stack qualified as GHC
 import Skeletest.Internal.Error (invariantViolation)
-import Skeletest.Internal.Snapshot (
-  SnapshotResult (..),
-  checkSnapshot,
- )
-import Skeletest.Internal.Utils.Diff (showLineDiff)
 import Skeletest.Internal.Utils.HList (HList (..))
 import Skeletest.Internal.Utils.HList qualified as HList
 import Skeletest.Prop.Gen (Gen)
@@ -805,40 +798,6 @@ isoWith gen =
  where
   disp = "isomorphic"
   dispNeg = "not isomorphic"
-
-{----- Snapshot -----}
-
--- | A predicate checking if the input matches the snapshot.
--- See the "Snapshot tests" section in the README.
---
--- >>> user `shouldSatisfy` P.matchesSnapshot
-matchesSnapshot :: (Typeable a, MonadIO m) => Predicate m a
-matchesSnapshot =
-  Predicate
-    { predicateFunc = \actual -> do
-        result <- checkSnapshot actual
-        pure
-          PredicateFuncResult
-            { predicateSuccess = result == SnapshotMatches
-            , predicateExplain =
-                Text.intercalate "\n" $
-                  case result of
-                    SnapshotMissing renderedVal ->
-                      [ "Snapshot does not exist. Update snapshot with --update."
-                      , showLineDiff ("expected", "") ("actual", renderedVal)
-                      ]
-                    SnapshotMatches ->
-                      [ "Matches snapshot"
-                      ]
-                    SnapshotDiff snapshot renderedActual ->
-                      [ "Result differed from snapshot. Update snapshot with --update."
-                      , showLineDiff ("expected", snapshot) ("actual", renderedActual)
-                      ]
-            , predicateShowFailCtx = HideFailCtx
-            }
-    , predicateDisp = "matches snapshot"
-    , predicateDispNeg = "does not match snapshot"
-    }
 
 {----- Utilities -----}
 

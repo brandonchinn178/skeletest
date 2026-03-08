@@ -46,7 +46,7 @@ module Skeletest.Plugin (
 
 import Skeletest.Internal.CLI (Flag)
 import Skeletest.Internal.Markers qualified as X
-import Skeletest.Internal.Snapshot (SnapshotRenderer)
+import Skeletest.Internal.Snapshot.Renderer (SnapshotRenderer)
 import Skeletest.Internal.Spec.Output qualified as X
 import Skeletest.Internal.Spec.Tree (SpecRegistry)
 import Skeletest.Internal.Spec.Tree qualified as X

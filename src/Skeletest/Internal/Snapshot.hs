@@ -8,17 +8,16 @@
 {-# LANGUAGE NoFieldSelectors #-}
 
 module Skeletest.Internal.Snapshot (
-  -- * Running snapshot
-  SnapshotResult (..),
-  checkSnapshot,
+  -- * Predicate
+  matchesSnapshot,
 
   -- * Rendering
-  SnapshotRenderer (..),
-  defaultSnapshotRenderers,
-  setSnapshotRenderers,
-  getSnapshotRenderers,
-  plainRenderer,
-  renderWithShow,
+  X.SnapshotRenderer (..),
+  X.defaultSnapshotRenderers,
+  X.setSnapshotRenderers,
+  X.getSnapshotRenderers,
+  X.plainRenderer,
+  X.renderWithShow,
 
   -- ** SnapshotFile
   SnapshotFile (..),
@@ -34,8 +33,6 @@ module Skeletest.Internal.Snapshot (
 import Control.Monad (guard, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Except qualified as Except
-import Data.Aeson qualified as Aeson
-import Data.Aeson.Encode.Pretty qualified as Aeson
 import Data.Char (isAlpha, isPrint)
 import Data.Foldable qualified as Seq (toList)
 import Data.List.NonEmpty qualified as NonEmpty
@@ -48,8 +45,6 @@ import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
-import Data.Text.Lazy qualified as TextL
-import Data.Text.Lazy.Encoding qualified as TextL
 import Data.Typeable (Typeable)
 import Data.Typeable qualified as Typeable
 import Data.Void (absurd)
@@ -64,11 +59,21 @@ import Skeletest.Internal.Fixtures (
   withCleanup,
  )
 import Skeletest.Internal.Paths (readTestFile)
+import Skeletest.Internal.Predicate (
+  Predicate (..),
+  PredicateFuncResult (..),
+  ShowFailCtx (..),
+ )
+import Skeletest.Internal.Snapshot.Renderer (
+  SnapshotRenderer (..),
+  getSnapshotRenderers,
+ )
+import Skeletest.Internal.Snapshot.Renderer qualified as X
 import Skeletest.Internal.TestInfo (TestId, TestInfo (..), getTestInfo)
+import Skeletest.Internal.Utils.Diff (showLineDiff)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (replaceExtension, splitFileName, takeDirectory, (</>))
 import System.IO.Error (isDoesNotExistError)
-import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.Exception (handleJust)
 import UnliftIO.IORef (
   IORef,
@@ -76,8 +81,44 @@ import UnliftIO.IORef (
   modifyIORef',
   newIORef,
   readIORef,
-  writeIORef,
  )
+
+-- | A predicate checking if the input matches the snapshot.
+-- See the "Snapshot tests" section in the README.
+--
+-- >>> user `shouldSatisfy` P.matchesSnapshot
+matchesSnapshot :: (Typeable a, MonadIO m) => Predicate m a
+matchesSnapshot =
+  Predicate
+    { predicateFunc = \actual -> do
+        SnapshotUpdateFlag doUpdate <- getFlag
+        SnapshotChecker check <-
+          if doUpdate
+            then (.checker) <$> getFixture @UpdateSnapshotFixture
+            else (.checker) <$> getFixture @CheckSnapshotFixture
+        result <- liftIO $ check actual
+        pure
+          PredicateFuncResult
+            { predicateSuccess = result == SnapshotMatches
+            , predicateExplain =
+                Text.intercalate "\n" $
+                  case result of
+                    SnapshotMissing renderedVal ->
+                      [ "Snapshot does not exist. Update snapshot with --update."
+                      , showLineDiff ("expected", "") ("actual", renderedVal)
+                      ]
+                    SnapshotMatches ->
+                      [ "Matches snapshot"
+                      ]
+                    SnapshotDiff snapshot renderedActual ->
+                      [ "Result differed from snapshot. Update snapshot with --update."
+                      , showLineDiff ("expected", snapshot) ("actual", renderedActual)
+                      ]
+            , predicateShowFailCtx = HideFailCtx
+            }
+    , predicateDisp = "matches snapshot"
+    , predicateDispNeg = "does not match snapshot"
+    }
 
 {----- Infrastructure -----}
 
@@ -88,15 +129,6 @@ instance IsFlag SnapshotUpdateFlag where
   flagShort = Just 'u'
   flagHelp = "Update snapshots"
   flagSpec = SwitchFlag SnapshotUpdateFlag
-
-checkSnapshot :: (Typeable a, MonadIO m) => a -> m SnapshotResult
-checkSnapshot actual = do
-  SnapshotUpdateFlag doUpdate <- getFlag
-  SnapshotChecker check <-
-    if doUpdate
-      then (.checker) <$> getFixture @UpdateSnapshotFixture
-      else (.checker) <$> getFixture @CheckSnapshotFixture
-  liftIO $ check actual
 
 data SnapshotChecker = SnapshotChecker (forall a. (Typeable a) => a -> IO SnapshotResult)
 
@@ -360,38 +392,7 @@ normalizeSnapshotFile file =
     c | (not . isPrint) c -> Text.drop 1 . Text.dropEnd 1 . Text.pack . show $ c
     c -> Text.singleton c
 
-{----- Renderers -----}
-
-data SnapshotRenderer
-  = forall a.
-  (Typeable a) =>
-  SnapshotRenderer
-  { render :: a -> Text
-  , snapshotLang :: Maybe Text
-  }
-
-plainRenderer :: (Typeable a) => (a -> Text) -> SnapshotRenderer
-plainRenderer render =
-  SnapshotRenderer
-    { render
-    , snapshotLang = Nothing
-    }
-
-renderWithShow :: forall a. (Typeable a, Show a) => SnapshotRenderer
-renderWithShow = plainRenderer (Text.pack . show @a)
-
-defaultSnapshotRenderers :: [SnapshotRenderer]
-defaultSnapshotRenderers =
-  [ plainRenderer @String Text.pack
-  , plainRenderer @Text id
-  , jsonRenderer
-  ]
- where
-  jsonRenderer =
-    SnapshotRenderer
-      { render = TextL.toStrict . TextL.decodeUtf8 . Aeson.encodePretty @Aeson.Value
-      , snapshotLang = Just "json"
-      }
+{----- Render values -----}
 
 renderVal :: (Typeable a) => [SnapshotRenderer] -> a -> SnapshotValue
 renderVal renderers a =
@@ -425,13 +426,3 @@ normalizeSnapshotVal snapshot =
   sanitizeBackTicks = Text.replace "```" "\\`\\`\\`"
   -- Ensure there's exactly one trailing newline.
   normalizeTrailingNewlines s = Text.dropWhileEnd (== '\n') s <> "\n"
-
-snapshotRenderersRef :: IORef [SnapshotRenderer]
-snapshotRenderersRef = unsafePerformIO $ newIORef []
-{-# NOINLINE snapshotRenderersRef #-}
-
-setSnapshotRenderers :: [SnapshotRenderer] -> IO ()
-setSnapshotRenderers = writeIORef snapshotRenderersRef
-
-getSnapshotRenderers :: (MonadIO m) => m [SnapshotRenderer]
-getSnapshotRenderers = readIORef snapshotRenderersRef

@@ -43,6 +43,7 @@ import Data.Map.Merge.Strict qualified as Map.Merge
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -59,6 +60,7 @@ import Skeletest.Internal.Fixtures (
   Fixture (..),
   FixtureScope (..),
   getFixture,
+  noCleanup,
   withCleanup,
  )
 import Skeletest.Internal.Paths (readTestFile)
@@ -87,6 +89,15 @@ instance IsFlag SnapshotUpdateFlag where
   flagHelp = "Update snapshots"
   flagSpec = SwitchFlag SnapshotUpdateFlag
 
+checkSnapshot :: (Typeable a, MonadIO m) => a -> m SnapshotResult
+checkSnapshot actual = do
+  SnapshotUpdateFlag doUpdate <- getFlag
+  SnapshotChecker check <-
+    if doUpdate
+      then (.checker) <$> getFixture @UpdateSnapshotFixture
+      else (.checker) <$> getFixture @CheckSnapshotFixture
+  liftIO $ check actual
+
 data SnapshotChecker = SnapshotChecker (forall a. (Typeable a) => a -> IO SnapshotResult)
 
 data SnapshotResult
@@ -100,53 +111,63 @@ data SnapshotResult
       }
   deriving (Show, Eq)
 
-instance Fixture SnapshotChecker where
+{----- Update snapshot -----}
+
+-- | Collect snapshots for all tests in a file.
+-- When test file is done, merge new snapshots into the existing snapshot file
+-- and write to disk if it's changed.
+data UpdateSnapshotFixture_File = UpdateSnapshotFixture_File
+  { newFileSnapshotsRef :: IORef (Map TestId [SnapshotValue])
+  }
+
+instance Fixture UpdateSnapshotFixture_File where
   fixtureScope = PerFileFixture
   fixtureAction = do
     testInfo <- getTestInfo
-    let snapshotPath = getSnapshotPath testInfo.file
+    newFileSnapshotsRef <- newIORef Map.empty
+    pure . withCleanup UpdateSnapshotFixture_File{newFileSnapshotsRef} $ do
+      saveSnapshotFile testInfo newFileSnapshotsRef
 
-    SnapshotUpdateFlag doUpdate <- getFlag
-    (checker, onCleanup) <-
-      if doUpdate
-        then initSnapshotChecker_Update (Text.pack testInfo.file) snapshotPath
-        else initSnapshotChecker_Check snapshotPath
+newtype UpdateSnapshotFixture = UpdateSnapshotFixture
+  { checker :: SnapshotChecker
+  }
 
-    pure $ withCleanup checker onCleanup
+instance Fixture UpdateSnapshotFixture where
+  fixtureScope = PerTestFixture
+  fixtureAction = do
+    testInfo <- getTestInfo
+    newSnapshotsRef <- newIORef Seq.empty
+    let checker = SnapshotChecker (recordSnapshot newSnapshotsRef)
+    pure . withCleanup UpdateSnapshotFixture{checker} $ do
+      copySnapshotsToFile testInfo newSnapshotsRef
 
-checkSnapshot :: (Typeable a, MonadIO m) => a -> m SnapshotResult
-checkSnapshot actual = do
-  SnapshotChecker check <- getFixture
-  liftIO $ check actual
-
-{----- Update snapshot -----}
-
-initSnapshotChecker_Update :: Text -> FilePath -> IO (SnapshotChecker, IO ())
-initSnapshotChecker_Update testFile snapshotPath = do
-  newSnapshotsRef <- newIORef Map.empty
+-- | Collect `P.matchesSnapshot` results into a list per test.
+recordSnapshot :: (Typeable a) => IORef (Seq SnapshotValue) -> a -> IO SnapshotResult
+recordSnapshot newSnapshotsRef val = do
   renderers <- getSnapshotRenderers
+  let newSnapshotVal = renderVal renderers val
+  modifyIORef' newSnapshotsRef (Seq.|> newSnapshotVal)
+  pure SnapshotMatches
 
-  let checker = SnapshotChecker $ \val -> do
-        testId <- (.testId) <$> getTestInfo
-        let newSnapshotVal = renderVal renderers val
-        modifyIORef' newSnapshotsRef $ \newSnapshots ->
-          Map.alter
-            (Just . (Seq.|> newSnapshotVal) . fromMaybe Seq.empty)
-            testId
-            newSnapshots
-        pure SnapshotMatches
+-- | Copy snapshots to the file fixture when test is over.
+copySnapshotsToFile :: TestInfo -> IORef (Seq SnapshotValue) -> IO ()
+copySnapshotsToFile testInfo newSnapshotsRef = do
+  UpdateSnapshotFixture_File{newFileSnapshotsRef} <- getFixture
+  newSnapshots <- Seq.toList <$> readIORef newSnapshotsRef
+  modifyIORef' newFileSnapshotsRef (Map.insert testInfo.testId newSnapshots)
 
-  let onCleanup = do
-        snapshotFile <- fromMaybe (emptySnapshotFile testFile) <$> loadSnapshotFile snapshotPath
-        newSnapshots <- Map.map Seq.toList <$> readIORef newSnapshotsRef
-        let updatedSnapshots = mergeSnapshots snapshotFile.snapshots newSnapshots
-        when (updatedSnapshots /= snapshotFile.snapshots) $ do
-          createDirectoryIfMissing True (takeDirectory snapshotPath)
-          Text.writeFile snapshotPath . encodeSnapshotFile . normalizeSnapshotFile $
-            snapshotFile{snapshots = updatedSnapshots}
-
-  pure (checker, onCleanup)
+saveSnapshotFile :: TestInfo -> IORef (Map TestId [SnapshotValue]) -> IO ()
+saveSnapshotFile testInfo newFileSnapshotsRef = do
+  let snapshotPath = getSnapshotPath testInfo.file
+  snapshotFile <- fromMaybe newSnapshotFile <$> loadSnapshotFile snapshotPath
+  newSnapshots <- Map.map Seq.toList <$> readIORef newFileSnapshotsRef
+  let updatedSnapshots = mergeSnapshots snapshotFile.snapshots newSnapshots
+  when (updatedSnapshots /= snapshotFile.snapshots) $ do
+    createDirectoryIfMissing True (takeDirectory snapshotPath)
+    Text.writeFile snapshotPath . encodeSnapshotFile . normalizeSnapshotFile $
+      snapshotFile{snapshots = updatedSnapshots}
  where
+  newSnapshotFile = emptySnapshotFile (Text.pack testInfo.file)
   -- TODO: Clean up outdated snapshots in file (#24)
   mergeSnapshots old new =
     Map.Merge.merge
@@ -164,39 +185,54 @@ initSnapshotChecker_Update testFile snapshotPath = do
 
 {----- Check snapshot -----}
 
-initSnapshotChecker_Check :: FilePath -> IO (SnapshotChecker, IO ())
-initSnapshotChecker_Check snapshotPath = do
-  mSnapshotFile <- loadSnapshotFile snapshotPath
+data CheckSnapshotFixture_File = CheckSnapshotFixture_File
+  { mSnapshotFile :: Maybe SnapshotFile
+  }
+
+instance Fixture CheckSnapshotFixture_File where
+  fixtureScope = PerFileFixture
+  fixtureAction = do
+    testFile <- (.file) <$> getTestInfo
+    let snapshotPath = getSnapshotPath testFile
+    mSnapshotFile <- loadSnapshotFile snapshotPath
+    pure $ noCleanup CheckSnapshotFixture_File{mSnapshotFile}
+
+newtype CheckSnapshotFixture = CheckSnapshotFixture
+  { checker :: SnapshotChecker
+  }
+
+instance Fixture CheckSnapshotFixture where
+  fixtureScope = PerTestFixture
+  fixtureAction = do
+    testInfo <- getTestInfo
+    snapshotIndexRef <- newIORef 0
+    let checker = SnapshotChecker (runCheckSnapshot testInfo snapshotIndexRef)
+    pure $ noCleanup CheckSnapshotFixture{checker}
+
+runCheckSnapshot :: (Typeable a) => TestInfo -> IORef Int -> a -> IO SnapshotResult
+runCheckSnapshot testInfo snapshotIndexRef val = runReturnE $ do
+  CheckSnapshotFixture_File{mSnapshotFile} <- getFixture
   renderers <- getSnapshotRenderers
-  snapshotIndexesRef <- newIORef Map.empty
 
-  let checker = SnapshotChecker $ \val -> runReturnE $ do
-        testId <- (.testId) <$> getTestInfo
-        let newSnapshotVal = renderVal renderers val
-            snapshotMissing = SnapshotMissing newSnapshotVal.content
+  let newSnapshotVal = renderVal renderers val
+      snapshotMissing = SnapshotMissing newSnapshotVal.content
 
-        index <- atomicModifyIORef' snapshotIndexesRef $ \snapshotIndexes ->
-          let index = Map.findWithDefault 0 testId snapshotIndexes
-           in (Map.insert testId (index + 1) snapshotIndexes, index)
+  index <- atomicModifyIORef' snapshotIndexRef $ \index -> (index + 1, index)
 
-        snapshotFile <- maybe (returnE snapshotMissing) pure mSnapshotFile
-        let testSnapshots = Map.findWithDefault [] testId snapshotFile.snapshots
-        snapshot <-
-          maybe (returnE snapshotMissing) (pure . NonEmpty.head) $
-            (NonEmpty.nonEmpty . drop index) testSnapshots
+  snapshotFile <- maybe (returnE snapshotMissing) pure mSnapshotFile
+  let testSnapshots = Map.findWithDefault [] testInfo.testId snapshotFile.snapshots
+  snapshot <-
+    maybe (returnE snapshotMissing) (pure . NonEmpty.head) $
+      (NonEmpty.nonEmpty . drop index) testSnapshots
 
-        returnE $
-          if snapshot.content == newSnapshotVal.content
-            then SnapshotMatches
-            else
-              SnapshotDiff
-                { snapshotContent = snapshot.content
-                , renderedTestResult = newSnapshotVal.content
-                }
-
-  let onCleanup = pure ()
-
-  pure (checker, onCleanup)
+  returnE $
+    if snapshot.content == newSnapshotVal.content
+      then SnapshotMatches
+      else
+        SnapshotDiff
+          { snapshotContent = snapshot.content
+          , renderedTestResult = newSnapshotVal.content
+          }
  where
   runReturnE = fmap (either id absurd) . Except.runExceptT
   returnE = Except.throwE

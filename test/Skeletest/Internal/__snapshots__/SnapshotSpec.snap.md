@@ -11,6 +11,10 @@
 │ │                    ^^^^^^^^^^^^^^^
 │ 
 │ Snapshot does not exist. Update snapshot with --update.
+│ --- expected
+│ +++ actual
+│ @@ --0,0 +1 @@
+│ +example result
 ╰───────────────────────────────────────────────────────────────────────────────
 ```
 

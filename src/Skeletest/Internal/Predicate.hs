@@ -821,11 +821,16 @@ matchesSnapshot =
           PredicateFuncResult
             { predicateSuccess = result == SnapshotMatches
             , predicateExplain =
-                case result of
-                  SnapshotMissing -> "Snapshot does not exist. Update snapshot with --update."
-                  SnapshotMatches -> "Matches snapshot"
-                  SnapshotDiff snapshot renderedActual ->
-                    Text.intercalate "\n" $
+                Text.intercalate "\n" $
+                  case result of
+                    SnapshotMissing renderedVal ->
+                      [ "Snapshot does not exist. Update snapshot with --update."
+                      , showLineDiff ("expected", "") ("actual", renderedVal)
+                      ]
+                    SnapshotMatches ->
+                      [ "Matches snapshot"
+                      ]
+                    SnapshotDiff snapshot renderedActual ->
                       [ "Result differed from snapshot. Update snapshot with --update."
                       , showLineDiff ("expected", snapshot) ("actual", renderedActual)
                       ]

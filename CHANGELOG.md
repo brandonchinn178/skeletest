@@ -2,6 +2,7 @@
 
 Runtime changes:
 * Sanitize a literal "\`\`\`" line in snapshots ([#27](https://github.com/brandonchinn178/skeletest/issues/27))
+* Show diff when snapshot doesn't exist also ([#51](https://github.com/brandonchinn178/skeletest/issues/51))
 
 ## v0.3.7
 

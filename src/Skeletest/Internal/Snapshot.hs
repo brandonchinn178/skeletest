@@ -107,6 +107,8 @@ instance IsFlag SnapshotUpdateFlag where
 
 data SnapshotResult
   = SnapshotMissing
+      { renderedVal :: Text
+      }
   | SnapshotMatches
   | SnapshotDiff
       { snapshotContent :: Text
@@ -168,18 +170,19 @@ initSnapshotChecker_Check snapshotPath = do
 
   let checker = SnapshotChecker $ \val -> runReturnE $ do
         testId <- (.testId) <$> getTestInfo
+        let newSnapshotVal = renderVal renderers val
+            snapshotMissing = SnapshotMissing newSnapshotVal.content
 
         index <- atomicModifyIORef' snapshotIndexesRef $ \snapshotIndexes ->
           let index = Map.findWithDefault 0 testId snapshotIndexes
            in (Map.insert testId (index + 1) snapshotIndexes, index)
 
-        snapshotFile <- maybe (returnE SnapshotMissing) pure mSnapshotFile
+        snapshotFile <- maybe (returnE snapshotMissing) pure mSnapshotFile
         let testSnapshots = Map.findWithDefault [] testId snapshotFile.snapshots
         snapshot <-
-          maybe (returnE SnapshotMissing) (pure . NonEmpty.head) $
+          maybe (returnE snapshotMissing) (pure . NonEmpty.head) $
             (NonEmpty.nonEmpty . drop index) testSnapshots
 
-        let newSnapshotVal = renderVal renderers val
         returnE $
           if snapshot.content == newSnapshotVal.content
             then SnapshotMatches

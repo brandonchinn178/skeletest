@@ -79,7 +79,26 @@ import UnliftIO.IORef (
 
 {----- Infrastructure -----}
 
+newtype SnapshotUpdateFlag = SnapshotUpdateFlag Bool
+
+instance IsFlag SnapshotUpdateFlag where
+  flagName = "update"
+  flagShort = Just 'u'
+  flagHelp = "Update snapshots"
+  flagSpec = SwitchFlag SnapshotUpdateFlag
+
 data SnapshotChecker = SnapshotChecker (forall a. (Typeable a) => a -> IO SnapshotResult)
+
+data SnapshotResult
+  = SnapshotMissing
+      { renderedVal :: Text
+      }
+  | SnapshotMatches
+  | SnapshotDiff
+      { snapshotContent :: Text
+      , renderedTestResult :: Text
+      }
+  deriving (Show, Eq)
 
 instance Fixture SnapshotChecker where
   fixtureScope = PerFileFixture
@@ -95,31 +114,12 @@ instance Fixture SnapshotChecker where
 
     pure $ withCleanup checker onCleanup
 
-newtype SnapshotUpdateFlag = SnapshotUpdateFlag Bool
-
-instance IsFlag SnapshotUpdateFlag where
-  flagName = "update"
-  flagShort = Just 'u'
-  flagHelp = "Update snapshots"
-  flagSpec = SwitchFlag SnapshotUpdateFlag
-
-{----- Running snapshot -----}
-
-data SnapshotResult
-  = SnapshotMissing
-      { renderedVal :: Text
-      }
-  | SnapshotMatches
-  | SnapshotDiff
-      { snapshotContent :: Text
-      , renderedTestResult :: Text
-      }
-  deriving (Show, Eq)
-
 checkSnapshot :: (Typeable a, MonadIO m) => a -> m SnapshotResult
 checkSnapshot actual = do
   SnapshotChecker check <- getFixture
   liftIO $ check actual
+
+{----- Update snapshot -----}
 
 initSnapshotChecker_Update :: Text -> FilePath -> IO (SnapshotChecker, IO ())
 initSnapshotChecker_Update testFile snapshotPath = do
@@ -162,6 +162,8 @@ initSnapshotChecker_Update testFile snapshotPath = do
     -- TODO: Clean up outdated snapshots in test (#24)
     new <> drop (length new) old
 
+{----- Check snapshot -----}
+
 initSnapshotChecker_Check :: FilePath -> IO (SnapshotChecker, IO ())
 initSnapshotChecker_Check snapshotPath = do
   mSnapshotFile <- loadSnapshotFile snapshotPath
@@ -199,16 +201,6 @@ initSnapshotChecker_Check snapshotPath = do
   runReturnE = fmap (either id absurd) . Except.runExceptT
   returnE = Except.throwE
 
-loadSnapshotFile :: FilePath -> IO (Maybe SnapshotFile)
-loadSnapshotFile path =
-  handleDNE (\_ -> pure Nothing) . fmap Just $ do
-    contents <- readTestFile path
-    case decodeSnapshotFile contents of
-      Just file -> pure file
-      Nothing -> skeletestError $ "Snapshot file was corrupted: " <> Text.pack path
- where
-  handleDNE = handleJust (\e -> guard (isDoesNotExistError e) *> Just e)
-
 {----- Snapshot file -----}
 
 data SnapshotFile = SnapshotFile
@@ -237,6 +229,16 @@ emptySnapshotFile testFile =
     { testFile
     , snapshots = Map.empty
     }
+
+loadSnapshotFile :: FilePath -> IO (Maybe SnapshotFile)
+loadSnapshotFile path =
+  handleDNE (\_ -> pure Nothing) . fmap Just $ do
+    contents <- readTestFile path
+    case decodeSnapshotFile contents of
+      Just file -> pure file
+      Nothing -> skeletestError $ "Snapshot file was corrupted: " <> Text.pack path
+ where
+  handleDNE = handleJust (\e -> guard (isDoesNotExistError e) *> Just e)
 
 decodeSnapshotFile :: Text -> Maybe SnapshotFile
 decodeSnapshotFile = parseFile . Text.lines

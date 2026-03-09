@@ -140,15 +140,17 @@ instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, S
         (_, "") -> s
         (pre, post) -> pre <> stripControlChars (Text.drop 1 . Text.dropWhile (/= 'm') $ post)
 
-expectCode :: (HasCallStack) => ExitCode -> IO (ExitCode, String, String) -> IO (String, String)
+expectCode :: (HasCallStack) => Int -> IO (ExitCode, String, String) -> IO (String, String)
 expectCode expected m = do
   (code, stdout, stderr) <- m
   context (unlines ["===== stdout =====", stdout, "===== stderr =====", stderr]) $
-    code `shouldBe` expected
+    code `shouldBe` expectedCode
   pure (stdout, stderr)
+ where
+  expectedCode = if expected == 0 then ExitSuccess else ExitFailure expected
 
 expectSuccess :: (HasCallStack) => IO (ExitCode, String, String) -> IO (String, String)
-expectSuccess = expectCode ExitSuccess
+expectSuccess = expectCode 0
 
 expectFailure :: (HasCallStack) => IO (ExitCode, String, String) -> IO (String, String)
-expectFailure = expectCode $ ExitFailure 1
+expectFailure = expectCode 1

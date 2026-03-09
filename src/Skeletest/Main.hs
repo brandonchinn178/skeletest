@@ -64,8 +64,8 @@ runSkeletest' Plugin{hooks = hooks0, ..} testModules = handleUnknownErrors $ do
     Text.hPutStrLn IO.stderr $ Color.red "ERROR: No tests selected!"
     exitWith ExitNoTests
 
-  success <- runSpecs hooks specs
-  exitWith $ if success then ExitSuccess else ExitTestFailure
+  exitCode <- hooks.runSpecs (runSpecs hooks) specs
+  exitWith exitCode
  where
   hooks = mconcat builtinHooks <> hooks0
 

@@ -15,6 +15,9 @@ Runtime changes:
 New features:
 * Support repeated CLI flags with `MultiFlag`
 
+API changes:
+* Added `runSpecs` to `Hooks`
+
 Runtime changes:
 * Fix `--foo=bar` to error when `--foo` is a `SwitchFlag`
   * Previously, it would silently add `bar` as a positional argument

@@ -42,7 +42,7 @@ import Data.List (sort)
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (catMaybes, fromMaybe, isNothing, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Data.Set (Set)
@@ -79,10 +79,10 @@ import Skeletest.Internal.TestInfo (TestId, TestInfo (..), getTestInfo)
 import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Internal.Utils.Diff (showLineDiff)
 import Skeletest.Plugin (BoxSpecContent (..), Hooks (..), Spec, SpecInfo (..), SpecTest (..), SpecTree (..), TestResult (..), TestResultMessage (..), defaultHooks, getSpecTrees)
-import System.Directory (createDirectoryIfMissing)
 import System.FilePath (replaceExtension, splitFileName, takeDirectory, takeExtensions, (</>))
 import System.IO.Error (isDoesNotExistError)
 import System.IO.Unsafe (unsafePerformIO)
+import UnliftIO.Directory (createDirectoryIfMissing, removeFile)
 import UnliftIO.Exception (handleJust)
 import UnliftIO.IORef (
   IORef,
@@ -175,7 +175,7 @@ snapshotsHook =
         code <- run specs
         SnapshotUpdateFlag isUpdate <- getFlag
         if isUpdate
-          then pure code -- FIXME(bchinn)
+          then removeOutdatedSnapshots *> pure code
           else checkOutdatedSnapshots code
     }
 
@@ -191,11 +191,60 @@ getTestIds = Set.fromList . concatMap (go Seq.empty) . getSpecTrees
     group@SpecTree_Group{} -> concatMap (go (context Seq.|> group.label)) group.trees
     SpecTree_Test test -> [Seq.toList $ context Seq.|> test.name]
 
-checkOutdatedSnapshots :: TestExitCode -> IO TestExitCode
-checkOutdatedSnapshots code = do
+-- | Detect outdated snapshots, returning the filepath to the outdated
+-- snapshot and the action to clean it up.
+detectOutdatedSnapshots :: IO [(FilePath, IO ())]
+detectOutdatedSnapshots = do
   allSnapshotFiles <- filter isSnapshotFile <$> listTestFiles
   allTests <- readIORef allTestsRef
-  outdated <- filterM (isOutdated allTests) allSnapshotFiles
+  mapMaybeM (detectOutdated allTests) allSnapshotFiles
+ where
+  isSnapshotFile fp = takeExtensions fp == ".snap.md"
+  mapMaybeM f = fmap catMaybes . mapM f
+
+  detectOutdated allTests = runDetectOutdatedM $ \snapshotFilePath -> do
+    testIds <-
+      case Map.lookup snapshotFilePath allTests of
+        Just testIds -> pure testIds
+        -- If Nothing, snapshot file does not correspond to any tests
+        Nothing -> returnOutdated $ removeFile snapshotFilePath
+
+    contents <- liftIO $ Text.readFile snapshotFilePath
+
+    snapshotFile <-
+      case decodeSnapshotFile contents of
+        Just file -> pure file
+        -- If Nothing, snapshot file is corrupted; we'll treat it the same as outdated.
+        -- If this happens when '--update' is passed, it means no more tests in
+        -- the file have snapshots, since it would've been regenerated. So just
+        -- remove the snapshot file if we still encounter this.
+        Nothing -> returnOutdated $ removeFile snapshotFilePath
+
+    let outdatedSnapshots = Map.keysSet snapshotFile.snapshots Set.\\ testIds
+    unless (null outdatedSnapshots) $
+      returnOutdated $ do
+        let snapshots' = Map.withoutKeys snapshotFile.snapshots outdatedSnapshots
+        if Map.null snapshots'
+          then removeFile snapshotFilePath
+          else
+            Text.writeFile snapshotFilePath . encodeSnapshotFile $
+              snapshotFile{snapshots = snapshots'}
+
+  runDetectOutdatedM ::
+    (FilePath -> Except.ExceptT (IO ()) IO ()) ->
+    FilePath ->
+    IO (Maybe (FilePath, IO ()))
+  runDetectOutdatedM action fp =
+    either (\io -> Just (fp, io)) (\_ -> Nothing)
+      <$> Except.runExceptT (action fp)
+  returnOutdated = Except.throwE
+
+removeOutdatedSnapshots :: IO ()
+removeOutdatedSnapshots = mapM_ snd =<< detectOutdatedSnapshots
+
+checkOutdatedSnapshots :: TestExitCode -> IO TestExitCode
+checkOutdatedSnapshots code = do
+  outdated <- map fst <$> detectOutdatedSnapshots
   if null outdated
     then pure code
     else do
@@ -208,22 +257,6 @@ checkOutdatedSnapshots code = do
         , ["╙─────────────────────────────────────────────────"]
         ]
       pure ExitOutdatedSnapshots
- where
-  isSnapshotFile fp = takeExtensions fp == ".snap.md"
-
-  isOutdated allTests snapshotFile = runCheckOutdated $ do
-    -- If Nothing, snapshot file does not correspond to any tests
-    testIds <- maybe returnOutdated pure $ Map.lookup snapshotFile allTests
-    contents <- liftIO $ Text.readFile snapshotFile
-    -- If Nothing, snapshot file is corrupted; we'll treat it the same as outdated
-    SnapshotFile{snapshots} <- maybe returnOutdated pure $ decodeSnapshotFile contents
-    when (not $ Map.keysSet snapshots `Set.isSubsetOf` testIds) $
-      returnOutdated
-
-  runCheckOutdated = fmap isNothing . Maybe.runMaybeT
-  returnOutdated = Maybe.hoistMaybe Nothing
-
-  filterM f = fmap catMaybes . mapM (\x -> (\p -> if p then Just x else Nothing) <$> f x)
 
 {----- Update snapshot -----}
 

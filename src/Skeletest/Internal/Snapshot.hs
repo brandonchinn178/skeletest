@@ -40,7 +40,6 @@ import Data.Char (isAlpha, isPrint)
 import Data.Foldable qualified as Seq (toList)
 import Data.List (sort)
 import Data.List.NonEmpty qualified as NonEmpty
-import Data.Map.Merge.Strict qualified as Map.Merge
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (catMaybes, fromMaybe, isNothing, mapMaybe)
@@ -279,27 +278,12 @@ saveSnapshotFile testInfo newFileSnapshotsRef = do
   let snapshotPath = getSnapshotPath testInfo.file
   snapshotFile <- fromMaybe newSnapshotFile <$> loadSnapshotFile snapshotPath
   newSnapshots <- Map.map Seq.toList <$> readIORef newFileSnapshotsRef
-  let updatedSnapshots = mergeSnapshots snapshotFile.snapshots newSnapshots
-  when (updatedSnapshots /= snapshotFile.snapshots) $ do
+  when (newSnapshots /= snapshotFile.snapshots) $ do
     createDirectoryIfMissing True (takeDirectory snapshotPath)
     Text.writeFile snapshotPath . encodeSnapshotFile . normalizeSnapshotFile $
-      snapshotFile{snapshots = updatedSnapshots}
+      snapshotFile{snapshots = newSnapshots}
  where
   newSnapshotFile = emptySnapshotFile (Text.pack testInfo.file)
-  -- TODO: Clean up outdated snapshots in file (#24)
-  mergeSnapshots old new =
-    Map.Merge.merge
-      Map.Merge.preserveMissing
-      Map.Merge.preserveMissing
-      (Map.Merge.zipWithMatched mergeSnapshotVals)
-      old
-      new
-  mergeSnapshotVals _ old new =
-    -- If test has extra snapshots, keep them, in case the test failed and didn't
-    -- make it to all the snapshot assertions.
-    -- TODO: Don't save when test fails (#25)
-    -- TODO: Clean up outdated snapshots in test (#24)
-    new <> drop (length new) old
 
 {----- Check snapshot -----}
 

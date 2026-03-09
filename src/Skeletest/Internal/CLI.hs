@@ -44,9 +44,10 @@ import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Data.Typeable (TypeRep, Typeable, typeOf, typeRep)
 import Skeletest.Internal.Error (invariantViolation, skeletestError)
+import Skeletest.Internal.Exit (TestExitCode (..), exitWith)
 import Skeletest.Internal.TestTargets (TestTargets, parseTestTargets)
+import Skeletest.Internal.Utils.Color qualified as Color
 import System.Environment (getArgs)
-import System.Exit (exitFailure, exitSuccess)
 import System.IO (stderr)
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -159,14 +160,14 @@ loadCliArgs builtinFlags flags = do
   args0 <- getArgs
   case parseCliArgs (builtinFlags <> flags) args0 of
     CLISetupFailure msg -> do
-      Text.hPutStrLn stderr $ "ERROR: " <> msg
-      exitFailure
+      Text.hPutStrLn stderr $ Color.red $ "ERROR: " <> msg
+      exitWith ExitCLIFailure
     CLIHelpRequested -> do
       Text.putStrLn helpText
-      exitSuccess
+      exitWith ExitSuccess
     CLIParseFailure msg -> do
       Text.hPutStrLn stderr $ msg <> "\n\n" <> helpText
-      exitFailure
+      exitWith ExitCLIFailure
     CLIParseSuccess{testTargets, flagStore} -> do
       setCliFlagStore flagStore
       pure testTargets

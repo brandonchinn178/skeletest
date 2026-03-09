@@ -42,6 +42,7 @@ module Skeletest.Internal.Spec.Tree (
   withSpecTrees,
   mapSpecTrees,
   traverseSpecTrees,
+  getSpecTests,
   mapSpecTests,
   filterSpecTests,
   traverseSpecTests,
@@ -52,8 +53,10 @@ module Skeletest.Internal.Spec.Tree (
 import Control.Monad (guard, (>=>))
 import Control.Monad.Trans.Reader qualified as Trans
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
+import Data.Foldable qualified as Seq
 import Data.Functor.Identity (runIdentity)
 import Data.Maybe (catMaybes, mapMaybe)
+import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Skeletest.Assertions (Testable, runTestable)
@@ -130,6 +133,11 @@ mapSpecTrees ::
   Spec ->
   Spec
 mapSpecTrees f = runIdentity . traverseSpecTrees (\go -> pure . f (runIdentity . go))
+
+getSpecTests :: Spec -> [SpecTest]
+getSpecTests = Seq.toList . execWriter . traverseSpecTests go
+ where
+  go stest = tell (Seq.singleton stest) *> pure stest
 
 traverseSpecTests :: (Monad m) => (SpecTest -> m SpecTest) -> Spec -> m Spec
 traverseSpecTests f = traverseSpecTrees $ \go ->

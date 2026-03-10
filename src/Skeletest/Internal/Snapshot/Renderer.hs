@@ -20,6 +20,7 @@ import Data.Text qualified as Text
 import Data.Text.Lazy qualified as TextL
 import Data.Text.Lazy.Encoding qualified as TextL
 import Data.Typeable (Typeable)
+import Skeletest.Internal.Utils.Text (showT)
 import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.IORef (IORef, newIORef, readIORef, writeIORef)
 
@@ -39,7 +40,7 @@ plainRenderer render =
     }
 
 renderWithShow :: forall a. (Typeable a, Show a) => SnapshotRenderer
-renderWithShow = plainRenderer (Text.pack . show @a)
+renderWithShow = plainRenderer (showT @a)
 
 defaultSnapshotRenderers :: [SnapshotRenderer]
 defaultSnapshotRenderers =

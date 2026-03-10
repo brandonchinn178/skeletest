@@ -19,6 +19,7 @@ import Skeletest.Internal.Paths (setOriginalDirectory)
 import Skeletest.Internal.Predicate qualified as P
 import Skeletest.Internal.Preprocessor qualified as Preprocessor
 import Skeletest.Internal.Utils.HList (HList (..))
+import Skeletest.Internal.Utils.Text (showT)
 import Skeletest.Main qualified as Main
 import Skeletest.Plugin qualified as Plugin
 
@@ -184,7 +185,7 @@ replaceConMatch ctx e =
 
   -- Generate variable names like x0, x1, ... for each element in the given list.
   mkVarNames =
-    let mkVar i = "x" <> (Text.pack . show) i
+    let mkVar i = "x" <> showT i
      in zipWith (\i _ -> hsVarName (mkVar i)) [0 :: Int ..]
 
   -- Create the deconstruction function:

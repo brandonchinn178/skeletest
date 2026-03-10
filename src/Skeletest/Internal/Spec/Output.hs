@@ -19,6 +19,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Skeletest.Internal.Paths (readTestFile)
+import Skeletest.Internal.Utils.Text (showT)
 import System.Console.Terminal.Size qualified as Term
 import System.IO qualified as IO
 import UnliftIO.Exception (SomeException, try)
@@ -106,7 +107,7 @@ renderPrettyFailure msg ctx callstack = do
             Left e -> (Text.pack e, "")
 
     pure . Text.intercalate "\n" $
-      [ Text.pack path <> ":" <> (Text.pack . show) lineNum <> ":"
+      [ Text.pack path <> ":" <> showT lineNum <> ":"
       , "│"
       , "│ " <> srcLine
       , "│ " <> pointerLine

@@ -97,6 +97,7 @@ import Skeletest.Internal.Error (
  )
 import Skeletest.Internal.GHC.Compat (genLoc)
 import Skeletest.Internal.GHC.Compat qualified as GHC.Compat
+import Skeletest.Internal.Utils.Text (showT)
 
 -- Has to be exactly GHC's Plugin type, for GHC to register it correctly.
 type Plugin = GHC.Plugin
@@ -239,8 +240,8 @@ getLoc HsExprUnsafe{ghcExpr} = getLoc' <$> ghcExpr
 
 renderHsExpr :: HsExpr GhcRn -> Text
 renderHsExpr = \case
-  HsExprUnsafe{ghcExpr = Just e} -> Text.pack $ show e
-  HsExprUnsafe{hsExpr = e} -> Text.pack $ show e
+  HsExprUnsafe{ghcExpr = Just e} -> showT e
+  HsExprUnsafe{hsExpr = e} -> showT e
 
 newHsExpr :: HsExprData p -> HsExpr p
 newHsExpr e =

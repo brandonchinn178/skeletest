@@ -24,8 +24,10 @@ import Skeletest.TestUtils.Integration
 
 spec :: Spec
 spec = do
+  let noopRank = const 0
+
   prop "decodeSnapshotFile . encodeSnapshotFile === pure" $ do
-    (decodeSnapshotFile . encodeSnapshotFile) P.=== pure `shouldSatisfy` P.isoWith genSnapshotFile
+    (decodeSnapshotFile . encodeSnapshotFile noopRank) P.=== pure `shouldSatisfy` P.isoWith genSnapshotFile
 
   prop "normalizeSnapshotFile is idempotent" $ do
     file <- forAll genSnapshotFileRaw
@@ -34,7 +36,7 @@ spec = do
     normalizeSnapshotFile' file `shouldBe` normalizeSnapshotFile file
 
   it "sanitizes literal ``` lines" $ do
-    let roundtrip x = (decodeSnapshotFile . encodeSnapshotFile) x `shouldBe` Just x
+    let roundtrip x = (decodeSnapshotFile . encodeSnapshotFile noopRank) x `shouldBe` Just x
     roundtrip $ mkSnapshot "```"
     roundtrip $ mkSnapshot "    ```"
     roundtrip $ mkSnapshot "a```b"

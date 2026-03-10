@@ -127,7 +127,7 @@ spec = do
       ]
     runner.addTestFile "__snapshots__/ExampleSpec.snap.md" ["asdf"]
 
-    (stdout, stderr) <- expectFailure runner.runTests
+    (stdout, stderr) <- expectCode 5 runner.runTests
     stderr `shouldBe` ""
     stdout `shouldSatisfy` P.matchesSnapshot
 

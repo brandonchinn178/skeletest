@@ -50,8 +50,14 @@
 ```
 ./ExampleSpec.hs
 ╭── should error: ERROR
-│ Snapshot file was corrupted: ./__snapshots__/ExampleSpec.snap.md
+│ Snapshot file was corrupted: __snapshots__/ExampleSpec.snap.md
 ╰───────────────────────────────────────────────────────────────────────────────
+
+╓─ 🚨 Outdated snapshots detected ────────────────
+║  * __snapshots__/ExampleSpec.snap.md
+║
+║  Update/remove these files with --update.
+╙─────────────────────────────────────────────────
 ```
 
 ## renders JSON values

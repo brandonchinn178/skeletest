@@ -193,6 +193,7 @@ When multiple targets are specified, they are joined with `or`.
 |     1     | Tests failed, general errors |
 |     3     | No tests ran                 |
 |     4     | CLI argument-related failure |
+|     5     | Outdated snapshots           |
 |    10     | Preprocessor failure         |
 |    99     | Some unknown error           |
 
@@ -464,6 +465,7 @@ Skeletest lets you hook into specific parts of test execution. Skeletest current
 
 * `modifySpecRegistry` - Modify all the specs in the test suite. This can be used to do your own test selection, test transformations, etc.
 * `runTest` - Modify how/if a test is run. Takes the `TestInfo` of the currently running test. `TestInfo` contains `testInfoMarkers`, which you can query with `findMarker` or `hasMarkerNamed`.
+* `runSpecs` - Modify running specs
 
 ### Plugins
 

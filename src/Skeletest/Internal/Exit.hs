@@ -22,6 +22,7 @@ data TestExitCode
   | ExitTestFailure
   | ExitNoTests
   | ExitCLIFailure
+  | ExitOutdatedSnapshots
   | ExitPreprocessorFailure
   | ExitOther
 
@@ -31,6 +32,7 @@ fromExitCode = \case
   ExitTestFailure -> Exit.ExitFailure 1
   ExitNoTests -> Exit.ExitFailure 3
   ExitCLIFailure -> Exit.ExitFailure 4
+  ExitOutdatedSnapshots -> Exit.ExitFailure 5
   ExitPreprocessorFailure -> Exit.ExitFailure 10
   ExitOther -> Exit.ExitFailure 99
 

@@ -49,6 +49,7 @@ import Data.Text.IO qualified as Text
 import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
 import Numeric (showFFloat)
 import Skeletest.Internal.Capture (addCapturedOutput, withCaptureOutput)
+import Skeletest.Internal.Exit (TestExitCode (..))
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.Markers (
   findMarker,
@@ -95,10 +96,10 @@ import UnliftIO.Exception (
 {----- Execute spec -----}
 
 -- | Run the given Specs and return whether all of the tests passed.
-runSpecs :: Hooks -> SpecRegistry -> IO Bool
+runSpecs :: Hooks -> SpecRegistry -> IO TestExitCode
 runSpecs hooks specs =
   (`finally` cleanupFixtures PerSessionFixtureKey) $
-    fmap and . forM (pruneSpec specs) $ \SpecInfo{..} ->
+    fmap resolveExitCode . forM (pruneSpec specs) $ \SpecInfo{..} ->
       (`finally` cleanupFixtures (PerFileFixtureKey specPath)) $ do
         let emptyTestInfo =
               TestInfo
@@ -111,7 +112,7 @@ runSpecs hooks specs =
         let specTrees = getSpecTrees specSpec
         runTrees emptyTestInfo specTrees
  where
-  runTrees baseTestInfo = fmap and . mapM (runTree baseTestInfo)
+  runTrees baseTestInfo = fmap resolveExitCode . mapM (runTree baseTestInfo)
   runTree baseTestInfo = \case
     SpecTree_Group{..} -> do
       let lvl = getIndentLevel baseTestInfo
@@ -146,7 +147,7 @@ runSpecs hooks specs =
         TestResultMessageBox box -> do
           termSize <- Term.size
           reportTestResultWithBoxMessage termSize lvl test.name testResultLabel box
-      pure testResultSuccess
+      pure $ if testResultSuccess then ExitSuccess else ExitTestFailure
 
   runTest info action =
     hooks.runTest info $ do
@@ -160,6 +161,15 @@ runSpecs hooks specs =
               Nothing -> testResultFromError e
 
   getIndentLevel testInfo = length testInfo.contexts + 1 -- +1 to include the module name
+
+-- | Resolve the given exit codes, returning the first non-success code.
+resolveExitCode :: [TestExitCode] -> TestExitCode
+resolveExitCode = go
+ where
+  go = \case
+    [] -> ExitSuccess
+    ExitSuccess : rest -> go rest
+    code : _ -> code
 
 withTimer :: IO a -> IO (a, NominalDiffTime)
 withTimer m = do

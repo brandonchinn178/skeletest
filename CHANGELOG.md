@@ -9,11 +9,15 @@ Runtime changes:
 * Only update snapshots if test passed ([#25](https://github.com/brandonchinn178/skeletest/issues/25))
 * Standardize exit codes
 * Error if no tests were selected
+* If there are any outdated snapshot files, `--update` now updates/removes them. The test suite fails if `--update` is not specified. ([#24](https://github.com/brandonchinn178/skeletest/issues/24))
 
 ## v0.3.7
 
 New features:
 * Support repeated CLI flags with `MultiFlag`
+
+API changes:
+* Added `runSpecs` to `Hooks`
 
 Runtime changes:
 * Fix `--foo=bar` to error when `--foo` is a `SwitchFlag`

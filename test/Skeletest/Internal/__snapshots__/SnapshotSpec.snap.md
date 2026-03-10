@@ -1,5 +1,32 @@
 # test/Skeletest/Internal/SnapshotSpec.hs
 
+## cleans up outdated snapshots
+
+```
+./Test1Spec.hs
+    test other: OK
+./Test2Spec.hs
+    test other: OK
+./Test3Spec.hs
+    test: OK
+    test other: OK
+./Test4Spec.hs
+    test: OK
+./Test5Spec.hs
+    test: OK
+
+╓─ 🚨 Outdated snapshots detected ────────────────
+║  * __snapshots__/Test1Spec.snap.md
+║  * __snapshots__/Test2Spec.snap.md
+║  * __snapshots__/Test3Spec.snap.md
+║  * __snapshots__/Test4Spec.snap.md
+║  * __snapshots__/Test5Spec.snap.md
+║  * __snapshots__/Test6Spec.snap.md
+║
+║  Update/remove these files with --update.
+╙─────────────────────────────────────────────────
+```
+
 ## creates a new snapshot
 
 ```
@@ -23,8 +50,14 @@
 ```
 ./ExampleSpec.hs
 ╭── should error: ERROR
-│ Snapshot file was corrupted: ./__snapshots__/ExampleSpec.snap.md
+│ Snapshot file was corrupted: __snapshots__/ExampleSpec.snap.md
 ╰───────────────────────────────────────────────────────────────────────────────
+
+╓─ 🚨 Outdated snapshots detected ────────────────
+║  * __snapshots__/ExampleSpec.snap.md
+║
+║  Update/remove these files with --update.
+╙─────────────────────────────────────────────────
 ```
 
 ## renders JSON values

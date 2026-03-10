@@ -2,6 +2,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -34,15 +35,17 @@ module Skeletest.Internal.Snapshot (
 import Control.Monad (guard, unless, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Except qualified as Except
+import Control.Monad.Trans.Maybe qualified as Maybe
 import Data.Char (isAlpha, isPrint)
 import Data.Foldable qualified as Seq (toList)
 import Data.List.NonEmpty qualified as NonEmpty
-import Data.Map.Merge.Strict qualified as Map.Merge
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
@@ -52,6 +55,7 @@ import Data.Void (absurd)
 import Debug.RecoverRTTI (anythingToString)
 import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..), getFlag)
 import Skeletest.Internal.Error (skeletestError)
+import Skeletest.Internal.Exit (TestExitCode (..))
 import Skeletest.Internal.Fixtures (
   Fixture (..),
   FixtureScope (..),
@@ -59,7 +63,7 @@ import Skeletest.Internal.Fixtures (
   noCleanup,
   withCleanup,
  )
-import Skeletest.Internal.Paths (readTestFile)
+import Skeletest.Internal.Paths (listTestFiles, readTestFile)
 import Skeletest.Internal.Predicate (
   Predicate (..),
   PredicateFuncResult (..),
@@ -72,10 +76,26 @@ import Skeletest.Internal.Snapshot.Renderer (
 import Skeletest.Internal.Snapshot.Renderer qualified as X
 import Skeletest.Internal.TestInfo (TestId, TestInfo (..), getTestInfo)
 import Skeletest.Internal.Utils.Diff (showLineDiff)
-import Skeletest.Plugin (Hooks (..), TestResult (..), defaultHooks)
-import System.Directory (createDirectoryIfMissing)
-import System.FilePath (replaceExtension, splitFileName, takeDirectory, (</>))
+import Skeletest.Plugin (
+  Hooks (..),
+  Spec,
+  SpecInfo (..),
+  SpecTest (..),
+  SpecTree (..),
+  TestResult (..),
+  defaultHooks,
+  getSpecTrees,
+ )
+import System.FilePath (
+  replaceExtension,
+  splitFileName,
+  takeDirectory,
+  takeExtensions,
+  (</>),
+ )
 import System.IO.Error (isDoesNotExistError)
+import System.IO.Unsafe (unsafePerformIO)
+import UnliftIO.Directory (createDirectoryIfMissing, removeFile)
 import UnliftIO.Exception (handleJust)
 import UnliftIO.IORef (
   IORef,
@@ -148,15 +168,129 @@ data SnapshotResult
 snapshotsHook :: Hooks
 snapshotsHook =
   defaultHooks
-    { runTest = \testInfo getResult -> do
+    { modifySpecRegistry = \_ modify registry -> do
+        -- Collect before the applyTestSelections hook to check for snapshots
+        -- that don't correspond to any tests anymore
+        modifyIORef' snapshotInfoStoreRef $ \store ->
+          store
+            { allSnapshotTestIds =
+                Map.fromList
+                  [ (getSnapshotPath specPath, getTestIds specSpec)
+                  | SpecInfo{..} <- registry
+                  ]
+            }
+        modify registry
+    , runTest = \testInfo getResult -> do
+        SnapshotUpdateFlag isUpdate <- getFlag
+        when isUpdate $ do
+          -- Always initialize the file fixture to ensure snapshots get
+          -- cleaned up for a test that removed all `P.matchesSnapshot`
+          -- checks
+          _ <- getFixture @UpdateSnapshotFixture_File
+          pure ()
         result <- getResult
         when result.testResultSuccess $ do
-          -- TODO: Allow checking if test used this fixture?
-          -- Currently, we're always doing this even for non-snapshot tests.
-          UpdateSnapshotFixture{newSnapshotsRef} <- getFixture
-          copySnapshotsToFile testInfo newSnapshotsRef
+          if isUpdate
+            then recordSnapshotsToFileFixture testInfo
+            else checkExtraTestSnapshots testInfo
         pure result
+    , runSpecs = \run specs -> do
+        SnapshotUpdateFlag isUpdate <- getFlag
+        code <- run specs
+        if isUpdate
+          then removeOutdatedSnapshots *> pure code
+          else checkOutdatedSnapshots code
     }
+
+-- | Snapshot-related information to store globally.
+data SnapshotInfoStore = SnapshotInfoStore
+  { allSnapshotTestIds :: Map FilePath (Set TestId)
+  -- ^ Map from a test file's snapshot path to all test ids in the file
+  , snapshotFilesWithExtraSnapshots :: Set FilePath
+  -- ^ Snapshot files that contain tests that contain extraneous snapshots.
+  }
+
+-- | Map from "Test file's snapshot path" => "All test ids in the test file"
+snapshotInfoStoreRef :: IORef SnapshotInfoStore
+snapshotInfoStoreRef =
+  unsafePerformIO . newIORef $
+    SnapshotInfoStore
+      { allSnapshotTestIds = Map.empty
+      , snapshotFilesWithExtraSnapshots = Set.empty
+      }
+{-# NOINLINE snapshotInfoStoreRef #-}
+
+getTestIds :: Spec -> Set TestId
+getTestIds = Set.fromList . concatMap (go Seq.empty) . getSpecTrees
+ where
+  go context = \case
+    group@SpecTree_Group{} -> concatMap (go (context Seq.|> group.label)) group.trees
+    SpecTree_Test test -> [Seq.toList $ context Seq.|> test.name]
+
+-- | Detect outdated snapshots, returning the filepath to the outdated
+-- snapshot and the action to clean it up.
+detectOutdatedSnapshots :: IO [(FilePath, IO ())]
+detectOutdatedSnapshots = do
+  allSnapshotFiles <- filter isSnapshotFile <$> listTestFiles
+  allTests <- (.allSnapshotTestIds) <$> readIORef snapshotInfoStoreRef
+  mapMaybeM (detectOutdated allTests) allSnapshotFiles
+ where
+  isSnapshotFile fp = takeExtensions fp == ".snap.md"
+  mapMaybeM f = fmap catMaybes . mapM f
+
+  detectOutdated allTests = runDetectOutdatedM $ \snapshotFilePath -> do
+    testIds <-
+      case Map.lookup snapshotFilePath allTests of
+        Just testIds -> pure testIds
+        -- If Nothing, snapshot file does not correspond to any tests
+        Nothing -> returnOutdated $ removeFile snapshotFilePath
+
+    contents <- liftIO $ Text.readFile snapshotFilePath
+
+    snapshotFile <-
+      case decodeSnapshotFile contents of
+        Just file -> pure file
+        -- If Nothing, snapshot file is corrupted; we'll treat it the same as outdated.
+        -- If this happens when '--update' is passed, it means no more tests in
+        -- the file have snapshots, since it would've been regenerated. So just
+        -- remove the snapshot file if we still encounter this.
+        Nothing -> returnOutdated $ removeFile snapshotFilePath
+
+    let outdatedSnapshots = Map.keysSet snapshotFile.snapshots Set.\\ testIds
+    unless (null outdatedSnapshots) $
+      returnOutdated $ do
+        let snapshots' = Map.withoutKeys snapshotFile.snapshots outdatedSnapshots
+        saveSnapshotFile snapshotFilePath snapshotFile{snapshots = snapshots'}
+
+  runDetectOutdatedM ::
+    (FilePath -> Except.ExceptT (IO ()) IO ()) ->
+    FilePath ->
+    IO (Maybe (FilePath, IO ()))
+  runDetectOutdatedM action fp =
+    either (\io -> Just (fp, io)) (\_ -> Nothing)
+      <$> Except.runExceptT (action fp)
+  returnOutdated = Except.throwE
+
+removeOutdatedSnapshots :: IO ()
+removeOutdatedSnapshots = mapM_ snd =<< detectOutdatedSnapshots
+
+checkOutdatedSnapshots :: TestExitCode -> IO TestExitCode
+checkOutdatedSnapshots code = do
+  outdated <- map fst <$> detectOutdatedSnapshots
+  store <- readIORef snapshotInfoStoreRef
+  let outdated' = Set.fromList outdated <> store.snapshotFilesWithExtraSnapshots
+  if Set.null outdated'
+    then pure code
+    else do
+      mapM_ putStrLn . concat $
+        [ [""]
+        , ["╓─ 🚨 Outdated snapshots detected ────────────────"]
+        , ["║  * " <> fp | fp <- Set.toAscList outdated']
+        , ["║"]
+        , ["║  Update/remove these files with --update."]
+        , ["╙─────────────────────────────────────────────────"]
+        ]
+      pure ExitOutdatedSnapshots
 
 {----- Update snapshot -----}
 
@@ -173,7 +307,7 @@ instance Fixture UpdateSnapshotFixture_File where
     testInfo <- getTestInfo
     newFileSnapshotsRef <- newIORef Map.empty
     pure . withCleanup UpdateSnapshotFixture_File{newFileSnapshotsRef} $ do
-      saveSnapshotFile testInfo newFileSnapshotsRef
+      finalizeUpdateSnapshotFixture testInfo newFileSnapshotsRef
 
 data UpdateSnapshotFixture = UpdateSnapshotFixture
   { checker :: SnapshotChecker
@@ -196,39 +330,23 @@ recordSnapshot newSnapshotsRef val = do
   pure SnapshotMatches
 
 -- | Copy snapshots to the file fixture when test is over.
-copySnapshotsToFile :: TestInfo -> IORef (Seq SnapshotValue) -> IO ()
-copySnapshotsToFile testInfo newSnapshotsRef = do
-  UpdateSnapshotFixture_File{newFileSnapshotsRef} <- getFixture
+recordSnapshotsToFileFixture :: TestInfo -> IO ()
+recordSnapshotsToFileFixture testInfo = do
+  UpdateSnapshotFixture{newSnapshotsRef} <- getFixture
   newSnapshots <- Seq.toList <$> readIORef newSnapshotsRef
   unless (null newSnapshots) $ do
+    UpdateSnapshotFixture_File{newFileSnapshotsRef} <- getFixture
     modifyIORef' newFileSnapshotsRef (Map.insert testInfo.testId (Seq.toList newSnapshots))
 
-saveSnapshotFile :: TestInfo -> IORef (Map TestId [SnapshotValue]) -> IO ()
-saveSnapshotFile testInfo newFileSnapshotsRef = do
+finalizeUpdateSnapshotFixture :: TestInfo -> IORef (Map TestId [SnapshotValue]) -> IO ()
+finalizeUpdateSnapshotFixture testInfo newFileSnapshotsRef = do
   let snapshotPath = getSnapshotPath testInfo.file
   snapshotFile <- fromMaybe newSnapshotFile <$> loadSnapshotFile snapshotPath
   newSnapshots <- Map.map Seq.toList <$> readIORef newFileSnapshotsRef
-  let updatedSnapshots = mergeSnapshots snapshotFile.snapshots newSnapshots
-  when (updatedSnapshots /= snapshotFile.snapshots) $ do
-    createDirectoryIfMissing True (takeDirectory snapshotPath)
-    Text.writeFile snapshotPath . encodeSnapshotFile . normalizeSnapshotFile $
-      snapshotFile{snapshots = updatedSnapshots}
+  when (newSnapshots /= snapshotFile.snapshots) $ do
+    saveSnapshotFile snapshotPath snapshotFile{snapshots = newSnapshots}
  where
   newSnapshotFile = emptySnapshotFile (Text.pack testInfo.file)
-  -- TODO: Clean up outdated snapshots in file (#24)
-  mergeSnapshots old new =
-    Map.Merge.merge
-      Map.Merge.preserveMissing
-      Map.Merge.preserveMissing
-      (Map.Merge.zipWithMatched mergeSnapshotVals)
-      old
-      new
-  mergeSnapshotVals _ old new =
-    -- If test has extra snapshots, keep them, in case the test failed and didn't
-    -- make it to all the snapshot assertions.
-    -- TODO: Don't save when test fails (#25)
-    -- TODO: Clean up outdated snapshots in test (#24)
-    new <> drop (length new) old
 
 {----- Check snapshot -----}
 
@@ -244,8 +362,9 @@ instance Fixture CheckSnapshotFixture_File where
     mSnapshotFile <- loadSnapshotFile snapshotPath
     pure $ noCleanup CheckSnapshotFixture_File{mSnapshotFile}
 
-newtype CheckSnapshotFixture = CheckSnapshotFixture
+data CheckSnapshotFixture = CheckSnapshotFixture
   { checker :: SnapshotChecker
+  , snapshotIndexRef :: IORef Int
   }
 
 instance Fixture CheckSnapshotFixture where
@@ -254,7 +373,7 @@ instance Fixture CheckSnapshotFixture where
     testInfo <- getTestInfo
     snapshotIndexRef <- newIORef 0
     let checker = SnapshotChecker (runCheckSnapshot testInfo snapshotIndexRef)
-    pure $ noCleanup CheckSnapshotFixture{checker}
+    pure $ noCleanup CheckSnapshotFixture{checker, snapshotIndexRef}
 
 runCheckSnapshot :: (Typeable a) => TestInfo -> IORef Int -> a -> IO SnapshotResult
 runCheckSnapshot testInfo snapshotIndexRef val = runReturnE $ do
@@ -284,6 +403,23 @@ runCheckSnapshot testInfo snapshotIndexRef val = runReturnE $ do
   runReturnE = fmap (either id absurd) . Except.runExceptT
   returnE = Except.throwE
 
+-- | Check if the snapshot file contains any extra snapshots for the current test
+checkExtraTestSnapshots :: TestInfo -> IO ()
+checkExtraTestSnapshots testInfo = do
+  CheckSnapshotFixture_File{mSnapshotFile} <- getFixture
+  fmap (fromMaybe ()) . Maybe.runMaybeT $ do
+    snapshotFile <- Maybe.hoistMaybe mSnapshotFile
+    testSnapshots <- Maybe.hoistMaybe $ Map.lookup testInfo.testId snapshotFile.snapshots
+    CheckSnapshotFixture{snapshotIndexRef} <- getFixture
+    index <- readIORef snapshotIndexRef
+    when (length testSnapshots > index) $ do
+      let snapshotPath = getSnapshotPath $ Text.unpack snapshotFile.testFile
+      modifyIORef' snapshotInfoStoreRef $ \store ->
+        store
+          { snapshotFilesWithExtraSnapshots =
+              Set.insert snapshotPath store.snapshotFilesWithExtraSnapshots
+          }
+
 {----- Snapshot file -----}
 
 data SnapshotFile = SnapshotFile
@@ -301,9 +437,10 @@ data SnapshotValue = SnapshotValue
   deriving (Show, Eq)
 
 getSnapshotPath :: FilePath -> FilePath
-getSnapshotPath testFile = testDir </> "__snapshots__" </> snapshotFileName
+getSnapshotPath testFile = testDir' </> "__snapshots__" </> snapshotFileName
  where
   (testDir, testFileName) = splitFileName testFile
+  testDir' = if testDir == "./" then "" else testDir
   snapshotFileName = replaceExtension testFileName ".snap.md"
 
 emptySnapshotFile :: Text -> SnapshotFile
@@ -322,6 +459,15 @@ loadSnapshotFile path =
       Nothing -> skeletestError $ "Snapshot file was corrupted: " <> Text.pack path
  where
   handleDNE = handleJust (\e -> guard (isDoesNotExistError e) *> Just e)
+
+saveSnapshotFile :: FilePath -> SnapshotFile -> IO ()
+saveSnapshotFile path snapshotFile =
+  if Map.null snapshotFile.snapshots
+    then removeFile path
+    else do
+      createDirectoryIfMissing True (takeDirectory path)
+      Text.writeFile path . encodeSnapshotFile . normalizeSnapshotFile $
+        snapshotFile
 
 decodeSnapshotFile :: Text -> Maybe SnapshotFile
 decodeSnapshotFile = parseFile . Text.lines

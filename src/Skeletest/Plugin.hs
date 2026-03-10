@@ -45,6 +45,7 @@ module Skeletest.Plugin (
 ) where
 
 import Skeletest.Internal.CLI (Flag)
+import Skeletest.Internal.Exit (TestExitCode)
 import Skeletest.Internal.Markers qualified as X
 import Skeletest.Internal.Snapshot.Renderer (SnapshotRenderer)
 import Skeletest.Internal.Spec.Output qualified as X
@@ -102,6 +103,8 @@ data Hooks = Hooks
   -- @since 0.3.4
   , runTest :: TestInfo -> IO TestResult -> IO TestResult
   -- ^ Modify how a test is executed
+  , runSpecs :: (SpecRegistry -> IO TestExitCode) -> (SpecRegistry -> IO TestExitCode)
+  -- ^ Modify the action to run specs.
   }
 
 instance Semigroup Hooks where
@@ -109,6 +112,7 @@ instance Semigroup Hooks where
     Hooks
       { modifySpecRegistry = \targets -> hooks2.modifySpecRegistry targets . hooks1.modifySpecRegistry targets
       , runTest = \testInfo -> hooks2.runTest testInfo . hooks1.runTest testInfo
+      , runSpecs = hooks2.runSpecs . hooks1.runSpecs
       }
 
 instance Monoid Hooks where
@@ -119,4 +123,5 @@ defaultHooks =
   Hooks
     { modifySpecRegistry = \_ -> id
     , runTest = \_ -> id
+    , runSpecs = id
     }

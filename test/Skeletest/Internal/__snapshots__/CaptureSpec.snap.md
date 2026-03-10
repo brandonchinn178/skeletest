@@ -24,12 +24,6 @@ line1
 line2
 ```
 
-```
-./ExampleSpec.hs
-    before: OK
-    test: OK
-```
-
 ## stderr / is rendered on test error
 
 ```
@@ -89,15 +83,6 @@ line2
 OK
 
 >>> stderr
-```
-
-```
-./ExampleSpec.hs
-    before: before
-OK
-    test: line1
-line2
-OK
 ```
 
 ## stdout / is rendered on test error

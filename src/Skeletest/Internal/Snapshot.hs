@@ -40,6 +40,7 @@ import Data.Char (isAlpha, isPrint)
 import Data.Foldable qualified as Seq (toList)
 import Data.List (sortOn)
 import Data.List.NonEmpty qualified as NonEmpty
+import Data.Map.Merge.Strict qualified as Map
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
@@ -335,21 +336,32 @@ recordSnapshot newSnapshotsRef val = do
 -- | Copy snapshots to the file fixture when test is over.
 recordSnapshotsToFileFixture :: TestInfo -> IO ()
 recordSnapshotsToFileFixture testInfo = do
+  UpdateSnapshotFixture_File{newFileSnapshotsRef} <- getFixture
   UpdateSnapshotFixture{newSnapshotsRef} <- getFixture
   newSnapshots <- Seq.toList <$> readIORef newSnapshotsRef
-  unless (null newSnapshots) $ do
-    UpdateSnapshotFixture_File{newFileSnapshotsRef} <- getFixture
-    modifyIORef' newFileSnapshotsRef (Map.insert testInfo.testId (Seq.toList newSnapshots))
+  modifyIORef' newFileSnapshotsRef (Map.insert testInfo.testId newSnapshots)
 
 finalizeUpdateSnapshotFixture :: TestInfo -> IORef (Map TestId [SnapshotValue]) -> IO ()
 finalizeUpdateSnapshotFixture testInfo newFileSnapshotsRef = do
   let snapshotPath = getSnapshotPath testInfo.file
   snapshotFile <- fromMaybe newSnapshotFile <$> loadSnapshotFile snapshotPath
   newSnapshots <- Map.map Seq.toList <$> readIORef newFileSnapshotsRef
-  when (newSnapshots /= snapshotFile.snapshots) $ do
-    saveSnapshotFile snapshotPath snapshotFile{snapshots = newSnapshots}
+  let snapshots' = mergeSnapshots snapshotFile.snapshots newSnapshots
+  when (snapshots' /= snapshotFile.snapshots) $ do
+    saveSnapshotFile snapshotPath snapshotFile{snapshots = snapshots'}
  where
   newSnapshotFile = emptySnapshotFile (Text.pack testInfo.file)
+
+  -- Merge snapshots, to avoid clearing snapshots of tests that were deselected.
+  -- Extraneous snapshots will be cleared by 'detectOutdatedSnapshots'.
+  mergeSnapshots old new =
+    Map.filter (not . null) $
+      Map.merge
+        Map.preserveMissing -- Keep snapshots for tests that weren't run
+        Map.preserveMissing -- Add new snapshots
+        (Map.zipWithMatched $ \_ _o n -> n) -- Overwrite old snapshots
+        old
+        new
 
 {----- Check snapshot -----}
 

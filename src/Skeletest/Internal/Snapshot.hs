@@ -181,16 +181,22 @@ snapshotsHook =
             }
         modify registry
     , runTest = \testInfo getResult -> do
-        result <- getResult
         SnapshotUpdateFlag isUpdate <- getFlag
+        when isUpdate $ do
+          -- Always initialize the file fixture to ensure snapshots get
+          -- cleaned up for a test that removed all `P.matchesSnapshot`
+          -- checks
+          _ <- getFixture @UpdateSnapshotFixture_File
+          pure ()
+        result <- getResult
         when result.testResultSuccess $ do
           if isUpdate
-            then copySnapshotsToFile testInfo
+            then recordSnapshotsToFileFixture testInfo
             else checkExtraTestSnapshots testInfo
         pure result
     , runSpecs = \run specs -> do
-        code <- run specs
         SnapshotUpdateFlag isUpdate <- getFlag
+        code <- run specs
         if isUpdate
           then removeOutdatedSnapshots *> pure code
           else checkOutdatedSnapshots code
@@ -254,11 +260,7 @@ detectOutdatedSnapshots = do
     unless (null outdatedSnapshots) $
       returnOutdated $ do
         let snapshots' = Map.withoutKeys snapshotFile.snapshots outdatedSnapshots
-        if Map.null snapshots'
-          then removeFile snapshotFilePath
-          else
-            Text.writeFile snapshotFilePath . encodeSnapshotFile $
-              snapshotFile{snapshots = snapshots'}
+        saveSnapshotFile snapshotFilePath snapshotFile{snapshots = snapshots'}
 
   runDetectOutdatedM ::
     (FilePath -> Except.ExceptT (IO ()) IO ()) ->
@@ -305,7 +307,7 @@ instance Fixture UpdateSnapshotFixture_File where
     testInfo <- getTestInfo
     newFileSnapshotsRef <- newIORef Map.empty
     pure . withCleanup UpdateSnapshotFixture_File{newFileSnapshotsRef} $ do
-      saveSnapshotFile testInfo newFileSnapshotsRef
+      finalizeUpdateSnapshotFixture testInfo newFileSnapshotsRef
 
 data UpdateSnapshotFixture = UpdateSnapshotFixture
   { checker :: SnapshotChecker
@@ -328,25 +330,21 @@ recordSnapshot newSnapshotsRef val = do
   pure SnapshotMatches
 
 -- | Copy snapshots to the file fixture when test is over.
-copySnapshotsToFile :: TestInfo -> IO ()
-copySnapshotsToFile testInfo = do
-  -- TODO: Allow checking if test used this fixture?
-  -- Currently, we're always doing this even for non-snapshot tests.
+recordSnapshotsToFileFixture :: TestInfo -> IO ()
+recordSnapshotsToFileFixture testInfo = do
   UpdateSnapshotFixture{newSnapshotsRef} <- getFixture
   newSnapshots <- Seq.toList <$> readIORef newSnapshotsRef
   unless (null newSnapshots) $ do
     UpdateSnapshotFixture_File{newFileSnapshotsRef} <- getFixture
     modifyIORef' newFileSnapshotsRef (Map.insert testInfo.testId (Seq.toList newSnapshots))
 
-saveSnapshotFile :: TestInfo -> IORef (Map TestId [SnapshotValue]) -> IO ()
-saveSnapshotFile testInfo newFileSnapshotsRef = do
+finalizeUpdateSnapshotFixture :: TestInfo -> IORef (Map TestId [SnapshotValue]) -> IO ()
+finalizeUpdateSnapshotFixture testInfo newFileSnapshotsRef = do
   let snapshotPath = getSnapshotPath testInfo.file
   snapshotFile <- fromMaybe newSnapshotFile <$> loadSnapshotFile snapshotPath
   newSnapshots <- Map.map Seq.toList <$> readIORef newFileSnapshotsRef
   when (newSnapshots /= snapshotFile.snapshots) $ do
-    createDirectoryIfMissing True (takeDirectory snapshotPath)
-    Text.writeFile snapshotPath . encodeSnapshotFile . normalizeSnapshotFile $
-      snapshotFile{snapshots = newSnapshots}
+    saveSnapshotFile snapshotPath snapshotFile{snapshots = newSnapshots}
  where
   newSnapshotFile = emptySnapshotFile (Text.pack testInfo.file)
 
@@ -461,6 +459,15 @@ loadSnapshotFile path =
       Nothing -> skeletestError $ "Snapshot file was corrupted: " <> Text.pack path
  where
   handleDNE = handleJust (\e -> guard (isDoesNotExistError e) *> Just e)
+
+saveSnapshotFile :: FilePath -> SnapshotFile -> IO ()
+saveSnapshotFile path snapshotFile =
+  if Map.null snapshotFile.snapshots
+    then removeFile path
+    else do
+      createDirectoryIfMissing True (takeDirectory path)
+      Text.writeFile path . encodeSnapshotFile . normalizeSnapshotFile $
+        snapshotFile
 
 decodeSnapshotFile :: Text -> Maybe SnapshotFile
 decodeSnapshotFile = parseFile . Text.lines

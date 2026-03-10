@@ -3,6 +3,7 @@ module Skeletest.Internal.Utils.Color (
   red,
   yellow,
   gray,
+  bold,
 ) where
 
 import Data.Text (Text)
@@ -23,3 +24,6 @@ yellow = withANSI [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Yellow]
 
 gray :: Text -> Text
 gray = withANSI [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Black]
+
+bold :: Text -> Text
+bold = withANSI [ANSI.SetConsoleIntensity ANSI.BoldIntensity]

@@ -76,6 +76,7 @@ import Skeletest.Internal.Snapshot.Renderer (
  )
 import Skeletest.Internal.Snapshot.Renderer qualified as X
 import Skeletest.Internal.TestInfo (TestId, TestInfo (..), getTestInfo)
+import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Internal.Utils.Diff (showLineDiff)
 import Skeletest.Plugin (
   Hooks (..),
@@ -284,10 +285,10 @@ checkOutdatedSnapshots code = do
   if Set.null outdated'
     then pure code
     else do
-      mapM_ putStrLn . concat $
+      mapM_ Text.putStrLn . concat $
         [ [""]
-        , ["╓─ 🚨 Outdated snapshots detected ────────────────"]
-        , ["║  * " <> fp | fp <- Set.toAscList outdated']
+        , ["╓─ 🚨 " <> Color.bold "Outdated snapshots detected" <> " ────────────────"]
+        , ["║  * " <> Text.pack fp | fp <- Set.toAscList outdated']
         , ["║"]
         , ["║  Update/remove these files with --update."]
         , ["╙─────────────────────────────────────────────────"]

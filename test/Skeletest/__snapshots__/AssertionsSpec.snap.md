@@ -1,36 +1,5 @@
 # test/Skeletest/AssertionsSpec.hs
 
-## context / should show failure context
-
-```
-./ExampleSpec.hs
-╭── should fail: FAIL
-│ ./ExampleSpec.hs:7:
-│ │
-│ │     1 `shouldBe` (2 :: Int)
-│ │       ^^^^^^^^^^
-│ 
-│ hello
-│ world
-│ 
-│ 1 ≠ 2
-╰───────────────────────────────────────────────────────────────────────────────
-```
-
-## failTest / should show failure
-
-```
-./ExampleSpec.hs
-╭── should fail: FAIL
-│ ./ExampleSpec.hs:5:
-│ │
-│ │ spec = it "should fail" $ failTest "error message"
-│ │                           ^^^^^^^^
-│ 
-│ error message
-╰───────────────────────────────────────────────────────────────────────────────
-```
-
 ## shouldBe / should show helpful failure
 
 ```
@@ -62,6 +31,20 @@
 │ 
 │ Got:
 │   1
+╰───────────────────────────────────────────────────────────────────────────────
+```
+
+## shouldSatisfy / should show helpful failure
+
+```
+./ExampleSpec.hs
+╭── should fail: FAIL
+│ ./ExampleSpec.hs:6:
+│ │
+│ │ spec = it "should fail" $ (-1) `shouldSatisfy` P.gt (0 :: Int)
+│ │                                ^^^^^^^^^^^^^^^
+│ 
+│ -1 ≯ 0
 ╰───────────────────────────────────────────────────────────────────────────────
 ```
 
@@ -99,17 +82,34 @@
 ╰───────────────────────────────────────────────────────────────────────────────
 ```
 
-## shouldSatisfy / should show helpful failure
+## context / should show failure context
 
 ```
 ./ExampleSpec.hs
 ╭── should fail: FAIL
-│ ./ExampleSpec.hs:6:
+│ ./ExampleSpec.hs:7:
 │ │
-│ │ spec = it "should fail" $ (-1) `shouldSatisfy` P.gt (0 :: Int)
-│ │                                ^^^^^^^^^^^^^^^
+│ │     1 `shouldBe` (2 :: Int)
+│ │       ^^^^^^^^^^
 │ 
-│ -1 ≯ 0
+│ hello
+│ world
+│ 
+│ 1 ≠ 2
+╰───────────────────────────────────────────────────────────────────────────────
+```
+
+## failTest / should show failure
+
+```
+./ExampleSpec.hs
+╭── should fail: FAIL
+│ ./ExampleSpec.hs:5:
+│ │
+│ │ spec = it "should fail" $ failTest "error message"
+│ │                           ^^^^^^^^
+│ 
+│ error message
 ╰───────────────────────────────────────────────────────────────────────────────
 ```
 
@@ -151,6 +151,16 @@
 ╰───────────────────────────────────────────────────────────────────────────────
 ```
 
+## shows unrecognized exceptions
+
+```
+./ExampleSpec.hs
+╭── should fail: ERROR
+│ Got exception of type `IOException`:
+│ unknown-file.txt: openFile: does not exist (No such file or directory)
+╰───────────────────────────────────────────────────────────────────────────────
+```
+
 ## shows source code when running from different directory
 
 ```
@@ -162,15 +172,5 @@
 │ │                           ^^^^^^^^
 │ 
 │ failure
-╰───────────────────────────────────────────────────────────────────────────────
-```
-
-## shows unrecognized exceptions
-
-```
-./ExampleSpec.hs
-╭── should fail: ERROR
-│ Got exception of type `IOException`:
-│ unknown-file.txt: openFile: does not exist (No such file or directory)
 ╰───────────────────────────────────────────────────────────────────────────────
 ```

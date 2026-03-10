@@ -38,6 +38,7 @@ import Control.Monad.Trans.Except qualified as Except
 import Control.Monad.Trans.Maybe qualified as Maybe
 import Data.Char (isAlpha, isPrint)
 import Data.Foldable qualified as Seq (toList)
+import Data.List (sortOn)
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -204,7 +205,7 @@ snapshotsHook =
 
 -- | Snapshot-related information to store globally.
 data SnapshotInfoStore = SnapshotInfoStore
-  { allSnapshotTestIds :: Map FilePath (Set TestId)
+  { allSnapshotTestIds :: Map FilePath [TestId]
   -- ^ Map from a test file's snapshot path to all test ids in the file
   , snapshotFilesWithExtraSnapshots :: Set FilePath
   -- ^ Snapshot files that contain tests that contain extraneous snapshots.
@@ -220,8 +221,8 @@ snapshotInfoStoreRef =
       }
 {-# NOINLINE snapshotInfoStoreRef #-}
 
-getTestIds :: Spec -> Set TestId
-getTestIds = Set.fromList . concatMap (go Seq.empty) . getSpecTrees
+getTestIds :: Spec -> [TestId]
+getTestIds = concatMap (go Seq.empty) . getSpecTrees
  where
   go context = \case
     group@SpecTree_Group{} -> concatMap (go (context Seq.|> group.label)) group.trees
@@ -232,7 +233,8 @@ getTestIds = Set.fromList . concatMap (go Seq.empty) . getSpecTrees
 detectOutdatedSnapshots :: IO [(FilePath, IO ())]
 detectOutdatedSnapshots = do
   allSnapshotFiles <- filter isSnapshotFile <$> listTestFiles
-  allTests <- (.allSnapshotTestIds) <$> readIORef snapshotInfoStoreRef
+  store <- readIORef snapshotInfoStoreRef
+  let allTests = Map.map Set.fromList store.allSnapshotTestIds
   mapMaybeM (detectOutdated allTests) allSnapshotFiles
  where
   isSnapshotFile fp = takeExtensions fp == ".snap.md"
@@ -465,9 +467,19 @@ saveSnapshotFile path snapshotFile =
   if Map.null snapshotFile.snapshots
     then removeFile path
     else do
+      rankTestId <- mkRankTestId <$> readIORef snapshotInfoStoreRef
       createDirectoryIfMissing True (takeDirectory path)
-      Text.writeFile path . encodeSnapshotFile . normalizeSnapshotFile $
+      Text.writeFile path . encodeSnapshotFile rankTestId . normalizeSnapshotFile $
         snapshotFile
+ where
+  mkRankTestId store =
+    let testIds = Map.findWithDefault [] path store.allSnapshotTestIds
+        testIdToRank = Map.fromList $ zip testIds [0 ..]
+     in \testId ->
+          Map.findWithDefault
+            (maxBound @Int) -- Shouldn't happen, but just in case
+            testId
+            testIdToRank
 
 decodeSnapshotFile :: Text -> Maybe SnapshotFile
 decodeSnapshotFile = parseFile . Text.lines
@@ -519,11 +531,11 @@ decodeSnapshotFile = parseFile . Text.lines
       | "```" <- line -> pure (Text.unlines $ Seq.toList snapshot, rest)
       | otherwise -> parseSnapshot (snapshot Seq.|> line) rest
 
-encodeSnapshotFile :: SnapshotFile -> Text
-encodeSnapshotFile snapshotFile =
-  Text.intercalate "\n" $
-    h1 snapshotFile.testFile : concatMap toSection (Map.toList snapshotFile.snapshots)
+encodeSnapshotFile :: (TestId -> Int) -> SnapshotFile -> Text
+encodeSnapshotFile rankTestId snapshotFile =
+  Text.intercalate "\n" $ h1 snapshotFile.testFile : concatMap toSection snapshots
  where
+  snapshots = sortOn (rankTestId . fst) . Map.toList $ snapshotFile.snapshots
   toSection (testIdentifier, snaps) =
     h2 (Text.intercalate " / " testIdentifier) : map codeBlock snaps
 

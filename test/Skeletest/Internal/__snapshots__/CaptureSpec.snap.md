@@ -1,6 +1,6 @@
 # test/Skeletest/Internal/CaptureSpec.hs
 
-## stderr / is hidden on test success
+## stdout / is hidden on test success
 
 ```
 ./ExampleSpec.hs
@@ -8,42 +8,7 @@
     test: OK
 ```
 
-## stderr / is not captured with --capture-output=off
-
-```
->>> stdout
-
-./ExampleSpec.hs
-    before: OK
-    test: OK
-
->>> stderr
-
-before
-line1
-line2
-```
-
-## stderr / is rendered on test error
-
-```
-./ExampleSpec.hs
-    before: OK
-╭── test: ERROR
-│ ExampleSpec.hs:14:
-│ │
-│ │     Just _ <- pure Nothing
-│ │     ^^^^^^
-│ 
-│ Pattern match failure in 'do' block
-│ 
-╞═══ Captured stderr
-│ line1
-│ line2
-╰───────────────────────────────────────────────────────────────────────────────
-```
-
-## stderr / is rendered on test failure
+## stdout / is rendered on test failure
 
 ```
 ./ExampleSpec.hs
@@ -56,33 +21,10 @@ line2
 │ 
 │ 1 ≠ 2
 │ 
-╞═══ Captured stderr
+╞═══ Captured stdout
 │ line1
 │ line2
 ╰───────────────────────────────────────────────────────────────────────────────
-```
-
-## stdout / is hidden on test success
-
-```
-./ExampleSpec.hs
-    before: OK
-    test: OK
-```
-
-## stdout / is not captured with --capture-output=off
-
-```
->>> stdout
-
-./ExampleSpec.hs
-    before: before
-OK
-    test: line1
-line2
-OK
-
->>> stderr
 ```
 
 ## stdout / is rendered on test error
@@ -104,7 +46,30 @@ OK
 ╰───────────────────────────────────────────────────────────────────────────────
 ```
 
-## stdout / is rendered on test failure
+## stdout / is not captured with --capture-output=off
+
+```
+>>> stdout
+
+./ExampleSpec.hs
+    before: before
+OK
+    test: line1
+line2
+OK
+
+>>> stderr
+```
+
+## stderr / is hidden on test success
+
+```
+./ExampleSpec.hs
+    before: OK
+    test: OK
+```
+
+## stderr / is rendered on test failure
 
 ```
 ./ExampleSpec.hs
@@ -117,8 +82,43 @@ OK
 │ 
 │ 1 ≠ 2
 │ 
-╞═══ Captured stdout
+╞═══ Captured stderr
 │ line1
 │ line2
 ╰───────────────────────────────────────────────────────────────────────────────
+```
+
+## stderr / is rendered on test error
+
+```
+./ExampleSpec.hs
+    before: OK
+╭── test: ERROR
+│ ExampleSpec.hs:14:
+│ │
+│ │     Just _ <- pure Nothing
+│ │     ^^^^^^
+│ 
+│ Pattern match failure in 'do' block
+│ 
+╞═══ Captured stderr
+│ line1
+│ line2
+╰───────────────────────────────────────────────────────────────────────────────
+```
+
+## stderr / is not captured with --capture-output=off
+
+```
+>>> stdout
+
+./ExampleSpec.hs
+    before: OK
+    test: OK
+
+>>> stderr
+
+before
+line1
+line2
 ```

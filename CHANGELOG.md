@@ -10,6 +10,8 @@ Runtime changes:
 * Standardize exit codes
 * Error if no tests were selected
 * If there are any outdated snapshot files, `--update` now updates/removes them. The test suite fails if `--update` is not specified. ([#24](https://github.com/brandonchinn178/skeletest/issues/24))
+* Snapshots are now ordered by test order ([#26](https://github.com/brandonchinn178/skeletest/issues/26))
+  * Will not reorder existing snapshot files until at least one snapshot in the file has changed and forces a write to the file. To force reorder everything, run `find ./test -name '*.snap.md' | xargs rm -rf` and rerun with `--update`.
 
 ## v0.3.7
 

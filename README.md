@@ -184,6 +184,18 @@ Some more examples:
 
 When multiple targets are specified, they are joined with `or`.
 
+### Exit codes
+
+<!-- Keep this in sync with Skeletest.Internal.Exit -->
+| Exit code | Description                  |
+|-----------|------------------------------|
+|     0     | Skeletest ran successfully   |
+|     1     | Tests failed, general errors |
+|     3     | No tests ran                 |
+|     4     | CLI argument-related failure |
+|    10     | Preprocessor failure         |
+|    99     | Some unknown error           |
+
 ### Assertions and Predicates
 
 All assertions in Skeletest use the following functions:

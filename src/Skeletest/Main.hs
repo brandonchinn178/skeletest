@@ -21,10 +21,11 @@ module Skeletest.Main (
   Spec,
 ) where
 
-import Control.Monad (unless, (<=<))
+import Control.Monad (when)
+import Data.Text.IO qualified as Text
 import Skeletest.Internal.CLI (Flag, flag, loadCliArgs)
 import Skeletest.Internal.Capture (CaptureOutputFlag)
-import Skeletest.Internal.Error (SkeletestError)
+import Skeletest.Internal.Exit (TestExitCode (..), exitWith, handleUnknownErrors)
 import Skeletest.Internal.Snapshot (
   SnapshotRenderer (..),
   SnapshotUpdateFlag,
@@ -43,23 +44,28 @@ import Skeletest.Internal.Spec (
   skipHook,
   xfailHook,
  )
+import Skeletest.Internal.Spec.Tree (getSpecTests)
+import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Plugin (Hooks (..), Plugin (..))
 import Skeletest.Prop.Internal (PropLimitFlag, PropSeedFlag)
-import System.Exit (exitFailure)
 import System.IO qualified as IO
-import UnliftIO.Exception (displayException, handle)
 
 runSkeletest :: [Plugin] -> [(FilePath, Spec)] -> IO ()
 runSkeletest = runSkeletest' . mconcat
 
 runSkeletest' :: Plugin -> [(FilePath, Spec)] -> IO ()
-runSkeletest' Plugin{hooks = hooks0, ..} testModules = handleErrors $ do
+runSkeletest' Plugin{hooks = hooks0, ..} testModules = handleUnknownErrors $ do
   selections <- loadCliArgs builtinFlags cliFlags
   setSnapshotRenderers (snapshotRenderers <> defaultSnapshotRenderers)
 
   let initialSpecs = map mkSpec testModules
-  success <- runSpecs hooks <=< hooks.modifySpecRegistry selections pure $ initialSpecs
-  unless success exitFailure
+  specs <- hooks.modifySpecRegistry selections pure initialSpecs
+  when (null $ concatMap (getSpecTests . (.specSpec)) specs) $ do
+    Text.hPutStrLn IO.stderr $ Color.red "ERROR: No tests selected!"
+    exitWith ExitNoTests
+
+  success <- runSpecs hooks specs
+  exitWith $ if success then ExitSuccess else ExitTestFailure
  where
   hooks = mconcat builtinHooks <> hooks0
 
@@ -84,11 +90,3 @@ runSkeletest' Plugin{hooks = hooks0, ..} testModules = handleErrors $ do
       { specPath
       , specSpec
       }
-
-handleErrors :: IO a -> IO a
-handleErrors = handle $ \(e :: SkeletestError) -> do
-  IO.hPutStrLn IO.stderr . unlines $
-    [ "================ Skeletest error ================"
-    , displayException e
-    ]
-  exitFailure

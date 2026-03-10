@@ -27,11 +27,15 @@ import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import GHC.IO.Encoding (setLocaleEncoding, utf8)
 import Skeletest.Internal.Error (SkeletestError)
+import Skeletest.Internal.Exit (
+  TestExitCode (..),
+  exitWith,
+  handleUnknownErrors,
+ )
 import Skeletest.Internal.Preprocessor (processFile)
 import Skeletest.Internal.Preprocessor qualified as Preprocessor
 import System.Environment (getArgs)
-import System.Exit (exitFailure)
-import System.IO (hPutStrLn, stderr)
+import System.IO qualified as IO
 import UnliftIO.Directory (getCurrentDirectory)
 import UnliftIO.Exception (displayException, handle)
 
@@ -52,10 +56,12 @@ main = handleErrors $ do
 
 -- | Output SkeletestError
 handleErrors :: IO a -> IO a
-handleErrors = handle $ \(e :: SkeletestError) -> do
-  hPutStrLn stderr $ normalizeLines $ displayException e
-  exitFailure
+handleErrors = handleUnknownErrors . handleSkeletestErrors
  where
+  handleSkeletestErrors = handle $ \(e :: SkeletestError) -> do
+    IO.hPutStrLn IO.stderr $ normalizeLines $ displayException e
+    exitWith ExitPreprocessorFailure
+
   normalizeLines
     | __GLASGOW_HASKELL__ == (908 :: Int) = dropWhileEnd (== '\n')
     | otherwise = id

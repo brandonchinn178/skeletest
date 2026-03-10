@@ -40,6 +40,7 @@ library
     Skeletest.Internal.Capture
     Skeletest.Internal.Constants
     Skeletest.Internal.Error
+    Skeletest.Internal.Exit
     Skeletest.Internal.Fixtures
     Skeletest.Internal.GHC
     Skeletest.Internal.GHC.Compat

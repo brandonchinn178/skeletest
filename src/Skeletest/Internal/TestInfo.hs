@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoFieldSelectors #-}
 
 module Skeletest.Internal.TestInfo (
@@ -17,7 +18,7 @@ import Data.Map qualified as Map
 import Data.Text (Text)
 import GHC.Records (HasField (..))
 import GHC.Stack (HasCallStack)
-import Skeletest.Internal.Error (invariantViolation)
+import Skeletest.Internal.Error (skeletestError)
 import Skeletest.Internal.Markers (SomeMarker)
 import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO (MonadUnliftIO)
@@ -61,6 +62,4 @@ getTestInfo :: (MonadIO m, HasCallStack) => m TestInfo
 getTestInfo =
   lookupTestInfo >>= \case
     Just info -> pure info
-    -- it's not possible for a user to write code that's executed within a test,
-    -- because we define the entire main function.
-    Nothing -> invariantViolation "test info not initialized"
+    Nothing -> skeletestError "getTestInfo was called from outside a test context"

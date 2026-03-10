@@ -1,0 +1,49 @@
+{-# LANGUAGE LambdaCase #-}
+
+module Skeletest.Internal.Exit (
+  TestExitCode (..),
+  exitWith,
+  handleUnknownErrors,
+) where
+
+import System.Exit qualified as Exit
+import System.IO qualified as IO
+import UnliftIO.Exception (
+  displayException,
+  fromException,
+  handleJust,
+ )
+
+-- | All exit codes for Skeletest.
+--
+-- Should be kept in sync with README.
+data TestExitCode
+  = ExitSuccess
+  | ExitTestFailure
+  | ExitNoTests
+  | ExitCLIFailure
+  | ExitPreprocessorFailure
+  | ExitOther
+
+fromExitCode :: TestExitCode -> Exit.ExitCode
+fromExitCode = \case
+  ExitSuccess -> Exit.ExitSuccess
+  ExitTestFailure -> Exit.ExitFailure 1
+  ExitNoTests -> Exit.ExitFailure 3
+  ExitCLIFailure -> Exit.ExitFailure 4
+  ExitPreprocessorFailure -> Exit.ExitFailure 10
+  ExitOther -> Exit.ExitFailure 99
+
+exitWith :: TestExitCode -> IO a
+exitWith = Exit.exitWith . fromExitCode
+
+handleUnknownErrors :: IO a -> IO a
+handleUnknownErrors = handleJust isUnknown $ \e -> do
+  IO.hPutStrLn IO.stderr $ displayException e
+  exitWith ExitOther
+ where
+  isUnknown e =
+    case fromException e of
+      Nothing -> Just e
+      -- Don't catch 'exitWith' calls
+      Just (_ :: Exit.ExitCode) -> Nothing

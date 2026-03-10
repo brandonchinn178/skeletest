@@ -1,24 +1,5 @@
 # test/Skeletest/Internal/SpecSpec.hs
 
-## focus / fails with -Werror
-
-```
-ExampleSpec.hs:6:3: error: [GHC-63394] [-Wx-focused-tests, -Werror=x-focused-tests]
-    In the use of ‘focus’
-    (imported from Skeletest, but defined in Skeletest.Internal.Spec.Tree):
-    "focus should only be used in development"
-  |
-6 |   focus . it "in progress" $ pure ()
-  |   ^^^^^
-```
-
-## focus / only runs focused test
-
-```
-./ExampleSpec.hs
-    in progress: OK
-```
-
 ## skip / skips tests completely
 
 ```
@@ -47,4 +28,23 @@ ExampleSpec.hs:6:3: error: [GHC-63394] [-Wx-focused-tests, -Werror=x-focused-tes
         broken tests
     should fail too: XPASS
         broken tests
+```
+
+## focus / only runs focused test
+
+```
+./ExampleSpec.hs
+    in progress: OK
+```
+
+## focus / fails with -Werror
+
+```
+ExampleSpec.hs:6:3: error: [GHC-63394] [-Wx-focused-tests, -Werror=x-focused-tests]
+    In the use of ‘focus’
+    (imported from Skeletest, but defined in Skeletest.Internal.Spec.Tree):
+    "focus should only be used in development"
+  |
+6 |   focus . it "in progress" $ pure ()
+  |   ^^^^^
 ```

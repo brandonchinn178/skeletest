@@ -1,5 +1,163 @@
 # test/Skeletest/PredicateSpec.hs
 
+## Ord / eq / shows helpful failure messages
+
+```
+2 ≠ 1
+```
+
+```
+1 = 1
+
+Expected:
+  ≠ 1
+
+Got:
+  1
+```
+
+## Data types / list / shows helpful failure messages
+
+```
+10 ≠ 1
+
+Expected:
+  [= 0, = 1]
+
+Got:
+  [0,10]
+```
+
+```
+Got different number of elements
+
+Expected:
+  [= 0, = 1]
+
+Got:
+  [0]
+```
+
+## Data types / tup / shows helpful failure messages
+
+```
+1 ≠ 0
+
+Expected:
+  (= 0, = [])
+
+Got:
+  (1,[])
+```
+
+```
+(1 = 1, [] = [])
+
+Expected:
+  not (= 1, = [])
+
+Got:
+  (1,[])
+```
+
+## Data types / con / shows a helpful failure message
+
+```
+./ExampleSpec.hs
+╭── should error: FAIL
+│ ./ExampleSpec.hs:9:
+│ │
+│ │   User "alice" `shouldSatisfy` P.con User{name = P.eq ""}
+│ │                ^^^^^^^^^^^^^^^
+│ 
+│ "alice" ≠ []
+│ 
+│ Expected:
+│   matches User{name = (= [])}
+│ 
+│ Got:
+│   User "alice"
+╰───────────────────────────────────────────────────────────────────────────────
+```
+
+## Data types / con / fails to compile with unknown record field
+
+```
+ExampleSpec.hs:9:43: error: [GHC-76037] Not in scope: ‘foo’
+  |
+9 |   User "alice" `shouldSatisfy` P.con User{foo = P.eq ""}
+  |                                           ^^^
+```
+
+## Data types / con / fails to compile with omitted positional fields
+
+```
+ExampleSpec.hs:9:3: error: [GHC-27346]
+    • The data constructor ‘User’ should have 2 arguments, but has been given 1
+    • In the pattern: User x0
+      In the pattern: Just (User x0)
+      In a case alternative:
+          Just (User x0)
+            -> Just
+                 (Skeletest.Internal.Utils.HList.HCons
+                    (pure x0) Skeletest.Internal.Utils.HList.HNil)
+  |
+9 |   User "alice" (Just 1) `shouldSatisfy` P.con (User (P.eq ""))
+  |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+```
+
+## Data types / con / fails to compile with non-constructor
+
+```
+ExampleSpec.hs:7:22: error: P.con must be applied to a constructor
+  |
+7 |   "" `shouldSatisfy` P.con ""
+  |                      ^^^^^^^^
+```
+
+## Data types / con / fails to compile when not applied to anything
+
+```
+ExampleSpec.hs:7:22: error: P.con must be applied to a constructor
+  |
+7 |   "" `shouldSatisfy` P.con
+  |                      ^^^^^
+```
+
+## Data types / con / fails to compile when applied to multiple arguments
+
+```
+ExampleSpec.hs:7:22: error:
+    P.con must be applied to exactly one argument
+  |
+7 |   "" `shouldSatisfy` P.con 1 2
+  |                      ^^^^^^^^^
+```
+
+## Combinators / <<< / shows a helpful failure message
+
+```
+2 ≯ 10
+
+Expected:
+  > 10
+
+Got:
+  1
+```
+
+## Combinators / >>> / shows a helpful failure message
+
+```
+"1" ≠ "2"
+
+Expected:
+  = "2"
+
+Got:
+  1
+```
+
 ## Combinators / && / shows helpful failure messages
 
 ```
@@ -25,25 +183,26 @@ Got:
   1
 ```
 
-## Combinators / <<< / shows a helpful failure message
+## Combinators / || / shows helpful failure messages
 
 ```
-2 ≯ 10
+No predicates passed
 
 Expected:
-  > 10
+  (= 2)
+  or (> 1)
 
 Got:
   1
 ```
 
-## Combinators / >>> / shows a helpful failure message
-
 ```
-"1" ≠ "2"
+1 > 0
 
 Expected:
-  = "2"
+  All failures:
+  (= 2)
+  or (> 0)
 
 Got:
   1
@@ -103,29 +262,26 @@ Got:
   1
 ```
 
-## Combinators / || / shows helpful failure messages
+## Containers / any / shows helpful failure messages
 
 ```
-No predicates passed
+No values matched
 
 Expected:
-  (= 2)
-  or (> 1)
+  at least one element matching (= 2)
 
 Got:
-  1
+  []
 ```
 
 ```
-1 > 0
+2 = 2
 
 Expected:
-  All failures:
-  (= 2)
-  or (> 0)
+  no elements matching (= 2)
 
 Got:
-  1
+  [1,2,3]
 ```
 
 ## Containers / all / shows helpful failure messages
@@ -145,28 +301,6 @@ All values matched
 
 Expected:
   some elements not matching (> 0)
-
-Got:
-  [1,2,3]
-```
-
-## Containers / any / shows helpful failure messages
-
-```
-No values matched
-
-Expected:
-  at least one element matching (= 2)
-
-Got:
-  []
-```
-
-```
-2 = 2
-
-Expected:
-  no elements matching (= 2)
 
 Got:
   [1,2,3]
@@ -192,124 +326,6 @@ Expected:
 
 Got:
   [1]
-```
-
-## Data types / con / fails to compile when applied to multiple arguments
-
-```
-ExampleSpec.hs:7:22: error:
-    P.con must be applied to exactly one argument
-  |
-7 |   "" `shouldSatisfy` P.con 1 2
-  |                      ^^^^^^^^^
-```
-
-## Data types / con / fails to compile when not applied to anything
-
-```
-ExampleSpec.hs:7:22: error: P.con must be applied to a constructor
-  |
-7 |   "" `shouldSatisfy` P.con
-  |                      ^^^^^
-```
-
-## Data types / con / fails to compile with non-constructor
-
-```
-ExampleSpec.hs:7:22: error: P.con must be applied to a constructor
-  |
-7 |   "" `shouldSatisfy` P.con ""
-  |                      ^^^^^^^^
-```
-
-## Data types / con / fails to compile with omitted positional fields
-
-```
-ExampleSpec.hs:9:3: error: [GHC-27346]
-    • The data constructor ‘User’ should have 2 arguments, but has been given 1
-    • In the pattern: User x0
-      In the pattern: Just (User x0)
-      In a case alternative:
-          Just (User x0)
-            -> Just
-                 (Skeletest.Internal.Utils.HList.HCons
-                    (pure x0) Skeletest.Internal.Utils.HList.HNil)
-  |
-9 |   User "alice" (Just 1) `shouldSatisfy` P.con (User (P.eq ""))
-  |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-```
-
-## Data types / con / fails to compile with unknown record field
-
-```
-ExampleSpec.hs:9:43: error: [GHC-76037] Not in scope: ‘foo’
-  |
-9 |   User "alice" `shouldSatisfy` P.con User{foo = P.eq ""}
-  |                                           ^^^
-```
-
-## Data types / con / shows a helpful failure message
-
-```
-./ExampleSpec.hs
-╭── should error: FAIL
-│ ./ExampleSpec.hs:9:
-│ │
-│ │   User "alice" `shouldSatisfy` P.con User{name = P.eq ""}
-│ │                ^^^^^^^^^^^^^^^
-│ 
-│ "alice" ≠ []
-│ 
-│ Expected:
-│   matches User{name = (= [])}
-│ 
-│ Got:
-│   User "alice"
-╰───────────────────────────────────────────────────────────────────────────────
-```
-
-## Data types / list / shows helpful failure messages
-
-```
-10 ≠ 1
-
-Expected:
-  [= 0, = 1]
-
-Got:
-  [0,10]
-```
-
-```
-Got different number of elements
-
-Expected:
-  [= 0, = 1]
-
-Got:
-  [0]
-```
-
-## Data types / tup / shows helpful failure messages
-
-```
-1 ≠ 0
-
-Expected:
-  (= 0, = [])
-
-Got:
-  (1,[])
-```
-
-```
-(1 = 1, [] = [])
-
-Expected:
-  not (= 1, = [])
-
-Got:
-  (1,[])
 ```
 
 ## IO / returns / shows helpful failure messages
@@ -350,20 +366,4 @@ Got:
 
 ```
 HttpException (404 = 404)
-```
-
-## Ord / eq / shows helpful failure messages
-
-```
-2 ≠ 1
-```
-
-```
-1 = 1
-
-Expected:
-  ≠ 1
-
-Got:
-  1
 ```

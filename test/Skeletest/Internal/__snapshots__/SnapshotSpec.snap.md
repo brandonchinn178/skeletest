@@ -8,22 +8,19 @@
 ./Test2Spec.hs
     test other: OK
 ./Test3Spec.hs
-╭── test: ERROR
-│ Test has outdated snapshots. Remove them with --update.
-╰───────────────────────────────────────────────────────────────────────────────
+    test: OK
     test other: OK
 ./Test4Spec.hs
-╭── test: ERROR
-│ Test has outdated snapshots. Remove them with --update.
-╰───────────────────────────────────────────────────────────────────────────────
+    test: OK
 ./Test5Spec.hs
-╭── test: ERROR
-│ Test has outdated snapshots. Remove them with --update.
-╰───────────────────────────────────────────────────────────────────────────────
+    test: OK
 
 ╓─ 🚨 Outdated snapshots detected ────────────────
 ║  * __snapshots__/Test1Spec.snap.md
 ║  * __snapshots__/Test2Spec.snap.md
+║  * __snapshots__/Test3Spec.snap.md
+║  * __snapshots__/Test4Spec.snap.md
+║  * __snapshots__/Test5Spec.snap.md
 ║  * __snapshots__/Test6Spec.snap.md
 ║
 ║  Update/remove these files with --update.

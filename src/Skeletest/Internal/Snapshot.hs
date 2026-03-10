@@ -38,7 +38,6 @@ import Control.Monad.Trans.Except qualified as Except
 import Control.Monad.Trans.Maybe qualified as Maybe
 import Data.Char (isAlpha, isPrint)
 import Data.Foldable qualified as Seq (toList)
-import Data.List (sort)
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
@@ -76,10 +75,24 @@ import Skeletest.Internal.Snapshot.Renderer (
  )
 import Skeletest.Internal.Snapshot.Renderer qualified as X
 import Skeletest.Internal.TestInfo (TestId, TestInfo (..), getTestInfo)
-import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Internal.Utils.Diff (showLineDiff)
-import Skeletest.Plugin (BoxSpecContent (..), Hooks (..), Spec, SpecInfo (..), SpecTest (..), SpecTree (..), TestResult (..), TestResultMessage (..), defaultHooks, getSpecTrees)
-import System.FilePath (replaceExtension, splitFileName, takeDirectory, takeExtensions, (</>))
+import Skeletest.Plugin (
+  Hooks (..),
+  Spec,
+  SpecInfo (..),
+  SpecTest (..),
+  SpecTree (..),
+  TestResult (..),
+  defaultHooks,
+  getSpecTrees,
+ )
+import System.FilePath (
+  replaceExtension,
+  splitFileName,
+  takeDirectory,
+  takeExtensions,
+  (</>),
+ )
 import System.IO.Error (isDoesNotExistError)
 import System.IO.Unsafe (unsafePerformIO)
 import UnliftIO.Directory (createDirectoryIfMissing, removeFile)
@@ -90,7 +103,6 @@ import UnliftIO.IORef (
   modifyIORef',
   newIORef,
   readIORef,
-  writeIORef,
  )
 
 -- | A predicate checking if the input matches the snapshot.
@@ -159,18 +171,23 @@ snapshotsHook =
     { modifySpecRegistry = \_ modify registry -> do
         -- Collect before the applyTestSelections hook to check for snapshots
         -- that don't correspond to any tests anymore
-        writeIORef allTestsRef . Map.fromList $
-          [ (getSnapshotPath specPath, getTestIds specSpec)
-          | SpecInfo{..} <- registry
-          ]
+        modifyIORef' snapshotInfoStoreRef $ \store ->
+          store
+            { allSnapshotTestIds =
+                Map.fromList
+                  [ (getSnapshotPath specPath, getTestIds specSpec)
+                  | SpecInfo{..} <- registry
+                  ]
+            }
         modify registry
     , runTest = \testInfo getResult -> do
         result <- getResult
         SnapshotUpdateFlag isUpdate <- getFlag
-        if
-          | not result.testResultSuccess -> pure result
-          | isUpdate -> copySnapshotsToFile testInfo *> pure result
-          | otherwise -> checkExtraTestSnapshots testInfo result
+        when result.testResultSuccess $ do
+          if isUpdate
+            then copySnapshotsToFile testInfo
+            else checkExtraTestSnapshots testInfo
+        pure result
     , runSpecs = \run specs -> do
         code <- run specs
         SnapshotUpdateFlag isUpdate <- getFlag
@@ -179,10 +196,23 @@ snapshotsHook =
           else checkOutdatedSnapshots code
     }
 
+-- | Snapshot-related information to store globally.
+data SnapshotInfoStore = SnapshotInfoStore
+  { allSnapshotTestIds :: Map FilePath (Set TestId)
+  -- ^ Map from a test file's snapshot path to all test ids in the file
+  , snapshotFilesWithExtraSnapshots :: Set FilePath
+  -- ^ Snapshot files that contain tests that contain extraneous snapshots.
+  }
+
 -- | Map from "Test file's snapshot path" => "All test ids in the test file"
-allTestsRef :: IORef (Map FilePath (Set TestId))
-allTestsRef = unsafePerformIO $ newIORef Map.empty
-{-# NOINLINE allTestsRef #-}
+snapshotInfoStoreRef :: IORef SnapshotInfoStore
+snapshotInfoStoreRef =
+  unsafePerformIO . newIORef $
+    SnapshotInfoStore
+      { allSnapshotTestIds = Map.empty
+      , snapshotFilesWithExtraSnapshots = Set.empty
+      }
+{-# NOINLINE snapshotInfoStoreRef #-}
 
 getTestIds :: Spec -> Set TestId
 getTestIds = Set.fromList . concatMap (go Seq.empty) . getSpecTrees
@@ -196,7 +226,7 @@ getTestIds = Set.fromList . concatMap (go Seq.empty) . getSpecTrees
 detectOutdatedSnapshots :: IO [(FilePath, IO ())]
 detectOutdatedSnapshots = do
   allSnapshotFiles <- filter isSnapshotFile <$> listTestFiles
-  allTests <- readIORef allTestsRef
+  allTests <- (.allSnapshotTestIds) <$> readIORef snapshotInfoStoreRef
   mapMaybeM (detectOutdated allTests) allSnapshotFiles
  where
   isSnapshotFile fp = takeExtensions fp == ".snap.md"
@@ -245,13 +275,15 @@ removeOutdatedSnapshots = mapM_ snd =<< detectOutdatedSnapshots
 checkOutdatedSnapshots :: TestExitCode -> IO TestExitCode
 checkOutdatedSnapshots code = do
   outdated <- map fst <$> detectOutdatedSnapshots
-  if null outdated
+  store <- readIORef snapshotInfoStoreRef
+  let outdated' = Set.fromList outdated <> store.snapshotFilesWithExtraSnapshots
+  if Set.null outdated'
     then pure code
     else do
       mapM_ putStrLn . concat $
         [ [""]
         , ["╓─ 🚨 Outdated snapshots detected ────────────────"]
-        , ["║  * " <> fp | fp <- sort outdated]
+        , ["║  * " <> fp | fp <- Set.toAscList outdated']
         , ["║"]
         , ["║  Update/remove these files with --update."]
         , ["╙─────────────────────────────────────────────────"]
@@ -374,26 +406,21 @@ runCheckSnapshot testInfo snapshotIndexRef val = runReturnE $ do
   returnE = Except.throwE
 
 -- | Check if the snapshot file contains any extra snapshots for the current test
-checkExtraTestSnapshots :: TestInfo -> TestResult -> IO TestResult
-checkExtraTestSnapshots testInfo result = do
+checkExtraTestSnapshots :: TestInfo -> IO ()
+checkExtraTestSnapshots testInfo = do
   CheckSnapshotFixture_File{mSnapshotFile} <- getFixture
-  outdated <- fmap (fromMaybe False) . Maybe.runMaybeT $ do
+  fmap (fromMaybe ()) . Maybe.runMaybeT $ do
     snapshotFile <- Maybe.hoistMaybe mSnapshotFile
     testSnapshots <- Maybe.hoistMaybe $ Map.lookup testInfo.testId snapshotFile.snapshots
     CheckSnapshotFixture{snapshotIndexRef} <- getFixture
     index <- readIORef snapshotIndexRef
-    pure $ length testSnapshots > index
-  pure $ if outdated then outdatedResult else result
- where
-  outdatedResult =
-    TestResult
-      { testResultSuccess = False
-      , testResultLabel = Color.red "ERROR"
-      , testResultMessage =
-          TestResultMessageBox
-            [ BoxText "Test has outdated snapshots. Remove them with --update."
-            ]
-      }
+    when (length testSnapshots > index) $ do
+      let snapshotPath = getSnapshotPath $ Text.unpack snapshotFile.testFile
+      modifyIORef' snapshotInfoStoreRef $ \store ->
+        store
+          { snapshotFilesWithExtraSnapshots =
+              Set.insert snapshotPath store.snapshotFilesWithExtraSnapshots
+          }
 
 {----- Snapshot file -----}
 

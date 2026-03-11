@@ -59,4 +59,5 @@ module Skeletest.Predicate (
 
 import Skeletest.Internal.Predicate
 import Skeletest.Internal.Snapshot
+import Skeletest.Prop.Internal
 import Prelude ()

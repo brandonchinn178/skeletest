@@ -25,40 +25,31 @@ import Control.Monad (when)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Skeletest.Internal.CLI (Flag, flag, loadCliArgs)
-import Skeletest.Internal.Capture (CaptureOutputFlag)
+import Skeletest.Internal.Capture (captureOutputPlugin)
 import Skeletest.Internal.Exit (TestExitCode (..), exitWith, handleUnknownErrors)
 import Skeletest.Internal.Snapshot (
   SnapshotRenderer (..),
-  SnapshotUpdateFlag,
-  defaultSnapshotRenderers,
   renderWithShow,
   setSnapshotRenderers,
-  snapshotsHook,
+  snapshotPlugin,
  )
 import Skeletest.Internal.Spec (
   Spec,
   SpecInfo (..),
-  applyTestSelectionsHook,
-  focusHook,
-  manualTestsHook,
   newTestSummary,
   runSpecs,
-  skipHook,
-  xfailHook,
+  specTreePlugin,
  )
 import Skeletest.Internal.Spec.Tree (getSpecTests)
 import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Plugin (Hooks (..), Plugin (..))
-import Skeletest.Prop.Internal (PropLimitFlag, PropSeedFlag)
+import Skeletest.Prop.Internal (propPlugin)
 import System.IO qualified as IO
 
 runSkeletest :: [Plugin] -> [(FilePath, Spec)] -> IO ()
-runSkeletest = runSkeletest' . mconcat
-
-runSkeletest' :: Plugin -> [(FilePath, Spec)] -> IO ()
-runSkeletest' Plugin{hooks = hooks0, ..} testModules = handleUnknownErrors $ do
+runSkeletest userPlugins testModules = handleUnknownErrors $ do
   selections <- loadCliArgs builtinFlags cliFlags
-  setSnapshotRenderers (snapshotRenderers <> defaultSnapshotRenderers)
+  setSnapshotRenderers snapshotRenderers
 
   let initialSpecs = map mkSpec testModules
   testSummary <- newTestSummary initialSpecs
@@ -72,23 +63,18 @@ runSkeletest' Plugin{hooks = hooks0, ..} testModules = handleUnknownErrors $ do
   testSummary.render >>= hooks.modifyTestSummary >>= displaySummary
   exitWith exitCode
  where
-  hooks = mconcat builtinHooks <> hooks0
-
-  builtinHooks =
-    [ xfailHook
-    , skipHook
-    , focusHook
-    , applyTestSelectionsHook
-    , manualTestsHook
-    , snapshotsHook
+  builtinPlugins =
+    [ specTreePlugin
+    , snapshotPlugin
+    , captureOutputPlugin
+    , propPlugin
     ]
 
-  builtinFlags =
-    [ flag @SnapshotUpdateFlag
-    , flag @PropSeedFlag
-    , flag @PropLimitFlag
-    , flag @CaptureOutputFlag
-    ]
+  hooks = foldMap (.hooks) $ builtinPlugins <> userPlugins
+  snapshotRenderers = foldMap (.snapshotRenderers) $ builtinPlugins <> userPlugins
+
+  cliFlags = foldMap (.cliFlags) userPlugins
+  builtinFlags = foldMap (.cliFlags) builtinPlugins
 
   mkSpec (specPath, specSpec) =
     SpecInfo

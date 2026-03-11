@@ -66,11 +66,8 @@ module Skeletest.Internal.Predicate (
   returns,
   throws,
 
-  -- * Functions
-  Fun (..),
-  IsoChecker (..),
-  (===),
-  isoWith,
+  -- * Utilities
+  render,
 ) where
 
 import Control.Monad.IO.Class (MonadIO)
@@ -87,12 +84,10 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Debug.RecoverRTTI (anythingToString)
 import GHC.Generics ((:*:) (..))
-import GHC.Stack qualified as GHC
 import Skeletest.Internal.Error (invariantViolation)
 import Skeletest.Internal.Utils.HList (HList (..))
 import Skeletest.Internal.Utils.HList qualified as HList
-import Skeletest.Prop.Gen (Gen)
-import Skeletest.Prop.Internal (PropertyM, forAll)
+import Skeletest.Internal.Utils.Text (indent, parens)
 import UnliftIO (MonadUnliftIO)
 import UnliftIO.Exception (Exception, displayException, try)
 import Prelude hiding (abs, all, and, any, elem, not, or, (&&), (||))
@@ -749,56 +744,6 @@ throws Predicate{..} =
   disp = "throws (" <> predicateDisp <> ")"
   dispNeg = "does not throw (" <> predicateDisp <> ")"
 
-{----- Functions -----}
-
-data Fun a b = Fun String (a -> b)
-data IsoChecker a b = IsoChecker (Fun a b) (Fun a b)
-
--- | Verify if two functions are isomorphic.
---
--- @
--- prop "reverse . reverse === id" $ do
---   let genList = Gen.list (Range.linear 0 10) $ Gen.int (Range.linear 0 1000)
---   (reverse . reverse) P.=== id \`shouldSatisfy\` P.isoWith genList
--- @
-(===) :: (a -> b) -> (a -> b) -> IsoChecker a b
-f === g = IsoChecker (Fun "lhs" f) (Fun "rhs" g)
-
-infix 2 ===
-
--- | See '(===)'.
-isoWith :: (GHC.HasCallStack, Show a, Eq b) => Gen a -> Predicate PropertyM (IsoChecker a b)
-isoWith gen =
-  Predicate
-    { predicateFunc = \(IsoChecker (Fun f1DispS f1) (Fun f2DispS f2)) -> do
-        a <- GHC.withFrozenCallStack $ forAll gen
-        let
-          f1Disp = Text.pack f1DispS
-          f2Disp = Text.pack f2DispS
-          b1 = f1 a
-          b2 = f2 a
-          aDisp = parens $ render a
-          b1Disp = parens $ render b1
-          b2Disp = parens $ render b2
-        pure
-          PredicateFuncResult
-            { predicateSuccess = b1 == b2
-            , predicateExplain =
-                Text.intercalate "\n" $
-                  [ b1Disp <> " " <> (if b1 == b2 then "=" else "≠") <> " " <> b2Disp
-                  , "where"
-                  , indent $ b1Disp <> " = " <> f1Disp <> " " <> aDisp
-                  , indent $ b2Disp <> " = " <> f2Disp <> " " <> aDisp
-                  ]
-            , predicateShowFailCtx = HideFailCtx
-            }
-    , predicateDisp = disp
-    , predicateDispNeg = dispNeg
-    }
- where
-  disp = "isomorphic"
-  dispNeg = "not isomorphic"
-
 {----- Utilities -----}
 
 mkPredicateOp ::
@@ -866,13 +811,3 @@ verifyAny mergeMessages results =
 
 render :: a -> Text
 render = Text.pack . anythingToString
-
--- | Add parentheses if the given input contains spaces.
-parens :: Text -> Text
-parens s =
-  if " " `Text.isInfixOf` s
-    then "(" <> s <> ")"
-    else s
-
-indent :: Text -> Text
-indent = Text.intercalate "\n" . map ("  " <>) . Text.splitOn "\n"

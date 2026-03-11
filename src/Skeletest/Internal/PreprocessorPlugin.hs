@@ -22,6 +22,7 @@ import Skeletest.Internal.Utils.HList (HList (..))
 import Skeletest.Internal.Utils.Text (showT)
 import Skeletest.Main qualified as Main
 import Skeletest.Plugin qualified as Plugin
+import Skeletest.Prop.Internal qualified as P
 
 #if !MIN_VERSION_base(4, 20, 0)
 import Data.Foldable (foldl')

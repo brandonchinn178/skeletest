@@ -6,9 +6,7 @@
 {-# LANGUAGE NoFieldSelectors #-}
 
 module Skeletest.Internal.Capture (
-  CaptureOutputFlag,
-  withCaptureOutput,
-  addCapturedOutput,
+  captureOutputPlugin,
   FixtureCapturedOutput (..),
 ) where
 
@@ -21,6 +19,7 @@ import Skeletest.Internal.CLI (
   IsFlag (..),
   getFlag,
  )
+import Skeletest.Internal.CLI qualified as CLI
 import Skeletest.Internal.Fixtures (
   Fixture (..),
   FixtureSkeletestTmpDir (..),
@@ -33,9 +32,25 @@ import Skeletest.Internal.TestRunner (
   TestResult (..),
   TestResultMessage (..),
  )
+import Skeletest.Plugin (Hooks (..), Plugin (..), defaultHooks, defaultPlugin)
 import System.Directory (removePathForcibly)
 import System.IO qualified as IO
 import UnliftIO.Exception (finally)
+
+captureOutputPlugin :: Plugin
+captureOutputPlugin =
+  defaultPlugin
+    { cliFlags = [CLI.flag @CaptureOutputFlag]
+    , hooks = captureOutputHooks
+    }
+
+captureOutputHooks :: Hooks
+captureOutputHooks =
+  defaultHooks
+    { runTest = \_ getResult -> do
+        (output, result) <- withCaptureOutput getResult
+        pure $ addCapturedOutput output result
+    }
 
 newtype CaptureOutputFlag = CaptureOutputFlag Bool
 
@@ -80,16 +95,19 @@ withCaptureOutput action = do
       IO.hClose orig
 
 addCapturedOutput :: CapturedOutput -> TestResult -> TestResult
-addCapturedOutput = maybe id updateResult
+addCapturedOutput = maybe id (updateResult . renderOutput)
  where
   updateResult output result =
-    result
-      { testResultMessage =
-          TestResultMessageBox . concat $
-            [ toBoxContents result.testResultMessage
-            , renderOutput output
-            ]
-      }
+    if result.testResultSuccess || null output
+      then result
+      else
+        result
+          { testResultMessage =
+              TestResultMessageBox . concat $
+                [ toBoxContents result.testResultMessage
+                , output
+                ]
+          }
   toBoxContents = \case
     TestResultMessageNone -> []
     TestResultMessageInline msg -> [BoxText msg]

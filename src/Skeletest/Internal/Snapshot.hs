@@ -14,7 +14,6 @@ module Skeletest.Internal.Snapshot (
 
   -- * Rendering
   X.SnapshotRenderer (..),
-  X.defaultSnapshotRenderers,
   X.setSnapshotRenderers,
   X.getSnapshotRenderers,
   X.plainRenderer,
@@ -27,9 +26,8 @@ module Skeletest.Internal.Snapshot (
   encodeSnapshotFile,
   normalizeSnapshotFile,
 
-  -- * Infrastructure
-  SnapshotUpdateFlag (..),
-  snapshotsHook,
+  -- * Plugin
+  snapshotPlugin,
 ) where
 
 import Control.Monad (guard, unless, when)
@@ -57,6 +55,7 @@ import Data.Typeable qualified as Typeable
 import Data.Void (absurd)
 import Debug.RecoverRTTI (anythingToString)
 import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..), getFlag)
+import Skeletest.Internal.CLI qualified as CLI
 import Skeletest.Internal.Error (skeletestError)
 import Skeletest.Internal.Exit (TestExitCode (..))
 import Skeletest.Internal.Fixtures (
@@ -74,6 +73,7 @@ import Skeletest.Internal.Predicate (
  )
 import Skeletest.Internal.Snapshot.Renderer (
   SnapshotRenderer (..),
+  defaultSnapshotRenderers,
   getSnapshotRenderers,
  )
 import Skeletest.Internal.Snapshot.Renderer qualified as X
@@ -81,16 +81,7 @@ import Skeletest.Internal.TestInfo (TestId, TestInfo (..), getTestInfo)
 import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Internal.Utils.Diff (showLineDiff)
 import Skeletest.Internal.Utils.Text (pluralize, showT)
-import Skeletest.Plugin (
-  Hooks (..),
-  Spec,
-  SpecInfo (..),
-  SpecTest (..),
-  SpecTree (..),
-  TestResult (..),
-  defaultHooks,
-  getSpecTrees,
- )
+import Skeletest.Plugin (Hooks (..), Plugin (..), Spec, SpecInfo (..), SpecTest (..), SpecTree (..), TestResult (..), defaultHooks, defaultPlugin, getSpecTrees)
 import System.FilePath (
   replaceExtension,
   splitFileName,
@@ -147,7 +138,15 @@ matchesSnapshot =
     , predicateDispNeg = "does not match snapshot"
     }
 
-{----- Infrastructure -----}
+{----- Plugin -----}
+
+snapshotPlugin :: Plugin
+snapshotPlugin =
+  defaultPlugin
+    { hooks = snapshotsHook
+    , cliFlags = [CLI.flag @SnapshotUpdateFlag]
+    , snapshotRenderers = defaultSnapshotRenderers
+    }
 
 newtype SnapshotUpdateFlag = SnapshotUpdateFlag Bool
 

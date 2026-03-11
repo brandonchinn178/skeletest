@@ -3,6 +3,8 @@
 module Skeletest.Internal.Utils.Text (
   showT,
   pluralize,
+  parens,
+  indent,
 ) where
 
 import Data.Text (Text)
@@ -15,3 +17,13 @@ showT = Text.pack . show
 
 pluralize :: (Num a, Eq a, Show a) => a -> Text -> Text
 pluralize n item = showT n <> " " <> item <> (if n == 1 then "" else "s")
+
+-- | Add parentheses if the given input contains spaces.
+parens :: Text -> Text
+parens s =
+  if " " `Text.isInfixOf` s
+    then "(" <> s <> ")"
+    else s
+
+indent :: Text -> Text
+indent = Text.intercalate "\n" . map ("  " <>) . Text.splitOn "\n"

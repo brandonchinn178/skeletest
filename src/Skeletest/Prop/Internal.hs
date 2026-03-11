@@ -10,6 +10,7 @@ module Skeletest.Prop.Internal (
   runProperty,
 
   -- * Test
+  prop,
   forAll,
   discard,
 
@@ -27,9 +28,14 @@ module Skeletest.Prop.Internal (
   label,
   collect,
 
-  -- * CLI flags
-  PropSeedFlag,
-  PropLimitFlag,
+  -- * Assertions
+  isoWith,
+  (===),
+  Fun (..),
+  IsoChecker (..),
+
+  -- * Plugin
+  propPlugin,
 ) where
 
 import Control.Monad (ap)
@@ -49,7 +55,11 @@ import Hedgehog.Internal.Runner qualified as Hedgehog
 import Hedgehog.Internal.Seed qualified as Hedgehog.Seed
 import Hedgehog.Internal.Source qualified as Hedgehog
 import Skeletest.Internal.CLI (FlagSpec (..), IsFlag (..), getFlag)
+import Skeletest.Internal.CLI qualified as CLI
 import Skeletest.Internal.Error (skeletestError)
+import Skeletest.Internal.Predicate (Predicate (..), PredicateFuncResult (..), ShowFailCtx (..), render)
+import Skeletest.Internal.Spec.Tree (Spec)
+import Skeletest.Internal.Spec.Tree qualified as Spec
 import Skeletest.Internal.TestInfo (TestInfo, getTestInfo)
 import Skeletest.Internal.TestRunner (
   AssertionFail (..),
@@ -62,6 +72,9 @@ import Skeletest.Internal.TestRunner (
   testResultPass,
  )
 import Skeletest.Internal.Utils.Color qualified as Color
+import Skeletest.Internal.Utils.Text (indent, parens)
+import Skeletest.Plugin (Plugin (..), defaultPlugin)
+import Skeletest.Prop.Gen (Gen)
 import Text.Read (readEither, readMaybe)
 import UnliftIO.Exception (SomeException, fromException, toException)
 import UnliftIO.IORef (IORef, newIORef, readIORef, writeIORef)
@@ -176,8 +189,8 @@ runProperty = \case
   PropertyIO cfg m -> do
     (seed, extraConfig) <- loadPropFlags
     let cfg' = resolveConfig $ cfg <> extraConfig
-    (prop, getException) <- fromPropertyIO m
-    report <- Hedgehog.checkReport cfg' size seed prop reportProgress
+    (prop_, getException) <- fromPropertyIO m
+    report <- Hedgehog.checkReport cfg' size seed prop_ reportProgress
 
     testInfo <- getTestInfo
     case Hedgehog.reportStatus report of
@@ -353,6 +366,17 @@ renderCoverage (Hedgehog.Coverage coverage) testCount =
 
 {----- Test -----}
 
+-- | Define a property test.
+--
+-- @
+-- describe \"User\" $ do
+--   prop "decode . encode === Just" $ do
+--     let genUser = ...
+--     (decode . encode) P.=== Just \`shouldSatisfy\` P.isoWith genUser
+-- @
+prop :: String -> Property -> Spec
+prop = Spec.test
+
 forAll :: (GHC.HasCallStack, Show a) => Hedgehog.Gen a -> PropertyM a
 forAll gen = GHC.withFrozenCallStack $ propM (Hedgehog.forAll gen)
 
@@ -415,7 +439,66 @@ label l = GHC.withFrozenCallStack $ propM $ Hedgehog.label (Hedgehog.LabelName l
 collect :: (Show a, GHC.HasCallStack) => a -> Property
 collect a = GHC.withFrozenCallStack $ propM $ Hedgehog.collect a
 
-{----- CLI flags -----}
+{----- Assertions -----}
+
+data Fun a b = Fun String (a -> b)
+data IsoChecker a b = IsoChecker (Fun a b) (Fun a b)
+
+-- | Verify if two functions are isomorphic.
+--
+-- @
+-- prop "reverse . reverse === id" $ do
+--   let genList = Gen.list (Range.linear 0 10) $ Gen.int (Range.linear 0 1000)
+--   (reverse . reverse) P.=== id \`shouldSatisfy\` P.isoWith genList
+-- @
+(===) :: (a -> b) -> (a -> b) -> IsoChecker a b
+f === g = IsoChecker (Fun "lhs" f) (Fun "rhs" g)
+
+infix 2 ===
+
+-- | See '(===)'.
+isoWith :: (GHC.HasCallStack, Show a, Eq b) => Gen a -> Predicate PropertyM (IsoChecker a b)
+isoWith gen =
+  Predicate
+    { predicateFunc = \(IsoChecker (Fun f1DispS f1) (Fun f2DispS f2)) -> do
+        a <- GHC.withFrozenCallStack $ forAll gen
+        let
+          f1Disp = Text.pack f1DispS
+          f2Disp = Text.pack f2DispS
+          b1 = f1 a
+          b2 = f2 a
+          aDisp = parens $ render a
+          b1Disp = parens $ render b1
+          b2Disp = parens $ render b2
+        pure
+          PredicateFuncResult
+            { predicateSuccess = b1 == b2
+            , predicateExplain =
+                Text.intercalate "\n" $
+                  [ b1Disp <> " " <> (if b1 == b2 then "=" else "≠") <> " " <> b2Disp
+                  , "where"
+                  , indent $ b1Disp <> " = " <> f1Disp <> " " <> aDisp
+                  , indent $ b2Disp <> " = " <> f2Disp <> " " <> aDisp
+                  ]
+            , predicateShowFailCtx = HideFailCtx
+            }
+    , predicateDisp = disp
+    , predicateDispNeg = dispNeg
+    }
+ where
+  disp = "isomorphic"
+  dispNeg = "not isomorphic"
+
+{----- Plugin -----}
+
+propPlugin :: Plugin
+propPlugin =
+  defaultPlugin
+    { cliFlags =
+        [ CLI.flag @PropSeedFlag
+        , CLI.flag @PropLimitFlag
+        ]
+    }
 
 newtype PropSeedFlag = PropSeedFlag (Maybe Hedgehog.Seed)
 

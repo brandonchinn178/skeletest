@@ -24,7 +24,6 @@ module Skeletest.Internal.Spec (
   X.Testable (..),
   X.test,
   X.it,
-  X.prop,
 
   -- ** Modifiers
   X.xfail,
@@ -37,12 +36,8 @@ module Skeletest.Internal.Spec (
   X.withMarkers,
   X.withMarker,
 
-  -- ** Built-in hooks
-  applyTestSelectionsHook,
-  manualTestsHook,
-  xfailHook,
-  skipHook,
-  focusHook,
+  -- ** Plugin
+  specTreePlugin,
 ) where
 
 import Control.Concurrent (myThreadId)
@@ -55,7 +50,6 @@ import Data.Text.IO qualified as Text
 import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
 import GHC.Records (HasField (..))
 import Numeric (showFFloat)
-import Skeletest.Internal.Capture (addCapturedOutput, withCaptureOutput)
 import Skeletest.Internal.Exit (TestExitCode (..))
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.Markers (
@@ -95,7 +89,7 @@ import Skeletest.Internal.TestRunner (
  )
 import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Internal.Utils.Text (pluralize)
-import Skeletest.Plugin (Hooks (..), defaultHooks, filterSpecTests, hasMarker)
+import Skeletest.Plugin (Hooks (..), Plugin (..), defaultHooks, defaultPlugin, filterSpecTests, hasMarker)
 import System.Console.Terminal.Size qualified as Term
 import UnliftIO.Exception (
   finally,
@@ -171,14 +165,12 @@ runSpecs hooks testSummary specs = withTestSummary $ do
 
   runTest info action =
     hooks.runTest info $ do
-      (mCapture, resultOrError) <- withCaptureOutput (try action)
-      case resultOrError of
+      try action >>= \case
         Right result -> pure result
         Left e ->
-          fmap (addCapturedOutput mCapture) $
-            case fromException e of
-              Just e' -> testResultFromAssertionFail e'
-              Nothing -> testResultFromError e
+          case fromException e of
+            Just e' -> testResultFromAssertionFail e'
+            Nothing -> testResultFromError e
 
   getIndentLevel testInfo = length testInfo.contexts + 1 -- +1 to include the module name
 
@@ -260,6 +252,19 @@ instance HasField "render" TestSummary (IO Text) where
     when_ p x = if p then [x] else []
 
 {----- Built-in hooks -----}
+
+specTreePlugin :: Plugin
+specTreePlugin =
+  defaultPlugin
+    { hooks =
+        mconcat
+          [ xfailHook
+          , skipHook
+          , focusHook
+          , applyTestSelectionsHook
+          , manualTestsHook
+          ]
+    }
 
 applyTestSelectionsHook :: Hooks
 applyTestSelectionsHook =

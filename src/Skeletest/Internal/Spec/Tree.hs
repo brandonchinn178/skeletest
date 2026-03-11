@@ -20,7 +20,6 @@ module Skeletest.Internal.Spec.Tree (
   Testable (..),
   test,
   it,
-  prop,
 
   -- ** Modifiers
   MarkerXFail (..),
@@ -68,7 +67,6 @@ import Skeletest.Internal.Markers (
 import Skeletest.Internal.TestRunner (TestResult)
 import Skeletest.Internal.TestTargets (TestTarget, matchesTest)
 import Skeletest.Internal.TestTargets qualified as TestTargets
-import Skeletest.Prop.Internal (Property)
 
 type Spec = Spec' ()
 
@@ -239,17 +237,6 @@ test name t = Spec $ tell [mkTest]
 -- @
 it :: String -> IO () -> Spec
 it = test
-
--- | Define a property test.
---
--- @
--- describe \"User\" $ do
---   prop "decode . encode === Just" $ do
---     let genUser = ...
---     (decode . encode) P.=== Just \`shouldSatisfy\` P.isoWith genUser
--- @
-prop :: String -> Property -> Spec
-prop = test
 
 {----- Modifiers -----}
 

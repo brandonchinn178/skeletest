@@ -38,6 +38,7 @@ import Skeletest.Internal.Error (invariantViolation, skeletestError)
 import Skeletest.Internal.TestInfo (getTestInfo)
 import Skeletest.Internal.TestInfo qualified as TestInfo
 import Skeletest.Internal.Utils.Map qualified as Map.Utils
+import Skeletest.Internal.Utils.Text (showT)
 import System.Directory (
   createDirectory,
   createDirectoryIfMissing,
@@ -114,7 +115,7 @@ getFixture = liftIO $ do
               msg =
                 Text.unwords
                   [ "Found circular dependency when resolving fixtures:"
-                  , Text.intercalate " -> " $ map (Text.pack . show) (fixtures <> [rep])
+                  , Text.intercalate " -> " $ map showT (fixtures <> [rep])
                   ]
            in (registry, Left msg)
 

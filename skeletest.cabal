@@ -61,6 +61,7 @@ library
     Skeletest.Internal.Utils.Diff
     Skeletest.Internal.Utils.HList
     Skeletest.Internal.Utils.Map
+    Skeletest.Internal.Utils.Text
     Skeletest.Main
     Skeletest.Plugin
     Skeletest.Predicate

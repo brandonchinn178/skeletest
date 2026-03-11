@@ -7,6 +7,10 @@
 ╭── should error: ERROR
 │ Found circular dependency when resolving fixtures: FixtureA -> FixtureB -> FixtureD -> FixtureA
 ╰────────────────────────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## getFixture / throws the appropriate error when setup fails
@@ -29,4 +33,8 @@
 │ 
 │ Fixture setup failed
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 2 tests ran in 0.00s
+  • 2 tests failed ✘
 ```

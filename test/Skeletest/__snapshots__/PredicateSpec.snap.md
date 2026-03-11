@@ -78,6 +78,10 @@ Got:
 │ Got:
 │   User "alice"
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## Data types / con / fails to compile with unknown record field

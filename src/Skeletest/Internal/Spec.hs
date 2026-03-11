@@ -1,4 +1,6 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -10,6 +12,8 @@ module Skeletest.Internal.Spec (
 
   -- ** Execution
   runSpecs,
+  TestSummary (..),
+  newTestSummary,
 
   -- ** Entrypoint
   X.SpecRegistry,
@@ -43,10 +47,13 @@ module Skeletest.Internal.Spec (
 
 import Control.Concurrent (myThreadId)
 import Control.Monad (forM)
+import Control.Monad.Trans.State.Strict qualified as State
+import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
+import GHC.Records (HasField (..))
 import Numeric (showFFloat)
 import Skeletest.Internal.Capture (addCapturedOutput, withCaptureOutput)
 import Skeletest.Internal.Exit (TestExitCode (..))
@@ -74,6 +81,8 @@ import Skeletest.Internal.Spec.Tree (
   getSpecTrees,
   mapSpecs,
   pruneSpec,
+  traverseSpecTests,
+  traverseSpecs,
  )
 import Skeletest.Internal.Spec.Tree qualified as X
 import Skeletest.Internal.TestInfo (TestInfo (TestInfo), withTestInfo)
@@ -85,6 +94,7 @@ import Skeletest.Internal.TestRunner (
   testResultFromError,
  )
 import Skeletest.Internal.Utils.Color qualified as Color
+import Skeletest.Internal.Utils.Text (pluralize)
 import Skeletest.Plugin (Hooks (..), defaultHooks, filterSpecTests, hasMarker)
 import System.Console.Terminal.Size qualified as Term
 import UnliftIO.Exception (
@@ -96,8 +106,8 @@ import UnliftIO.Exception (
 {----- Execute spec -----}
 
 -- | Run the given Specs and return whether all of the tests passed.
-runSpecs :: Hooks -> SpecRegistry -> IO TestExitCode
-runSpecs hooks specs =
+runSpecs :: Hooks -> TestSummary -> SpecRegistry -> IO TestExitCode
+runSpecs hooks testSummary specs = withTestSummary $ do
   (`finally` cleanupFixtures PerSessionFixtureKey) $
     fmap resolveExitCode . forM (pruneSpec specs) $ \SpecInfo{..} ->
       (`finally` cleanupFixtures (PerFileFixtureKey specPath)) $ do
@@ -112,6 +122,10 @@ runSpecs hooks specs =
         let specTrees = getSpecTrees specSpec
         runTrees emptyTestInfo specTrees
  where
+  withTestSummary action = do
+    testSummary.update $ \d -> d{testsSelected = getTotalTests specs}
+    recordDuration testSummary action
+
   runTrees baseTestInfo = fmap resolveExitCode . mapM (runTree baseTestInfo)
   runTree baseTestInfo = \case
     SpecTree_Group{..} -> do
@@ -138,6 +152,12 @@ runSpecs hooks specs =
                   then ""
                   else " " <> Color.gray ("(" <> renderDuration duration <> ")")
           pure result{testResultLabel = result.testResultLabel <> durationLabel}
+
+      testSummary.update $ \d ->
+        if
+          | "SKIP" `Text.isInfixOf` testResultLabel -> d
+          | testResultSuccess -> d{testsPassed = d.testsPassed + 1}
+          | otherwise -> d{testsFailed = d.testsFailed + 1}
 
       case testResultMessage of
         TestResultMessageNone -> do
@@ -182,6 +202,62 @@ renderDuration :: NominalDiffTime -> Text
 renderDuration duration = (Text.pack . showRounded) duration <> "s"
  where
   showRounded n = showFFloat (Just 2) (realToFrac n :: Double) ""
+
+{----- Test summary -----}
+
+newtype TestSummary = TestSummary (IORef TestSummaryData)
+
+data TestSummaryData = TestSummaryData
+  { totalTests :: !Int
+  , testsSelected :: !Int
+  , testsPassed :: !Int
+  , testsFailed :: !Int
+  , snapshotsUpdated :: !Int
+  , totalDuration :: !NominalDiffTime
+  }
+
+newTestSummary :: SpecRegistry -> IO TestSummary
+newTestSummary specs = do
+  fmap TestSummary . newIORef $
+    TestSummaryData
+      { totalTests = getTotalTests specs
+      , testsSelected = 0
+      , testsPassed = 0
+      , testsFailed = 0
+      , snapshotsUpdated = 0
+      , totalDuration = 0
+      }
+
+getTotalTests :: SpecRegistry -> Int
+getTotalTests specs = State.execState (count specs) 0
+ where
+  count = traverseSpecs . traverseSpecTests $ \x -> State.modify (+ 1) *> pure x
+
+recordDuration :: TestSummary -> IO a -> IO a
+recordDuration (TestSummary ref) m = do
+  (a, duration) <- withTimer m
+  modifyIORef' ref $ \d -> d{totalDuration = duration}
+  pure a
+
+instance HasField "update" TestSummary ((TestSummaryData -> TestSummaryData) -> IO ()) where
+  getField (TestSummary ref) = modifyIORef' ref
+instance HasField "render" TestSummary (IO Text) where
+  getField (TestSummary ref) = do
+    TestSummaryData{..} <- readIORef ref
+    let testsDeselected = totalTests - testsSelected
+    let testsSkipped = testsSelected - testsPassed - testsFailed
+    pure . Text.unlines . concat $
+      [ ["═════ Test report ═════"]
+      , ["➤ " <> pluralize testsSelected "test" <> " ran in " <> renderDuration totalDuration]
+      , when_ (testsFailed > 0) $
+          "  • " <> pluralize testsFailed "test" <> " failed " <> Color.red "✘"
+      , when_ (testsSkipped > 0) $
+          "  • " <> pluralize testsSkipped "test" <> " skipped " <> Color.yellow "≫"
+      , when_ (testsDeselected > 0) $
+          "  • " <> pluralize testsDeselected "test" <> " deselected"
+      ]
+   where
+    when_ p x = if p then [x] else []
 
 {----- Built-in hooks -----}
 

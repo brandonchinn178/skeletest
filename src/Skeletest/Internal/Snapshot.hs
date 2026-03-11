@@ -36,6 +36,7 @@ import Control.Monad (guard, unless, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Except qualified as Except
 import Control.Monad.Trans.Maybe qualified as Maybe
+import Control.Monad.Trans.State.Strict qualified as State
 import Data.Char (isAlpha, isPrint)
 import Data.Foldable qualified as Seq (toList)
 import Data.List (sortOn)
@@ -79,6 +80,7 @@ import Skeletest.Internal.Snapshot.Renderer qualified as X
 import Skeletest.Internal.TestInfo (TestId, TestInfo (..), getTestInfo)
 import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Internal.Utils.Diff (showLineDiff)
+import Skeletest.Internal.Utils.Text (pluralize, showT)
 import Skeletest.Plugin (
   Hooks (..),
   Spec,
@@ -203,14 +205,21 @@ snapshotsHook =
         if isUpdate
           then removeOutdatedSnapshots *> pure code
           else checkOutdatedSnapshots code
+    , modifyTestSummary = \summary -> do
+        snapshotSummary <- getSnapshotSummary
+        pure $ summary <> snapshotSummary
     }
 
 -- | Snapshot-related information to store globally.
 data SnapshotInfoStore = SnapshotInfoStore
-  { allSnapshotTestIds :: Map FilePath [TestId]
+  { allSnapshotTestIds :: !(Map FilePath [TestId])
   -- ^ Map from a test file's snapshot path to all test ids in the file
-  , snapshotFilesWithExtraSnapshots :: Set FilePath
+  , snapshotFilesWithExtraSnapshots :: !(Set FilePath)
   -- ^ Snapshot files that contain tests that contain extraneous snapshots.
+  , numSnapshotsUpdated :: !Int
+  -- ^ Number of snapshots that were updated
+  , numSnapshotFilesCleanedUp :: !Int
+  -- ^ Number of snapshot files that were cleaned up
   }
 
 -- | Map from "Test file's snapshot path" => "All test ids in the test file"
@@ -220,6 +229,8 @@ snapshotInfoStoreRef =
     SnapshotInfoStore
       { allSnapshotTestIds = Map.empty
       , snapshotFilesWithExtraSnapshots = Set.empty
+      , numSnapshotsUpdated = 0
+      , numSnapshotFilesCleanedUp = 0
       }
 {-# NOINLINE snapshotInfoStoreRef #-}
 
@@ -247,7 +258,7 @@ detectOutdatedSnapshots = do
       case Map.lookup snapshotFilePath allTests of
         Just testIds -> pure testIds
         -- If Nothing, snapshot file does not correspond to any tests
-        Nothing -> returnOutdated $ removeFile snapshotFilePath
+        Nothing -> returnOutdated $ cleanupFile snapshotFilePath
 
     contents <- liftIO $ Text.readFile snapshotFilePath
 
@@ -258,13 +269,20 @@ detectOutdatedSnapshots = do
         -- If this happens when '--update' is passed, it means no more tests in
         -- the file have snapshots, since it would've been regenerated. So just
         -- remove the snapshot file if we still encounter this.
-        Nothing -> returnOutdated $ removeFile snapshotFilePath
+        Nothing -> returnOutdated $ cleanupFile snapshotFilePath
 
     let outdatedSnapshots = Map.keysSet snapshotFile.snapshots Set.\\ testIds
     unless (null outdatedSnapshots) $
       returnOutdated $ do
+        modifyIORef' snapshotInfoStoreRef $ \store ->
+          store{numSnapshotsUpdated = store.numSnapshotsUpdated + length outdatedSnapshots}
         let snapshots' = Map.withoutKeys snapshotFile.snapshots outdatedSnapshots
         saveSnapshotFile snapshotFilePath snapshotFile{snapshots = snapshots'}
+
+  cleanupFile path = do
+    modifyIORef' snapshotInfoStoreRef $ \store ->
+      store{numSnapshotFilesCleanedUp = store.numSnapshotFilesCleanedUp + 1}
+    removeFile path
 
   runDetectOutdatedM ::
     (FilePath -> Except.ExceptT (IO ()) IO ()) ->
@@ -295,6 +313,18 @@ checkOutdatedSnapshots code = do
         , ["╙─────────────────────────────────────────────────"]
         ]
       pure ExitOutdatedSnapshots
+
+getSnapshotSummary :: IO Text
+getSnapshotSummary = do
+  store <- readIORef snapshotInfoStoreRef
+  pure . Text.unlines . concat $
+    [ when_ (store.numSnapshotsUpdated > 0) $
+        "➤ " <> pluralize store.numSnapshotsUpdated "snapshot" <> " updated"
+    , when_ (store.numSnapshotFilesCleanedUp > 0) $
+        "➤ " <> pluralize store.numSnapshotFilesCleanedUp "snapshot file" <> " cleaned up"
+    ]
+ where
+  when_ p x = if p then [x] else []
 
 {----- Update snapshot -----}
 
@@ -348,9 +378,28 @@ finalizeUpdateSnapshotFixture testInfo newFileSnapshotsRef = do
   newSnapshots <- Map.map Seq.toList <$> readIORef newFileSnapshotsRef
   let snapshots' = mergeSnapshots snapshotFile.snapshots newSnapshots
   when (snapshots' /= snapshotFile.snapshots) $ do
+    modifyIORef' snapshotInfoStoreRef $ \store ->
+      store{numSnapshotsUpdated = store.numSnapshotsUpdated + countChanges snapshotFile.snapshots snapshots'}
     saveSnapshotFile snapshotPath snapshotFile{snapshots = snapshots'}
  where
   newSnapshotFile = emptySnapshotFile (Text.pack testInfo.file)
+  countChanges old new =
+    flip State.execState 0 $
+      Map.mergeA
+        ( Map.traverseMissing $ \_ snaps -> do
+            State.modify' (+ length snaps)
+        )
+        ( Map.traverseMissing $ \_ snaps -> do
+            State.modify' (+ length snaps)
+        )
+        ( Map.zipWithAMatched $ \_ snapsOld snapsNew -> do
+            let (snapsOld', snapsNew') = (Set.fromList snapsOld, Set.fromList snapsNew)
+            let added = Set.size $ snapsNew' Set.\\ snapsOld'
+            let removed = Set.size $ snapsOld' Set.\\ snapsNew'
+            State.modify' (+ (added + removed))
+        )
+        old
+        new
 
   -- Merge snapshots, to avoid clearing snapshots of tests that were deselected.
   -- Extraneous snapshots will be cleared by 'detectOutdatedSnapshots'.
@@ -449,7 +498,7 @@ data SnapshotValue = SnapshotValue
   { content :: Text
   , lang :: Maybe Text
   }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
 getSnapshotPath :: FilePath -> FilePath
 getSnapshotPath testFile = testDir' </> "__snapshots__" </> snapshotFileName
@@ -575,7 +624,7 @@ normalizeSnapshotFile file =
   sanitizeSlashes = Text.replace " /" " \\/"
 
   sanitizeNonPrint = Text.concatMap $ \case
-    c | (not . isPrint) c -> Text.drop 1 . Text.dropEnd 1 . Text.pack . show $ c
+    c | (not . isPrint) c -> Text.drop 1 . Text.dropEnd 1 . showT $ c
     c -> Text.singleton c
 
 {----- Render values -----}

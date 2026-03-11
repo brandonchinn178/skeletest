@@ -1,7 +1,12 @@
 ## Unreleased
 
 New features:
-* Long tests now display the duration of the test
+* Long tests now display the duration of the test ([#23](https://github.com/brandonchinn178/skeletest/issues/23))
+* Summary of test results now displayed at end of test ([#21](https://github.com/brandonchinn178/skeletest/issues/21))
+
+API changes:
+* Added `runSpecs` to `Hooks`
+* Added `modifyTestSummary` to `Hooks`
 
 Runtime changes:
 * Sanitize a literal "\`\`\`" line in snapshots ([#27](https://github.com/brandonchinn178/skeletest/issues/27))
@@ -17,9 +22,6 @@ Runtime changes:
 
 New features:
 * Support repeated CLI flags with `MultiFlag`
-
-API changes:
-* Added `runSpecs` to `Hooks`
 
 Runtime changes:
 * Fix `--foo=bar` to error when `--foo` is a `SwitchFlag`

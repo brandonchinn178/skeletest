@@ -60,6 +60,7 @@ class (MonadIO m) => Testable m where
 {----- TestResult -----}
 
 -- TODO: Remove 'testResult' prefix
+-- TODO: Change success -> PASS/FAIL/SKIP
 -- https://github.com/brandonchinn178/skeletest/issues/89
 data TestResult = TestResult
   { testResultSuccess :: Bool

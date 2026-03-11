@@ -21,6 +21,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Skeletest.Internal.Constants (mainFileSpecsListIdentifier)
 import Skeletest.Internal.Error (SkeletestError (..))
+import Skeletest.Internal.Utils.Text (showT)
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (makeRelative, splitExtensions, takeDirectory, (</>))
 import Text.Read (readMaybe)
@@ -42,7 +43,7 @@ defaultOptions originalDirectory =
     }
 
 encodeOptions :: Options -> Text
-encodeOptions = Text.pack . show
+encodeOptions = showT
 
 decodeOptions :: Text -> Either Text Options
 decodeOptions = readEither . unquote

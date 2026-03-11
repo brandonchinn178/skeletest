@@ -107,7 +107,8 @@ class (Typeable a) => IsFlag a where
 
   flagSpec :: FlagSpec a
 
--- TODO(breaking-change): Remove 'flag' prefix from these fields
+-- TODO: Remove 'flag' prefix from these fields
+-- https://github.com/brandonchinn178/skeletest/issues/89
 data FlagSpec a
   = SwitchFlag
       { flagFromBool :: Bool -> a

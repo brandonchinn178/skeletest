@@ -44,6 +44,8 @@ module Skeletest.Plugin (
   X.traverseSpecs,
 ) where
 
+import Control.Monad ((>=>))
+import Data.Text (Text)
 import Skeletest.Internal.CLI (Flag)
 import Skeletest.Internal.Exit (TestExitCode)
 import Skeletest.Internal.Markers qualified as X
@@ -105,6 +107,7 @@ data Hooks = Hooks
   -- ^ Modify how a test is executed
   , runSpecs :: (SpecRegistry -> IO TestExitCode) -> (SpecRegistry -> IO TestExitCode)
   -- ^ Modify the action to run specs.
+  , modifyTestSummary :: Text -> IO Text
   }
 
 instance Semigroup Hooks where
@@ -113,6 +116,7 @@ instance Semigroup Hooks where
       { modifySpecRegistry = \targets -> hooks2.modifySpecRegistry targets . hooks1.modifySpecRegistry targets
       , runTest = \testInfo -> hooks2.runTest testInfo . hooks1.runTest testInfo
       , runSpecs = hooks2.runSpecs . hooks1.runSpecs
+      , modifyTestSummary = hooks1.modifyTestSummary >=> hooks2.modifyTestSummary
       }
 
 instance Monoid Hooks where
@@ -124,4 +128,5 @@ defaultHooks =
     { modifySpecRegistry = \_ -> id
     , runTest = \_ -> id
     , runSpecs = id
+    , modifyTestSummary = pure
     }

@@ -12,6 +12,10 @@
 │ 
 │ 1 ≠ 2
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## shouldNotBe / should show helpful failure
@@ -32,6 +36,10 @@
 │ Got:
 │   1
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## shouldSatisfy / should show helpful failure
@@ -46,6 +54,10 @@
 │ 
 │ -1 ≯ 0
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## shouldNotSatisfy / should show helpful failure
@@ -66,6 +78,10 @@
 │ Got:
 │   1
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## shouldReturn / should show helpful failure
@@ -80,6 +96,10 @@
 │ 
 │ 1 ≠ 2
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## context / should show failure context
@@ -97,6 +117,10 @@
 │ 
 │ 1 ≠ 2
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## failTest / should show failure
@@ -111,6 +135,10 @@
 │ 
 │ error message
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## shows backtrace of failed assertions
@@ -135,6 +163,10 @@
 │ 
 │ -1 ≯ 0
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## shows helpful error on pattern match fail
@@ -149,6 +181,10 @@
 │ 
 │ Pattern match failure in 'do' block
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## shows unrecognized exceptions
@@ -159,6 +195,10 @@
 │ Got exception of type `IOException`:
 │ unknown-file.txt: openFile: does not exist (No such file or directory)
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```
 
 ## shows source code when running from different directory
@@ -173,4 +213,8 @@
 │ 
 │ failure
 ╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test failed ✘
 ```

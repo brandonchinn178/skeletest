@@ -337,6 +337,65 @@ spec = do
     runner.lookupTestFile "__snapshots__/Test6Spec.snap.md"
       `shouldReturn` expected6
 
+  integration . it "does not clean up deselected tests" $ do
+    runner <- getFixture @TestRunner
+    runner.addTestFile "Test1Spec.hs" $
+      [ "module Test1Spec (spec) where"
+      , "import Skeletest"
+      , "import qualified Skeletest.Predicate as P"
+      , "spec = do"
+      , "  it \"focused test\" $ do"
+      , "    \"result\" `shouldSatisfy` P.matchesSnapshot"
+      , "  it \"other test\" $ do"
+      , "    \"result\" `shouldSatisfy` P.matchesSnapshot"
+      ]
+    runner.addTestFile "Test2Spec.hs" $
+      [ "module Test2Spec (spec) where"
+      , "import Skeletest"
+      , "import qualified Skeletest.Predicate as P"
+      , "spec = do"
+      , "  it \"other test\" $ do"
+      , "    \"result\" `shouldSatisfy` P.matchesSnapshot"
+      ]
+    let expected1 =
+          Text.unlines
+            [ "# ./Test1Spec.hs"
+            , ""
+            , "## focused test"
+            , ""
+            , "```"
+            , "result"
+            , "```"
+            , ""
+            , "## other test"
+            , ""
+            , "```"
+            , "result"
+            , "```"
+            ]
+    let expected2 =
+          Text.unlines
+            [ "# ./Test2Spec.hs"
+            , ""
+            , "## other test"
+            , ""
+            , "```"
+            , "result"
+            , "```"
+            ]
+
+    _ <- expectSuccess $ runner.runTestsWith def{cliArgs = ["-u"]}
+    runner.readTestFile "__snapshots__/Test1Spec.snap.md"
+      `shouldReturn` expected1
+    runner.readTestFile "__snapshots__/Test2Spec.snap.md"
+      `shouldReturn` expected2
+
+    _ <- expectSuccess $ runner.runTestsWith def{cliArgs = ["[focused test]", "-u"]}
+    runner.readTestFile "__snapshots__/Test1Spec.snap.md"
+      `shouldReturn` expected1
+    runner.readTestFile "__snapshots__/Test2Spec.snap.md"
+      `shouldReturn` expected2
+
   integration . it "works when test changes directories" $ do
     runner <- getFixture @TestRunner
     runner.addTestFile "ExampleSpec.hs" $

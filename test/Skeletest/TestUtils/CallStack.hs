@@ -17,13 +17,13 @@ sanitizeTraceback :: String -> String
 sanitizeTraceback s =
   let (pre, post) = break ("HasCallStack backtrace:" `Text.isInfixOf`) $ Text.lines $ Text.pack s
       (_, post2) = span (", called at" `Text.isInfixOf`) $ drop 1 post
-      post2' = mapLast (Text.take 80) post2
+      post2' = map trimBorder post2
    in Text.unpack . Text.unlines $ pre ++ post2'
  where
-  mapLast f = \case
-    [] -> []
-    [x] -> [f x]
-    x : xs -> x : mapLast f xs
+  trimBorder line =
+    if Text.all (== '─') . Text.drop 1 $ line
+      then Text.take 80 line
+      else line
 #else
 sanitizeTraceback = id
 #endif

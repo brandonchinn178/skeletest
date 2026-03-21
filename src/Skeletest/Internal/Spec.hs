@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 module Skeletest.Internal.Spec (
   -- * Spec interface
@@ -11,9 +12,8 @@ module Skeletest.Internal.Spec (
   X.SpecTree (..),
 
   -- ** Execution
-  runSpecs,
-  TestSummary (..),
-  newTestSummary,
+  SpecRunner,
+  newSpecRunner,
 
   -- ** Entrypoint
   X.SpecRegistry,
@@ -41,7 +41,6 @@ module Skeletest.Internal.Spec (
 ) where
 
 import Control.Concurrent (myThreadId)
-import Control.Monad (forM)
 import Control.Monad.Trans.State.Strict qualified as State
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Text (Text)
@@ -90,89 +89,118 @@ import Skeletest.Internal.TestRunner (
 import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Internal.Utils.Text (pluralize)
 import Skeletest.Plugin (Hooks (..), Plugin (..), defaultHooks, defaultPlugin, filterSpecTests, hasMarker)
+import Skeletest.Plugin qualified as Plugin
 import System.Console.Terminal.Size qualified as Term
 import UnliftIO.Exception (
+  catch,
   finally,
   fromException,
-  try,
  )
 
 {----- Execute spec -----}
 
--- | Run the given Specs and return whether all of the tests passed.
-runSpecs :: Hooks -> TestSummary -> SpecRegistry -> IO TestExitCode
-runSpecs hooks testSummary specs = withTestSummary $ do
-  (`finally` cleanupFixtures PerSessionFixtureKey) $
-    fmap resolveExitCode . forM (pruneSpec specs) $ \SpecInfo{..} ->
-      (`finally` cleanupFixtures (PerFileFixtureKey specPath)) $ do
-        let emptyTestInfo =
-              TestInfo
-                { contexts = []
-                , name = ""
-                , markers = []
-                , file = specPath
-                }
-        Text.putStrLn $ Text.pack specPath
-        let specTrees = getSpecTrees specSpec
-        runTrees emptyTestInfo specTrees
- where
-  withTestSummary action = do
-    testSummary.update $ \d -> d{testsSelected = getTotalTests specs}
-    recordDuration testSummary action
+data SpecRunner = SpecRunner
+  { hooks :: Hooks
+  , testSummary :: TestSummary
+  }
 
-  runTrees baseTestInfo = fmap resolveExitCode . mapM (runTree baseTestInfo)
-  runTree baseTestInfo = \case
-    SpecTree_Group{..} -> do
-      let lvl = getIndentLevel baseTestInfo
-      reportGroup lvl label
-      runTrees baseTestInfo{TestInfo.contexts = baseTestInfo.contexts <> [label]} trees
-    SpecTree_Test test -> do
-      let lvl = getIndentLevel baseTestInfo
-      reportTestInProgress lvl test.name
+newSpecRunner :: Hooks -> SpecRegistry -> IO SpecRunner
+newSpecRunner hooks initialSpecs = do
+  testSummary <- newTestSummary initialSpecs
+  pure
+    SpecRunner
+      { hooks
+      , testSummary
+      }
 
-      let testInfo =
-            baseTestInfo
-              { TestInfo.name = test.name
-              , TestInfo.markers = test.markers
-              }
-      TestResult{..} <-
-        withTestInfo testInfo $ do
-          tid <- myThreadId
-          (result, duration) <-
-            (`finally` cleanupFixtures (PerTestFixtureKey tid)) $ do
-              withTimer $ runTest testInfo test.action
-          let durationLabel =
-                if duration < 0.1
-                  then ""
-                  else " " <> Color.gray ("(" <> renderDuration duration <> ")")
-          pure result{testResultLabel = result.testResultLabel <> durationLabel}
+instance HasField "run" SpecRunner (SpecRegistry -> IO TestExitCode) where
+  getField runner specs = withTestSummary $ do
+    (`finally` cleanupFixtures PerSessionFixtureKey) $
+      resolveExitCode <$> mapM runner.runFile (pruneSpec specs)
+   where
+    withTestSummary action = do
+      runner.testSummary.update $ \d -> d{testsSelected = getTotalTests specs}
+      recordDuration runner.testSummary action
 
-      testSummary.update $ \d ->
-        if
-          | "SKIP" `Text.isInfixOf` testResultLabel -> d
-          | testResultSuccess -> d{testsPassed = d.testsPassed + 1}
-          | otherwise -> d{testsFailed = d.testsFailed + 1}
+instance HasField "runFile" SpecRunner (SpecInfo -> IO TestExitCode) where
+  getField runner info = do
+    (`finally` cleanupFixtures (PerFileFixtureKey info.specPath)) $ do
+      Text.putStrLn $ Text.pack info.specPath
+      runner.runTrees emptyTestInfo (getSpecTrees info.specSpec)
+   where
+    emptyTestInfo =
+      TestInfo
+        { contexts = []
+        , name = ""
+        , markers = []
+        , file = info.specPath
+        }
 
-      case testResultMessage of
-        TestResultMessageNone -> do
-          reportTestResultWithoutMessage testResultLabel
-        TestResultMessageInline msg -> do
-          reportTestResultWithInlineMessage lvl testResultLabel msg
-        TestResultMessageBox box -> do
-          termSize <- Term.size
-          reportTestResultWithBoxMessage termSize lvl test.name testResultLabel box
-      pure $ if testResultSuccess then ExitSuccess else ExitTestFailure
+instance HasField "runTrees" SpecRunner (TestInfo -> [SpecTree] -> IO TestExitCode) where
+  getField runner testInfo = fmap resolveExitCode . mapM runTree
+   where
+    runTree = \case
+      SpecTree_Group{label, trees} -> runner.runGroup testInfo label trees
+      SpecTree_Test test ->
+        runner.runTest
+          testInfo
+            { TestInfo.name = test.name
+            , TestInfo.markers = test.markers
+            }
+          test
 
-  runTest info action =
-    hooks.runTest info $ do
-      try action >>= \case
-        Right result -> pure result
-        Left e ->
-          case fromException e of
-            Just e' -> testResultFromAssertionFail e'
-            Nothing -> testResultFromError e
+instance HasField "runGroup" SpecRunner (TestInfo -> Text -> [SpecTree] -> IO TestExitCode) where
+  getField runner testInfo label trees = do
+    reportGroup testInfo.indentLevel label
+    runner.runTrees testInfo{TestInfo.contexts = testInfo.contexts <> [label]} trees
 
-  getIndentLevel testInfo = length testInfo.contexts + 1 -- +1 to include the module name
+instance HasField "runTest" SpecRunner (TestInfo -> SpecTest -> IO TestExitCode) where
+  getField runner testInfo test = withTestInfo testInfo $ do
+    reportTestInProgress testInfo.indentLevel test.name
+
+    tid <- myThreadId
+    result <-
+      (`finally` cleanupFixtures (PerTestFixtureKey tid)) $ do
+        withDuration . runner.hooks.runTest testInfo $ do
+          test.action `catch` mkTestResultError
+
+    runner.testSummary.update $ \d ->
+      if
+        | "SKIP" `Text.isInfixOf` result.testResultLabel -> d
+        | result.testResultSuccess -> d{testsPassed = d.testsPassed + 1}
+        | otherwise -> d{testsFailed = d.testsFailed + 1}
+
+    case result.testResultMessage of
+      TestResultMessageNone -> do
+        reportTestResultWithoutMessage result.testResultLabel
+      TestResultMessageInline msg -> do
+        reportTestResultWithInlineMessage testInfo.indentLevel result.testResultLabel msg
+      TestResultMessageBox box -> do
+        termSize <- Term.size
+        reportTestResultWithBoxMessage termSize testInfo.indentLevel test.name result.testResultLabel box
+
+    pure $ if result.testResultSuccess then ExitSuccess else ExitTestFailure
+   where
+    withDuration action = do
+      (result, duration) <- withTimer action
+      let durationLabel =
+            if duration < 0.1
+              then ""
+              else " " <> Color.gray ("(" <> renderDuration duration <> ")")
+      pure result{testResultLabel = result.testResultLabel <> durationLabel}
+
+    mkTestResultError e =
+      case fromException e of
+        Just e' -> testResultFromAssertionFail e'
+        Nothing -> testResultFromError e
+
+instance HasField "printSummary" SpecRunner (IO ()) where
+  getField runner = do
+    summary <- runner.testSummary.render >>= runner.hooks.modifyTestSummary
+    Text.putStrLn ""
+    Text.putStrLn . colorize . Text.strip $ summary
+   where
+    colorize = Text.unlines . map Color.yellow . Text.lines
 
 -- | Resolve the given exit codes, returning the first non-success code.
 resolveExitCode :: [TestExitCode] -> TestExitCode
@@ -256,7 +284,7 @@ instance HasField "render" TestSummary (IO Text) where
 specTreePlugin :: Plugin
 specTreePlugin =
   defaultPlugin
-    { hooks =
+    { Plugin.hooks =
         mconcat
           [ xfailHook
           , skipHook

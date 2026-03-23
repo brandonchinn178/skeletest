@@ -129,12 +129,7 @@ drawBoxBody :: Maybe (Term.Window Int) -> BoxSpec -> Text
 drawBoxBody termSize boxContents = Text.intercalate "\n" $ concatMap draw boxContents <> [footer]
  where
   termWidth = maybe 80 Term.width termSize
-  width =
-    maximum . (termWidth :) . flip concatMap boxContents $ \case
-      BoxHeader s -> [Text.length s + indentSize + 2]
-      BoxText s -> [Text.length line + 2 | line <- Text.lines s]
-
-  footer = "╰" <> Text.replicate (width - 1) "─"
+  footer = "╰" <> Text.replicate (termWidth - 1) "─"
 
   draw = \case
     BoxHeader s ->

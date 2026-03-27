@@ -13,14 +13,17 @@ module Skeletest.Internal.Spec.TestReporter (
 
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Time (NominalDiffTime)
 import GHC.Records (HasField (..))
 import Skeletest.Internal.CLI (FormatFlag (..), getFormatFlag)
 import Skeletest.Internal.Exit (TestExitCode)
 import Skeletest.Internal.Spec.Output (BoxSpec, BoxSpecContent (..))
 import Skeletest.Internal.TestInfo (TestInfo (..))
 import Skeletest.Internal.TestRunner (TestResult (..), TestResultMessage (..))
+import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Internal.Utils.Term qualified as Term
 import Skeletest.Internal.Utils.Text (indentWith)
+import Skeletest.Internal.Utils.Timer (renderDuration)
 import System.IO qualified as IO
 
 {----- TestReporter -----}
@@ -47,26 +50,26 @@ getFormatAction reporter = getField @field formatActions reporter
 
 instance HasField "reportFilePre" TestReporter (FilePath -> IO ()) where
   getField = getFormatAction @"reportFilePre"
-instance HasField "reportFilePost" TestReporter (FilePath -> TestExitCode -> IO ()) where
+instance HasField "reportFilePost" TestReporter (FilePath -> (TestExitCode, NominalDiffTime) -> IO ()) where
   getField = getFormatAction @"reportFilePost"
 instance HasField "reportGroupPre" TestReporter (TestInfo -> Text -> IO ()) where
   getField = getFormatAction @"reportGroupPre"
-instance HasField "reportGroupPost" TestReporter (TestInfo -> Text -> TestExitCode -> IO ()) where
+instance HasField "reportGroupPost" TestReporter (TestInfo -> Text -> (TestExitCode, NominalDiffTime) -> IO ()) where
   getField = getFormatAction @"reportGroupPost"
 instance HasField "reportTestPre" TestReporter (TestInfo -> IO ()) where
   getField = getFormatAction @"reportTestPre"
-instance HasField "reportTestPost" TestReporter (TestInfo -> TestResult -> IO ()) where
+instance HasField "reportTestPost" TestReporter (TestInfo -> (TestResult, NominalDiffTime) -> IO ()) where
   getField = getFormatAction @"reportTestPost"
 
 {----- Report formats -----}
 
 data FormatActions = FormatActions
   { reportFilePre :: TestReporter -> FilePath -> IO ()
-  , reportFilePost :: TestReporter -> FilePath -> TestExitCode -> IO ()
+  , reportFilePost :: TestReporter -> FilePath -> (TestExitCode, NominalDiffTime) -> IO ()
   , reportGroupPre :: TestReporter -> TestInfo -> Text -> IO ()
-  , reportGroupPost :: TestReporter -> TestInfo -> Text -> TestExitCode -> IO ()
+  , reportGroupPost :: TestReporter -> TestInfo -> Text -> (TestExitCode, NominalDiffTime) -> IO ()
   , reportTestPre :: TestReporter -> TestInfo -> IO ()
-  , reportTestPost :: TestReporter -> TestInfo -> TestResult -> IO ()
+  , reportTestPost :: TestReporter -> TestInfo -> (TestResult, NominalDiffTime) -> IO ()
   }
 
 defaultFormatActions :: FormatActions
@@ -106,9 +109,9 @@ formatActionsFull =
    where
     indentLevel = getIndentLevel testInfo
 
-  reportTestPost reporter testInfo result = do
+  reportTestPost reporter testInfo (result, duration) = do
     withBoxHeader $ do
-      Term.output $ result.testResultLabel
+      Term.output $ result.testResultLabel <> durationLabel
     case result.testResultMessage of
       TestResultMessageNone -> pure ()
       TestResultMessageInline msg -> do
@@ -131,6 +134,10 @@ formatActionsFull =
       | otherwise = do
           action
           Term.output $ drawBoxHeader indentLevel BoxHeaderType_NextLine
+    durationLabel =
+      if duration < 0.1
+        then ""
+        else " " <> Color.gray ("(" <> renderDuration duration <> ")")
 
 formatActionsVerbose :: FormatActions
 formatActionsVerbose = error "not implemented"

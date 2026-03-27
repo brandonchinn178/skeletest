@@ -23,7 +23,7 @@
 │ │       ^^^^^^^^^^
 │ 
 │ 1 ≠ 2
-│ 
+│
 ╞═══ Captured stdout
 │ line1
 │ line2
@@ -46,7 +46,7 @@
 │ │     ^^^^^^
 │ 
 │ Pattern match failure in 'do' block
-│ 
+│
 ╞═══ Captured stdout
 │ line1
 │ line2
@@ -98,7 +98,7 @@ OK
 │ │       ^^^^^^^^^^
 │ 
 │ 1 ≠ 2
-│ 
+│
 ╞═══ Captured stderr
 │ line1
 │ line2
@@ -121,7 +121,7 @@ OK
 │ │     ^^^^^^
 │ 
 │ Pattern match failure in 'do' block
-│ 
+│
 ╞═══ Captured stderr
 │ line1
 │ line2

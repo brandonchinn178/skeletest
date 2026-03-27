@@ -95,28 +95,33 @@ withCaptureOutput action = do
       IO.hClose orig
 
 addCapturedOutput :: CapturedOutput -> TestResult -> TestResult
-addCapturedOutput = maybe id (updateResult . renderOutput)
+addCapturedOutput mCapturedOutput result =
+  let output = maybe [] renderOutput mCapturedOutput
+   in if shouldShowOutput output
+        then result{testResultMessage = addOutput output result.testResultMessage}
+        else result
  where
-  updateResult output result =
-    if result.testResultSuccess || null output
-      then result
-      else
-        result
-          { testResultMessage =
-              TestResultMessageBox . concat $
-                [ toBoxContents result.testResultMessage
-                , output
-                ]
-          }
+  renderOutput (stdout, stderr) =
+    concat
+      [ renderSection "Captured stdout" stdout
+      , renderSection "Captured stderr" stderr
+      ]
+  renderSection name s =
+    if Text.null s
+      then []
+      else [BoxHeader name, BoxText $ Text.stripEnd s]
+
+  shouldShowOutput output
+    | null output = False
+    | result.testResultSuccess = False
+    | otherwise = True
+
+  addOutput output resultMessage =
+    TestResultMessageBox $ toBoxContents resultMessage <> output
   toBoxContents = \case
     TestResultMessageNone -> []
     TestResultMessageInline msg -> [BoxText msg]
     TestResultMessageBox box -> box
-  renderOutput (stdout, stderr) =
-    concat
-      [ if Text.null stdout then [] else [BoxHeader "Captured stdout", BoxText stdout]
-      , if Text.null stderr then [] else [BoxHeader "Captured stderr", BoxText stderr]
-      ]
 
 data FixtureCapturedOutputHandles = FixtureCapturedOutputHandles
   { stdout :: LogHandle

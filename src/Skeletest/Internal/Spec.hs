@@ -54,12 +54,9 @@ import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.Markers (
   findMarker,
  )
-import Skeletest.Internal.Spec.Output (
-  reportGroup,
-  reportTestInProgress,
-  reportTestResultWithBoxMessage,
-  reportTestResultWithInlineMessage,
-  reportTestResultWithoutMessage,
+import Skeletest.Internal.Spec.TestReporter (
+  TestReporter,
+  newTestReporter,
  )
 import Skeletest.Internal.Spec.Tree (
   MarkerFocus (..),
@@ -90,7 +87,6 @@ import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Internal.Utils.Text (pluralize)
 import Skeletest.Plugin (Hooks (..), Plugin (..), defaultHooks, defaultPlugin, filterSpecTests, hasMarker)
 import Skeletest.Plugin qualified as Plugin
-import System.Console.Terminal.Size qualified as Term
 import UnliftIO.Exception (
   catch,
   finally,
@@ -102,15 +98,18 @@ import UnliftIO.Exception (
 data SpecRunner = SpecRunner
   { hooks :: Hooks
   , testSummary :: TestSummary
+  , testReporter :: TestReporter
   }
 
 newSpecRunner :: Hooks -> SpecRegistry -> IO SpecRunner
 newSpecRunner hooks initialSpecs = do
   testSummary <- newTestSummary initialSpecs
+  testReporter <- newTestReporter
   pure
     SpecRunner
       { hooks
       , testSummary
+      , testReporter
       }
 
 instance HasField "run" SpecRunner (SpecRegistry -> IO TestExitCode) where
@@ -125,8 +124,10 @@ instance HasField "run" SpecRunner (SpecRegistry -> IO TestExitCode) where
 instance HasField "runFile" SpecRunner (SpecInfo -> IO TestExitCode) where
   getField runner info = do
     (`finally` cleanupFixtures (PerFileFixtureKey info.specPath)) $ do
-      Text.putStrLn $ Text.pack info.specPath
-      runner.runTrees emptyTestInfo (getSpecTrees info.specSpec)
+      runner.testReporter.reportFilePre info.specPath
+      code <- runner.runTrees emptyTestInfo (getSpecTrees info.specSpec)
+      runner.testReporter.reportFilePost info.specPath code
+      pure code
    where
     emptyTestInfo =
       TestInfo
@@ -151,33 +152,26 @@ instance HasField "runTrees" SpecRunner (TestInfo -> [SpecTree] -> IO TestExitCo
 
 instance HasField "runGroup" SpecRunner (TestInfo -> Text -> [SpecTree] -> IO TestExitCode) where
   getField runner testInfo label trees = do
-    reportGroup testInfo.indentLevel label
-    runner.runTrees testInfo{TestInfo.contexts = testInfo.contexts <> [label]} trees
+    runner.testReporter.reportGroupPre testInfo label
+    code <- runner.runTrees testInfo{TestInfo.contexts = testInfo.contexts <> [label]} trees
+    runner.testReporter.reportGroupPost testInfo label code
+    pure code
 
 instance HasField "runTest" SpecRunner (TestInfo -> SpecTest -> IO TestExitCode) where
   getField runner testInfo test = withTestInfo testInfo $ do
-    reportTestInProgress testInfo.indentLevel test.name
-
+    runner.testReporter.reportTestPre testInfo
     tid <- myThreadId
     result <-
       (`finally` cleanupFixtures (PerTestFixtureKey tid)) $ do
         withDuration . runner.hooks.runTest testInfo $ do
           test.action `catch` mkTestResultError
+    runner.testReporter.reportTestPost testInfo result
 
     runner.testSummary.update $ \d ->
       if
         | "SKIP" `Text.isInfixOf` result.testResultLabel -> d
         | result.testResultSuccess -> d{testsPassed = d.testsPassed + 1}
         | otherwise -> d{testsFailed = d.testsFailed + 1}
-
-    case result.testResultMessage of
-      TestResultMessageNone -> do
-        reportTestResultWithoutMessage result.testResultLabel
-      TestResultMessageInline msg -> do
-        reportTestResultWithInlineMessage testInfo.indentLevel result.testResultLabel msg
-      TestResultMessageBox box -> do
-        termSize <- Term.size
-        reportTestResultWithBoxMessage termSize testInfo.indentLevel test.name result.testResultLabel box
 
     pure $ if result.testResultSuccess then ExitSuccess else ExitTestFailure
    where

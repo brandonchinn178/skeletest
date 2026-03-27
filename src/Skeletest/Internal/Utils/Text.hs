@@ -4,7 +4,12 @@ module Skeletest.Internal.Utils.Text (
   showT,
   pluralize,
   parens,
+
+  -- * Indentation
+  IndentSize,
+  IndentLevel,
   indent,
+  indentWith,
 ) where
 
 import Data.Text (Text)
@@ -26,4 +31,13 @@ parens s =
     else s
 
 indent :: Text -> Text
-indent = Text.intercalate "\n" . map ("  " <>) . Text.splitOn "\n"
+indent = indentWith 2 " " 1
+
+type IndentSize = Int
+type IndentLevel = Int
+
+indentWith :: IndentSize -> Text -> IndentLevel -> Text -> Text
+indentWith indentSize fill lvl =
+  Text.intercalate "\n"
+    . map (Text.replicate (lvl * indentSize) fill <>)
+    . Text.splitOn "\n"

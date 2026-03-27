@@ -53,6 +53,7 @@ library
     Skeletest.Internal.Snapshot.Renderer
     Skeletest.Internal.Spec
     Skeletest.Internal.Spec.Output
+    Skeletest.Internal.Spec.TestReporter
     Skeletest.Internal.Spec.Tree
     Skeletest.Internal.TestInfo
     Skeletest.Internal.TestRunner

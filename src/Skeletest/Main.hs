@@ -38,6 +38,7 @@ import Skeletest.Internal.Spec (
   newSpecRunner,
   specTreePlugin,
  )
+import Skeletest.Internal.Spec.TestReporter (testReporterPlugin)
 import Skeletest.Internal.Spec.Tree (getSpecTests)
 import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Plugin (Hooks (..), Plugin (..))
@@ -65,6 +66,7 @@ runSkeletest userPlugins testModules = handleUnknownErrors $ do
     , snapshotPlugin
     , captureOutputPlugin
     , propPlugin
+    , testReporterPlugin
     ]
 
   hooks = foldMap (.hooks) $ builtinPlugins <> userPlugins

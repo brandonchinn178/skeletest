@@ -39,9 +39,6 @@ type TestId = [Text]
 instance HasField "testId" TestInfo TestId where
   getField testInfo = testInfo.contexts <> [testInfo.name]
 
-instance HasField "indentLevel" TestInfo Int where
-  getField testInfo = length testInfo.contexts + 1
-
 type TestInfoMap = Map ThreadId TestInfo
 
 testInfoMapRef :: IORef TestInfoMap

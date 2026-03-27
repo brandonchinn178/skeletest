@@ -19,8 +19,10 @@ import Data.Text.IO qualified as Text
 import GHC.IO.Handle qualified as IO
 import Skeletest.Internal.CLI (
   FlagSpec (..),
+  FormatFlag (..),
   IsFlag (..),
   getFlag,
+  getFormatFlag,
  )
 import Skeletest.Internal.CLI qualified as CLI
 import Skeletest.Internal.Fixtures (
@@ -52,7 +54,7 @@ captureOutputHooks =
   defaultHooks
     { runTest = \_ getResult -> do
         (output, result) <- withCaptureOutput getResult
-        pure $ addCapturedOutput output result
+        addCapturedOutput output result
     }
 
 newtype CaptureOutputFlag = CaptureOutputFlag Bool
@@ -97,12 +99,14 @@ withCaptureOutput action = do
       IO.hSetBuffering h buf
       IO.hClose orig
 
-addCapturedOutput :: CapturedOutput -> TestResult -> TestResult
-addCapturedOutput mCapturedOutput result =
+addCapturedOutput :: CapturedOutput -> TestResult -> IO TestResult
+addCapturedOutput mCapturedOutput result = do
+  format <- getFormatFlag
   let output = maybe [] renderOutput mCapturedOutput
-   in if shouldShowOutput output
-        then result{testResultMessage = addOutput output result.testResultMessage}
-        else result
+  pure $
+    if shouldShowOutput format output
+      then result{testResultMessage = addOutput output result.testResultMessage}
+      else result
  where
   renderOutput (stdout, stderr) =
     concat
@@ -114,8 +118,9 @@ addCapturedOutput mCapturedOutput result =
       then []
       else [BoxHeader name, BoxText $ Text.stripEnd s]
 
-  shouldShowOutput output
+  shouldShowOutput format output
     | null output = False
+    | format == FormatFlag_Verbose = True
     | result.testResultSuccess = False
     | otherwise = True
 

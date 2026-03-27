@@ -11,6 +11,26 @@
 ➤ 2 tests ran in 0.00s
 ```
 
+## stdout ≫ is rendered on test success with --format=verbose
+
+```
+./ExampleSpec.hs
+╭── before: OK (0.00s)
+│
+╞═══ Captured stdout
+│ before
+╰───────────────────────────────────────────────────────────────────────────────
+╭── test: OK (0.00s)
+│
+╞═══ Captured stdout
+│ line1
+│ line2
+╰───────────────────────────────────────────────────────────────────────────────
+
+═════ Test report ═════
+➤ 2 tests ran in 0.00s
+```
+
 ## stdout ≫ is rendered on test failure
 
 ```
@@ -81,6 +101,26 @@ OK
 ./ExampleSpec.hs
     before: OK
     test: OK
+
+═════ Test report ═════
+➤ 2 tests ran in 0.00s
+```
+
+## stderr ≫ is rendered on test success with --format=verbose
+
+```
+./ExampleSpec.hs
+╭── before: OK (0.00s)
+│
+╞═══ Captured stderr
+│ before
+╰───────────────────────────────────────────────────────────────────────────────
+╭── test: OK (0.00s)
+│
+╞═══ Captured stderr
+│ line1
+│ line2
+╰───────────────────────────────────────────────────────────────────────────────
 
 ═════ Test report ═════
 ➤ 2 tests ran in 0.00s

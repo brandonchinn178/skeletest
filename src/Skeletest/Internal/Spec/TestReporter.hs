@@ -135,12 +135,14 @@ formatActionsFull =
           action
           Term.output $ drawBoxHeader indentLevel BoxHeaderType_NextLine
     durationLabel =
-      if duration < 0.1
-        then ""
-        else " " <> Color.gray ("(" <> renderDuration duration <> ")")
+      if reporter.format == FormatFlag_Verbose || duration > 0.1
+        then " " <> Color.gray ("(" <> renderDuration duration <> ")")
+        else ""
 
+-- Verbose is the same as full, except with some minor changes, so
+-- we'll re-use full and inspect format directly
 formatActionsVerbose :: FormatActions
-formatActionsVerbose = error "not implemented"
+formatActionsVerbose = formatActionsFull
 
 {----- BoxSpec -----}
 

@@ -1,6 +1,6 @@
 # test/Skeletest/Internal/SpecSpec.hs
 
-## skip / skips tests completely
+## skip ≫ skips tests completely
 
 ```
 ./ExampleSpec.hs
@@ -14,7 +14,7 @@
   • 2 tests skipped ≫
 ```
 
-## xfail / checks for expected failures
+## xfail ≫ checks for expected failures
 
 ```
 ./ExampleSpec.hs
@@ -27,7 +27,7 @@
 ➤ 2 tests ran in 0.00s
 ```
 
-## xfail / errors on unexpected passes
+## xfail ≫ errors on unexpected passes
 
 ```
 ./ExampleSpec.hs
@@ -41,7 +41,7 @@
   • 2 tests failed ✘
 ```
 
-## focus / only runs focused test
+## focus ≫ only runs focused test
 
 ```
 ./ExampleSpec.hs
@@ -52,7 +52,7 @@
   • 1 test deselected
 ```
 
-## focus / fails with -Werror
+## focus ≫ fails with -Werror
 
 ```
 ExampleSpec.hs:6:3: error: [GHC-63394] [-Wx-focused-tests, -Werror=x-focused-tests]

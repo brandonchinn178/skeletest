@@ -1,6 +1,6 @@
 # test/Skeletest/PluginSpec.hs
 
-## runTest / allows hooking into test execution
+## runTest ≫ allows hooking into test execution
 
 ```
 ./ExampleSpec.hs
@@ -12,7 +12,7 @@ OK
 ➤ 1 test ran in 0.00s
 ```
 
-## modifySpecRegistry / allows modifying specs
+## modifySpecRegistry ≫ allows modifying specs
 
 ```
 ./ExampleSpec.hs

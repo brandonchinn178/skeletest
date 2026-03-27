@@ -1,6 +1,6 @@
 # test/Skeletest/PredicateSpec.hs
 
-## Ord / eq / shows helpful failure messages
+## Ord ≫ eq ≫ shows helpful failure messages
 
 ```
 2 ≠ 1
@@ -16,7 +16,7 @@ Got:
   1
 ```
 
-## Data types / list / shows helpful failure messages
+## Data types ≫ list ≫ shows helpful failure messages
 
 ```
 10 ≠ 1
@@ -38,7 +38,7 @@ Got:
   [0]
 ```
 
-## Data types / tup / shows helpful failure messages
+## Data types ≫ tup ≫ shows helpful failure messages
 
 ```
 1 ≠ 0
@@ -60,7 +60,7 @@ Got:
   (1,[])
 ```
 
-## Data types / con / shows a helpful failure message
+## Data types ≫ con ≫ shows a helpful failure message
 
 ```
 ./ExampleSpec.hs
@@ -84,7 +84,7 @@ Got:
   • 1 test failed ✘
 ```
 
-## Data types / con / fails to compile with unknown record field
+## Data types ≫ con ≫ fails to compile with unknown record field
 
 ```
 ExampleSpec.hs:9:43: error: [GHC-76037] Not in scope: ‘foo’
@@ -93,7 +93,7 @@ ExampleSpec.hs:9:43: error: [GHC-76037] Not in scope: ‘foo’
   |                                           ^^^
 ```
 
-## Data types / con / fails to compile with omitted positional fields
+## Data types ≫ con ≫ fails to compile with omitted positional fields
 
 ```
 ExampleSpec.hs:9:3: error: [GHC-27346]
@@ -110,7 +110,7 @@ ExampleSpec.hs:9:3: error: [GHC-27346]
   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ```
 
-## Data types / con / fails to compile with non-constructor
+## Data types ≫ con ≫ fails to compile with non-constructor
 
 ```
 ExampleSpec.hs:7:22: error: P.con must be applied to a constructor
@@ -119,7 +119,7 @@ ExampleSpec.hs:7:22: error: P.con must be applied to a constructor
   |                      ^^^^^^^^
 ```
 
-## Data types / con / fails to compile when not applied to anything
+## Data types ≫ con ≫ fails to compile when not applied to anything
 
 ```
 ExampleSpec.hs:7:22: error: P.con must be applied to a constructor
@@ -128,7 +128,7 @@ ExampleSpec.hs:7:22: error: P.con must be applied to a constructor
   |                      ^^^^^
 ```
 
-## Data types / con / fails to compile when applied to multiple arguments
+## Data types ≫ con ≫ fails to compile when applied to multiple arguments
 
 ```
 ExampleSpec.hs:7:22: error:
@@ -138,7 +138,7 @@ ExampleSpec.hs:7:22: error:
   |                      ^^^^^^^^^
 ```
 
-## Combinators / <<< / shows a helpful failure message
+## Combinators ≫ <<< ≫ shows a helpful failure message
 
 ```
 2 ≯ 10
@@ -150,7 +150,7 @@ Got:
   1
 ```
 
-## Combinators / >>> / shows a helpful failure message
+## Combinators ≫ >>> ≫ shows a helpful failure message
 
 ```
 "1" ≠ "2"
@@ -162,7 +162,7 @@ Got:
   1
 ```
 
-## Combinators / && / shows helpful failure messages
+## Combinators ≫ && ≫ shows helpful failure messages
 
 ```
 1 ≠ 2
@@ -187,7 +187,7 @@ Got:
   1
 ```
 
-## Combinators / || / shows helpful failure messages
+## Combinators ≫ || ≫ shows helpful failure messages
 
 ```
 No predicates passed
@@ -212,7 +212,7 @@ Got:
   1
 ```
 
-## Combinators / and / shows helpful failure messages
+## Combinators ≫ and ≫ shows helpful failure messages
 
 ```
 1 ≠ 2
@@ -239,7 +239,7 @@ Got:
   1
 ```
 
-## Combinators / or / shows helpful failure messages
+## Combinators ≫ or ≫ shows helpful failure messages
 
 ```
 No predicates passed
@@ -266,7 +266,7 @@ Got:
   1
 ```
 
-## Containers / any / shows helpful failure messages
+## Containers ≫ any ≫ shows helpful failure messages
 
 ```
 No values matched
@@ -288,7 +288,7 @@ Got:
   [1,2,3]
 ```
 
-## Containers / all / shows helpful failure messages
+## Containers ≫ all ≫ shows helpful failure messages
 
 ```
 1 ≯ 10
@@ -310,7 +310,7 @@ Got:
   [1,2,3]
 ```
 
-## Containers / elem / shows helpful failure messages
+## Containers ≫ elem ≫ shows helpful failure messages
 
 ```
 No values matched
@@ -332,7 +332,7 @@ Got:
   [1]
 ```
 
-## IO / returns / shows helpful failure messages
+## IO ≫ returns ≫ shows helpful failure messages
 
 ```
 1 ≠ 0
@@ -348,7 +348,7 @@ Got:
 Left (0 = 0)
 ```
 
-## IO / throws / shows helpful failure messages
+## IO ≫ throws ≫ shows helpful failure messages
 
 ```
 404 ≠ 500

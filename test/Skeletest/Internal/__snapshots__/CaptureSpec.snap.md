@@ -1,6 +1,6 @@
 # test/Skeletest/Internal/CaptureSpec.hs
 
-## stdout / is hidden on test success
+## stdout ≫ is hidden on test success
 
 ```
 ./ExampleSpec.hs
@@ -11,7 +11,7 @@
 ➤ 2 tests ran in 0.00s
 ```
 
-## stdout / is rendered on test failure
+## stdout ≫ is rendered on test failure
 
 ```
 ./ExampleSpec.hs
@@ -34,7 +34,7 @@
   • 1 test failed ✘
 ```
 
-## stdout / is rendered on test error
+## stdout ≫ is rendered on test error
 
 ```
 ./ExampleSpec.hs
@@ -57,7 +57,7 @@
   • 1 test failed ✘
 ```
 
-## stdout / is not captured with --capture-output=off
+## stdout ≫ is not captured with --capture-output=off
 
 ```
 >>> stdout
@@ -75,7 +75,7 @@ OK
 >>> stderr
 ```
 
-## stderr / is hidden on test success
+## stderr ≫ is hidden on test success
 
 ```
 ./ExampleSpec.hs
@@ -86,7 +86,7 @@ OK
 ➤ 2 tests ran in 0.00s
 ```
 
-## stderr / is rendered on test failure
+## stderr ≫ is rendered on test failure
 
 ```
 ./ExampleSpec.hs
@@ -109,7 +109,7 @@ OK
   • 1 test failed ✘
 ```
 
-## stderr / is rendered on test error
+## stderr ≫ is rendered on test error
 
 ```
 ./ExampleSpec.hs
@@ -132,7 +132,7 @@ OK
   • 1 test failed ✘
 ```
 
-## stderr / is not captured with --capture-output=off
+## stderr ≫ is not captured with --capture-output=off
 
 ```
 >>> stdout

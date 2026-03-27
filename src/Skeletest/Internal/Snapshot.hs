@@ -568,7 +568,10 @@ decodeSnapshotFile = parseFile . Text.lines
       | "" <- Text.strip line -> parseSections snapshotFile mTest rest
       -- found a test section
       | Just sectionName <- Text.stripPrefix "## " line -> do
-          let testIdentifier = map Text.strip $ Text.splitOn " / " sectionName
+          let testIdentifier
+                -- Backwards compat, skeletest < 0.4 separated with "/"
+                | not $ "≫" `Text.isInfixOf` sectionName = map Text.strip $ Text.splitOn " / " sectionName
+                | otherwise = map Text.strip $ Text.splitOn "≫" sectionName
           let snapshotFile' = snapshotFile{snapshots = Map.insert testIdentifier [] snapshotFile.snapshots}
           parseSections snapshotFile' (Just testIdentifier) rest
       -- found the beginning of a snapshot
@@ -598,7 +601,8 @@ encodeSnapshotFile rankTestId snapshotFile =
  where
   snapshots = sortOn (rankTestId . fst) . Map.toList $ snapshotFile.snapshots
   toSection (testIdentifier, snaps) =
-    h2 (Text.intercalate " / " testIdentifier) : map codeBlock snaps
+    let testIdentifier' = map (Text.replace "≫" ">>") testIdentifier
+     in h2 (Text.intercalate " ≫ " testIdentifier') : map codeBlock snaps
 
   h1 s = "# " <> s <> "\n"
   h2 s = "## " <> s <> "\n"

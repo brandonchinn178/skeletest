@@ -1,6 +1,6 @@
 # test/Skeletest/Internal/CLISpec.hs
 
-## getFlag / errors if flag is not registered
+## getFlag ≫ errors if flag is not registered
 
 ```
 ./ExampleSpec.hs

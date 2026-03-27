@@ -1,6 +1,6 @@
 # test/Skeletest/Internal/TestTargetsSpec.hs
 
-## parseTestTargets / fails with a helpful error message
+## parseTestTargets ≫ fails with a helpful error message
 
 ```
 Could not parse test target: unexpected '!'

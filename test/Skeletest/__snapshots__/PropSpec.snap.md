@@ -1,6 +1,6 @@
 # test/Skeletest/PropSpec.hs
 
-## prop / shows hedgehog context for arbitrary failures
+## prop ≫ shows hedgehog context for arbitrary failures
 
 ```
 ./ExampleSpec.hs
@@ -17,7 +17,7 @@
   • 1 test failed ✘
 ```
 
-## prop / renders Skeletest errors well
+## prop ≫ renders Skeletest errors well
 
 ```
 ./ExampleSpec.hs
@@ -33,7 +33,7 @@
   • 1 test failed ✘
 ```
 
-## prop / fails when configuration occurs after forAll
+## prop ≫ fails when configuration occurs after forAll
 
 ```
 ./ExampleSpec.hs
@@ -49,7 +49,7 @@
   • 1 test failed ✘
 ```
 
-## prop / fails when configuration occurs after IO actions
+## prop ≫ fails when configuration occurs after IO actions
 
 ```
 ./ExampleSpec.hs
@@ -65,7 +65,7 @@
   • 1 test failed ✘
 ```
 
-## prop / supports MonadFail
+## prop ≫ supports MonadFail
 
 ```
 ./ExampleSpec.hs
@@ -86,7 +86,7 @@
   • 1 test failed ✘
 ```
 
-## setDiscardLimit / sets discard limit
+## setDiscardLimit ≫ sets discard limit
 
 ```
 ./ExampleSpec.hs
@@ -100,7 +100,7 @@
   • 1 test failed ✘
 ```
 
-## === / shows a helpful failure message
+## === ≫ shows a helpful failure message
 
 ```
 ./ExampleSpec.hs

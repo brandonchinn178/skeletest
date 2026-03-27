@@ -1,6 +1,6 @@
 # test/Skeletest/Internal/FixturesSpec.hs
 
-## getFixture / detects circular dependencies
+## getFixture ≫ detects circular dependencies
 
 ```
 ./ExampleSpec.hs
@@ -13,7 +13,7 @@
   • 1 test failed ✘
 ```
 
-## getFixture / throws the appropriate error when setup fails
+## getFixture ≫ throws the appropriate error when setup fails
 
 ```
 ./ExampleSpec.hs

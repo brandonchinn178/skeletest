@@ -1,6 +1,6 @@
 # test/Skeletest/AssertionsSpec.hs
 
-## shouldBe / should show helpful failure
+## shouldBe ≫ should show helpful failure
 
 ```
 ./ExampleSpec.hs
@@ -18,7 +18,7 @@
   • 1 test failed ✘
 ```
 
-## shouldNotBe / should show helpful failure
+## shouldNotBe ≫ should show helpful failure
 
 ```
 ./ExampleSpec.hs
@@ -42,7 +42,7 @@
   • 1 test failed ✘
 ```
 
-## shouldSatisfy / should show helpful failure
+## shouldSatisfy ≫ should show helpful failure
 
 ```
 ./ExampleSpec.hs
@@ -60,7 +60,7 @@
   • 1 test failed ✘
 ```
 
-## shouldNotSatisfy / should show helpful failure
+## shouldNotSatisfy ≫ should show helpful failure
 
 ```
 ./ExampleSpec.hs
@@ -84,7 +84,7 @@
   • 1 test failed ✘
 ```
 
-## shouldReturn / should show helpful failure
+## shouldReturn ≫ should show helpful failure
 
 ```
 ./ExampleSpec.hs
@@ -102,7 +102,7 @@
   • 1 test failed ✘
 ```
 
-## context / should show failure context
+## context ≫ should show failure context
 
 ```
 ./ExampleSpec.hs
@@ -123,7 +123,7 @@
   • 1 test failed ✘
 ```
 
-## failTest / should show failure
+## failTest ≫ should show failure
 
 ```
 ./ExampleSpec.hs

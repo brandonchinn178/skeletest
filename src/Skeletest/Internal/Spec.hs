@@ -45,9 +45,8 @@ import Control.Monad.Trans.State.Strict qualified as State
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
+import Data.Time (NominalDiffTime)
 import GHC.Records (HasField (..))
-import Numeric (showFFloat)
 import Skeletest.Internal.Exit (TestExitCode (..))
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.Markers (
@@ -85,6 +84,7 @@ import Skeletest.Internal.TestRunner (
 import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Internal.Utils.Term qualified as Term
 import Skeletest.Internal.Utils.Text (pluralize)
+import Skeletest.Internal.Utils.Timer (renderDuration, withTimer)
 import Skeletest.Plugin (Hooks (..), Plugin (..), defaultHooks, defaultPlugin, filterSpecTests, hasMarker)
 import Skeletest.Plugin qualified as Plugin
 import UnliftIO.Exception (
@@ -204,18 +204,6 @@ resolveExitCode = go
     [] -> ExitSuccess
     ExitSuccess : rest -> go rest
     code : _ -> code
-
-withTimer :: IO a -> IO (a, NominalDiffTime)
-withTimer m = do
-  start <- getCurrentTime
-  a <- m
-  end <- getCurrentTime
-  pure (a, end `diffUTCTime` start)
-
-renderDuration :: NominalDiffTime -> Text
-renderDuration duration = (Text.pack . showRounded) duration <> "s"
- where
-  showRounded n = showFFloat (Just 2) (realToFrac n :: Double) ""
 
 {----- Test summary -----}
 

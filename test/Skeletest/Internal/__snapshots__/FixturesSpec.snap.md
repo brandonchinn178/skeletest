@@ -6,7 +6,7 @@
 ./ExampleSpec.hs
 ╭── should error: ERROR
 │ Found circular dependency when resolving fixtures: FixtureA -> FixtureB -> FixtureD -> FixtureA
-╰────────────────────────────────────────────────────────────────────────────────────────────────
+╰───────────────────────────────────────────────────────────────────────────────
 
 ═════ Test report ═════
 ➤ 1 test ran in 0.00s

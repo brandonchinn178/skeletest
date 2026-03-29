@@ -49,8 +49,8 @@ reportTestResultWithBoxMessage termSize lvl testName testResultLabel box = do
       Text.putStrLn testResultLabel
     else do
       Text.putStr "\r"
-      Text.putStrLn $ drawBoxHeader lvl testName <> ": " <> testResultLabel
-      Text.putStrLn $ drawBoxBody termSize box
+      Text.putStr $ drawBoxHeader lvl (testName <> ": " <> testResultLabel)
+      Text.putStr $ drawBoxBody termSize box
 
 type IndentLevel = Int
 
@@ -123,23 +123,20 @@ data BoxSpecContent
   deriving (Show, Eq)
 
 drawBoxHeader :: IndentLevel -> Text -> Text
-drawBoxHeader lvl testName = "╭" <> Text.drop 2 (indentWith "─" lvl "") <> " " <> testName
+drawBoxHeader lvl header = "╭" <> Text.drop 2 (indentWith "─" lvl "") <> " " <> header <> "\n"
 
 drawBoxBody :: Maybe (Term.Window Int) -> BoxSpec -> Text
-drawBoxBody termSize boxContents = Text.intercalate "\n" $ concatMap draw boxContents <> [footer]
+drawBoxBody termSize boxContents = Text.unlines $ concatMap draw boxContents <> [footer]
  where
   termWidth = maybe 80 Term.width termSize
-  width =
-    maximum . (termWidth :) . flip concatMap boxContents $ \case
-      BoxHeader s -> [Text.length s + indentSize + 2]
-      BoxText s -> [Text.length line + 2 | line <- Text.lines s]
-
-  footer = "╰" <> Text.replicate (width - 1) "─"
+  footer = "╰" <> Text.replicate (termWidth - 1) "─"
 
   draw = \case
     BoxHeader s ->
-      [ drawLine ""
+      [ "│"
       , "╞═══ " <> s
       ]
-    BoxText s -> map drawLine $ Text.lines s
-  drawLine s = "│ " <> s
+    BoxText s ->
+      [ "│ " <> line
+      | line <- Text.lines s
+      ]

@@ -211,7 +211,7 @@ runProperty = \case
               -- N.B. testFailContext is reversed!
               failure{testFailContext = failure.testFailContext <> reverse info}
           Right err -> do
-            let addInfo msg = msg <> "\n\n" <> Text.unlines info
+            let addInfo msg = msg <> "\n\n" <> Text.intercalate "\n" info
             testResultFromErrorWith addInfo err
  where
   size = 0

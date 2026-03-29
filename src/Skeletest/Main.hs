@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -22,8 +23,9 @@ module Skeletest.Main (
 ) where
 
 import Control.Monad (when)
-import Skeletest.Internal.CLI (Flag, flag, loadCliArgs)
-import Skeletest.Internal.Capture (captureOutputPlugin)
+import Data.Foldable (traverse_)
+import Skeletest.Internal.CLI (ANSIFlag (..), Flag, flag, getFlag, loadCliArgs)
+import Skeletest.Internal.Capture (CaptureOutputFlag (..), captureOutputPlugin)
 import Skeletest.Internal.Exit (TestExitCode (..), exitWith, handleUnknownErrors)
 import Skeletest.Internal.Snapshot (
   SnapshotRenderer (..),
@@ -48,6 +50,8 @@ runSkeletest :: [Plugin] -> [(FilePath, Spec)] -> IO ()
 runSkeletest userPlugins testModules = handleUnknownErrors $ do
   Term.init
   selections <- loadCliArgs builtinFlags cliFlags
+  resolveANSISupport
+
   setSnapshotRenderers snapshotRenderers
 
   let initialSpecs = map mkSpec testModules
@@ -73,10 +77,23 @@ runSkeletest userPlugins testModules = handleUnknownErrors $ do
   snapshotRenderers = foldMap (.snapshotRenderers) $ builtinPlugins <> userPlugins
 
   cliFlags = foldMap (.cliFlags) userPlugins
-  builtinFlags = foldMap (.cliFlags) builtinPlugins
+  builtinFlags = foldMap (.cliFlags) builtinPlugins <> generalFlags
+  generalFlags =
+    [ flag @ANSIFlag
+    ]
 
   mkSpec (specPath, specSpec) =
     SpecInfo
       { specPath
       , specSpec
       }
+
+resolveANSISupport :: IO ()
+resolveANSISupport = do
+  CaptureOutputFlag captureOutput <- getFlag
+  ANSIFlag mUseANSI <- getFlag
+  traverse_ Term.setANSISupport $
+    if
+      | Just userANSI <- mUseANSI -> Just userANSI
+      | not captureOutput -> Just False -- if --capture-output=off, ANSI could mess up output
+      | otherwise -> Nothing

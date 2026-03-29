@@ -100,6 +100,7 @@ data TestArgs = TestArgs
   , cliArgs :: [String]
   , ghcArgs :: [String]
   , mainFile :: String
+  , simulateANSI :: Bool
   }
 
 instance Default TestArgs where
@@ -109,6 +110,7 @@ instance Default TestArgs where
       , cliArgs = []
       , ghcArgs = []
       , mainFile = "Main.hs"
+      , simulateANSI = True
       }
 
 instance HasField "runTests" TestRunner (IO (ExitCode, String, String)) where
@@ -133,9 +135,15 @@ instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, S
         runProcWith
           (maybe id setCWD args.cwd)
           (runner.dir </> "test-runner")
-          args.cliArgs
+          cliArgs
       result -> pure result
    where
+    cliArgs =
+      concat
+        [ args.cliArgs
+        , [if args.simulateANSI then "--ansi=always" else "--ansi=never"]
+        ]
+
     setCWD dir p = p{Process.cwd = Just dir}
     runProcWith f cmd args_ = do
       let proc = f . setCWD runner.dir $ Process.proc cmd args_
@@ -145,7 +153,7 @@ instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, S
     sanitize =
       Text.unpack
         . scrubDurations
-        . stripOverwrites
+        . (if args.simulateANSI then resolveANSI else id)
         . stripAnsiEscapeCodes
         . Text.strip
         . Text.pack
@@ -163,10 +171,10 @@ instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, S
           -- 'post' is empty; we've checked the whole string
           | otherwise ->
               pre
-    stripOverwrites s =
+    resolveANSI s =
       case Text.breakOn "\r" s of
         (_, "") -> s
-        (pre, post) -> Text.dropWhileEnd (/= '\n') pre <> stripOverwrites (Text.drop 1 post)
+        (pre, post) -> Text.dropWhileEnd (/= '\n') pre <> resolveANSI (Text.drop 1 post)
 
 expectCode :: (HasCallStack) => Int -> IO (ExitCode, String, String) -> IO (String, String)
 expectCode expected m = do

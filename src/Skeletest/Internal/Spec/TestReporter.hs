@@ -30,12 +30,14 @@ import System.IO qualified as IO
 
 data TestReporter = TestReporter
   { format :: ReportFormat
+  , supportsANSI :: Bool
   }
 
 newTestReporter :: IO TestReporter
 newTestReporter = do
   format <- fromMaybe ReportFormat_Full <$> CLI.getFlag -- TODO: change default to minimal
-  pure TestReporter{format}
+  supportsANSI <- Term.supportsANSI Term.stdout
+  pure TestReporter{format, supportsANSI}
 
 testReporterPlugin :: Plugin
 testReporterPlugin =
@@ -132,13 +134,9 @@ formatActionsFull =
    where
     indentLevel = getIndentLevel testInfo
 
-  reportTestPost _ testInfo result = do
-    case result.testResultMessage of
-      TestResultMessageBox _ -> do
-        Term.outputN "\r"
-        Term.outputN $ drawBoxHeader indentLevel (testInfo.name <> ": ")
-      _ -> pure ()
-    Term.output result.testResultLabel
+  reportTestPost reporter testInfo result = do
+    withBoxHeader $ do
+      Term.output $ result.testResultLabel
     case result.testResultMessage of
       TestResultMessageNone -> pure ()
       TestResultMessageInline msg -> do
@@ -148,16 +146,42 @@ formatActionsFull =
         Term.output drawBoxFooter
    where
     indentLevel = getIndentLevel testInfo
+    isBox = \case
+      TestResultMessageBox _ -> True
+      _ -> False
+    withBoxHeader action
+      | not $ isBox result.testResultMessage = do
+          action
+      | reporter.supportsANSI = do
+          Term.outputN "\r"
+          Term.outputN $ drawBoxHeader indentLevel (BoxHeaderType_Inline $ testInfo.name <> ": ")
+          action
+      | otherwise = do
+          action
+          Term.output $ drawBoxHeader indentLevel BoxHeaderType_NextLine
 
 formatActionsVerbose :: FormatActions
 formatActionsVerbose = error "not implemented"
 
 {----- BoxSpec -----}
 
-drawBoxHeader :: IndentLevel -> Text -> Text
-drawBoxHeader lvl s = "╭" <> dashes <> " " <> s
+data BoxHeaderType
+  = -- | e.g.
+    --   "╭── my test: FAIL"
+    BoxHeaderType_Inline Text
+  | -- | e.g.
+    --   "    my test: FAIL"
+    --   "╭───╯"
+    BoxHeaderType_NextLine
+
+drawBoxHeader :: IndentLevel -> BoxHeaderType -> Text
+drawBoxHeader lvl type_ = "╭" <> dashes <> suffix
  where
   dashes = Text.replicate (4 * lvl - 2) "─"
+  suffix =
+    case type_ of
+      BoxHeaderType_Inline s -> " " <> s
+      BoxHeaderType_NextLine -> "─╯"
 
 drawBoxBody :: BoxSpec -> Text
 drawBoxBody boxContents = Text.unlines $ concatMap draw boxContents

@@ -17,6 +17,9 @@ module Skeletest.Internal.CLI (
   getFlag,
   loadCliArgs,
 
+  -- * General flags
+  ANSIFlag (..),
+
   -- * Internal
   parseCliArgsWith,
   FlagInfos,
@@ -149,6 +152,22 @@ getFlag =
           ]
  where
   rep = typeRep (Proxy @a)
+
+{----- General flags -----}
+
+newtype ANSIFlag = ANSIFlag (Maybe Bool)
+instance IsFlag ANSIFlag where
+  flagName = "ansi"
+  flagHelp = "Whether to enable ANSI output: auto (default), always, never"
+  flagSpec =
+    OptionalFlag
+      { flagDefault = ANSIFlag Nothing
+      , flagParse = \case
+          "auto" -> Right . ANSIFlag $ Nothing
+          "always" -> Right . ANSIFlag $ Just True
+          "never" -> Right . ANSIFlag $ Just False
+          s -> Left $ "invalid value: " <> s
+      }
 
 {----- Load CLI arguments -----}
 

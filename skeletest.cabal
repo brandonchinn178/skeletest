@@ -134,6 +134,7 @@ test-suite skeletest-tests
     Skeletest.Internal.FixturesSpec
     Skeletest.Internal.SnapshotSpec
     Skeletest.Internal.SpecSpec
+    Skeletest.Internal.Spec.TestReporterSpec
     Skeletest.Internal.TestTargetsSpec
     Skeletest.MainSpec
     Skeletest.OptionsSpec

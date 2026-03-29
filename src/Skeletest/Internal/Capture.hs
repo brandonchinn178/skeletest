@@ -8,6 +8,9 @@
 module Skeletest.Internal.Capture (
   captureOutputPlugin,
   FixtureCapturedOutput (..),
+
+  -- * CLI flag
+  CaptureOutputFlag (..),
 ) where
 
 import Data.Text (Text)

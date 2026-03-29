@@ -22,7 +22,6 @@ module Skeletest.Main (
 ) where
 
 import Control.Monad (when)
-import Data.Text.IO qualified as Text
 import Skeletest.Internal.CLI (Flag, flag, loadCliArgs)
 import Skeletest.Internal.Capture (captureOutputPlugin)
 import Skeletest.Internal.Exit (TestExitCode (..), exitWith, handleUnknownErrors)
@@ -41,19 +40,20 @@ import Skeletest.Internal.Spec (
 import Skeletest.Internal.Spec.TestReporter (testReporterPlugin)
 import Skeletest.Internal.Spec.Tree (getSpecTests)
 import Skeletest.Internal.Utils.Color qualified as Color
+import Skeletest.Internal.Utils.Term qualified as Term
 import Skeletest.Plugin (Hooks (..), Plugin (..))
 import Skeletest.Prop.Internal (propPlugin)
-import System.IO qualified as IO
 
 runSkeletest :: [Plugin] -> [(FilePath, Spec)] -> IO ()
 runSkeletest userPlugins testModules = handleUnknownErrors $ do
+  Term.init
   selections <- loadCliArgs builtinFlags cliFlags
   setSnapshotRenderers snapshotRenderers
 
   let initialSpecs = map mkSpec testModules
   specs <- hooks.modifySpecRegistry selections pure initialSpecs
   when (null $ concatMap (getSpecTests . (.specSpec)) specs) $ do
-    Text.hPutStrLn IO.stderr $ Color.red "ERROR: No tests selected!"
+    Term.outputErr $ Color.red "ERROR: No tests selected!"
     exitWith ExitNoTests
 
   runner <- newSpecRunner hooks initialSpecs

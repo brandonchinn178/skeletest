@@ -45,7 +45,6 @@ import Control.Monad.Trans.State.Strict qualified as State
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Text.IO qualified as Text
 import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
 import GHC.Records (HasField (..))
 import Numeric (showFFloat)
@@ -84,6 +83,7 @@ import Skeletest.Internal.TestRunner (
   testResultFromError,
  )
 import Skeletest.Internal.Utils.Color qualified as Color
+import Skeletest.Internal.Utils.Term qualified as Term
 import Skeletest.Internal.Utils.Text (pluralize)
 import Skeletest.Plugin (Hooks (..), Plugin (..), defaultHooks, defaultPlugin, filterSpecTests, hasMarker)
 import Skeletest.Plugin qualified as Plugin
@@ -191,8 +191,8 @@ instance HasField "runTest" SpecRunner (TestInfo -> SpecTest -> IO TestExitCode)
 instance HasField "printSummary" SpecRunner (IO ()) where
   getField runner = do
     summary <- runner.testSummary.render >>= runner.hooks.modifyTestSummary
-    Text.putStrLn ""
-    Text.putStr . colorize . Text.strip $ summary
+    Term.output ""
+    Term.outputN . colorize . Text.strip $ summary
    where
     colorize = Text.unlines . map Color.yellow . Text.lines
 

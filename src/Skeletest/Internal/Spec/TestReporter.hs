@@ -15,31 +15,27 @@ module Skeletest.Internal.Spec.TestReporter (
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Text.IO qualified as Text
 import GHC.Records (HasField (..))
 import Skeletest.Internal.CLI qualified as CLI
 import Skeletest.Internal.Exit (TestExitCode)
 import Skeletest.Internal.Spec.Output (BoxSpec, BoxSpecContent (..))
 import Skeletest.Internal.TestInfo (TestInfo (..))
 import Skeletest.Internal.TestRunner (TestResult (..), TestResultMessage (..))
+import Skeletest.Internal.Utils.Term qualified as Term
 import Skeletest.Internal.Utils.Text (indentWith)
 import Skeletest.Plugin (Plugin (..), defaultPlugin)
-import System.Console.Terminal.Size qualified as Term
 import System.IO qualified as IO
 
 {----- TestReporter -----}
 
-type TermWidth = Int
 data TestReporter = TestReporter
   { format :: ReportFormat
-  , termWidth :: TermWidth
   }
 
 newTestReporter :: IO TestReporter
 newTestReporter = do
   format <- fromMaybe ReportFormat_Full <$> CLI.getFlag -- TODO: change default to minimal
-  termWidth <- maybe 80 Term.width <$> Term.size
-  pure TestReporter{format, termWidth}
+  pure TestReporter{format}
 
 testReporterPlugin :: Plugin
 testReporterPlugin =
@@ -123,33 +119,33 @@ formatActionsFull =
     }
  where
   reportFilePre _ fp = do
-    Text.putStrLn $ Text.pack fp
+    Term.output $ Text.pack fp
 
   reportGroupPre _ testInfo name = do
-    Text.putStrLn $ fullIndent indentLevel name
+    Term.output $ fullIndent indentLevel name
    where
     indentLevel = getIndentLevel testInfo
 
   reportTestPre _ testInfo = do
-    Text.putStr $ fullIndent indentLevel (testInfo.name <> ": ")
+    Term.outputN $ fullIndent indentLevel (testInfo.name <> ": ")
     IO.hFlush IO.stdout
    where
     indentLevel = getIndentLevel testInfo
 
-  reportTestPost reporter testInfo result = do
+  reportTestPost _ testInfo result = do
     case result.testResultMessage of
       TestResultMessageBox _ -> do
-        Text.putStr "\r"
-        Text.putStr $ drawBoxHeader indentLevel (testInfo.name <> ": ")
+        Term.outputN "\r"
+        Term.outputN $ drawBoxHeader indentLevel (testInfo.name <> ": ")
       _ -> pure ()
-    Text.putStrLn result.testResultLabel
+    Term.output result.testResultLabel
     case result.testResultMessage of
       TestResultMessageNone -> pure ()
       TestResultMessageInline msg -> do
-        Text.putStrLn $ fullIndent (indentLevel + 1) msg
+        Term.output $ fullIndent (indentLevel + 1) msg
       TestResultMessageBox box -> do
-        Text.putStr $ drawBoxBody box
-        Text.putStrLn $ drawBoxFooter reporter.termWidth
+        Term.outputN $ drawBoxBody box
+        Term.output drawBoxFooter
    where
     indentLevel = getIndentLevel testInfo
 
@@ -176,8 +172,8 @@ drawBoxBody boxContents = Text.unlines $ concatMap draw boxContents
       | line <- Text.lines s
       ]
 
-drawBoxFooter :: TermWidth -> Text
-drawBoxFooter termWidth = "╰" <> Text.replicate (termWidth - 1) "─"
+drawBoxFooter :: Text
+drawBoxFooter = "╰" <> Text.replicate (Term.width - 1) "─"
 
 {----- Indentation -----}
 

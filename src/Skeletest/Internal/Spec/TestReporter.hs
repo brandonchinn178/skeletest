@@ -11,12 +11,16 @@ module Skeletest.Internal.Spec.TestReporter (
   newTestReporter,
 ) where
 
+import Control.Monad (when)
+import Data.IORef (IORef, atomicModifyIORef', newIORef)
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (NominalDiffTime)
 import GHC.Records (HasField (..))
 import Skeletest.Internal.CLI (FormatFlag (..), getFormatFlag)
-import Skeletest.Internal.Exit (TestExitCode)
+import Skeletest.Internal.Exit (TestExitCode (..))
 import Skeletest.Internal.Spec.Output (BoxSpec, BoxSpecContent (..))
 import Skeletest.Internal.TestInfo (TestInfo (..))
 import Skeletest.Internal.TestRunner (TestResult (..), TestResultMessage (..))
@@ -31,13 +35,15 @@ import System.IO qualified as IO
 data TestReporter = TestReporter
   { format :: FormatFlag
   , supportsANSI :: Bool
+  , minimalFormatFailures :: IORef (Set FilePath)
   }
 
 newTestReporter :: IO TestReporter
 newTestReporter = do
   format <- getFormatFlag
   supportsANSI <- Term.supportsANSI Term.stdout
-  pure TestReporter{format, supportsANSI}
+  minimalFormatFailures <- newIORef Set.empty
+  pure TestReporter{format, supportsANSI, minimalFormatFailures}
 
 getFormatAction :: forall field a. (HasField field FormatActions (TestReporter -> a)) => TestReporter -> a
 getFormatAction reporter = getField @field formatActions reporter
@@ -84,7 +90,63 @@ defaultFormatActions =
     }
 
 formatActionsMinimal :: FormatActions
-formatActionsMinimal = error "not implemented"
+formatActionsMinimal =
+  defaultFormatActions
+    { reportFilePre
+    , reportFilePost
+    , reportTestPre
+    , reportTestPost
+    }
+ where
+  reportFilePre reporter fp = do
+    when (not reporter.supportsANSI) $ do
+      Term.outputN $ renderFile fp
+
+  reportFilePost reporter fp (_, duration) = do
+    fileHadFailure <-
+      atomicModifyIORef' reporter.minimalFormatFailures $ \failures ->
+        (Set.delete fp failures, fp `Set.member` failures)
+    when (not fileHadFailure) $ do
+      Term.output . Text.concat $
+        [ if reporter.supportsANSI then renderFile fp else ""
+        , Color.green "OK"
+        , renderDurationLabel reporter duration
+        ]
+
+  renderFile fp = "◈ " <> Text.pack fp <> ": "
+
+  reportTestPre reporter testInfo = do
+    when reporter.supportsANSI $ do
+      Term.resetLine
+      Term.outputN $ "RUNNING: " <> minimalTestLabel reporter testInfo
+
+  reportTestPost reporter testInfo (result, duration) = do
+    when reporter.supportsANSI Term.resetLine
+    when (not result.testResultSuccess) $ do
+      hadPreviousFailure <-
+        atomicModifyIORef' reporter.minimalFormatFailures $ \failures ->
+          (Set.insert testInfo.file failures, testInfo.file `Set.member` failures)
+      if reporter.supportsANSI
+        then do
+          Term.outputN "◈ "
+        else do
+          when (not hadPreviousFailure) $ Term.outputN "\n"
+          Term.outputN $ drawBoxHeader 1 (BoxHeaderType_Inline "")
+      Term.output . Text.concat $
+        [ minimalTestLabel reporter testInfo
+        , ": "
+        , result.testResultLabel
+        , renderDurationLabel reporter duration
+        ]
+      renderTestResultMessage 0 result
+
+  minimalTestLabel :: TestReporter -> TestInfo -> Text
+  minimalTestLabel reporter testInfo =
+    Text.intercalate " ≫ " . concat $
+      [ if reporter.supportsANSI then [Text.pack testInfo.file] else []
+      , testInfo.contexts
+      , [testInfo.name]
+      ]
 
 formatActionsFull :: FormatActions
 formatActionsFull =
@@ -112,13 +174,7 @@ formatActionsFull =
   reportTestPost reporter testInfo (result, duration) = do
     withBoxHeader $ do
       Term.output $ result.testResultLabel <> durationLabel
-    case result.testResultMessage of
-      TestResultMessageNone -> pure ()
-      TestResultMessageInline msg -> do
-        Term.output $ fullIndent (indentLevel + 1) msg
-      TestResultMessageBox box -> do
-        Term.outputN $ drawBoxBody box
-        Term.output drawBoxFooter
+    renderTestResultMessage indentLevel result
    where
     indentLevel = getIndentLevel testInfo
     isBox = \case
@@ -128,21 +184,34 @@ formatActionsFull =
       | not $ isBox result.testResultMessage = do
           action
       | reporter.supportsANSI = do
-          Term.outputN "\r"
+          Term.resetLine
           Term.outputN $ drawBoxHeader indentLevel (BoxHeaderType_Inline $ testInfo.name <> ": ")
           action
       | otherwise = do
           action
           Term.output $ drawBoxHeader indentLevel BoxHeaderType_NextLine
-    durationLabel =
-      if reporter.format == FormatFlag_Verbose || duration > 0.1
-        then " " <> Color.gray ("(" <> renderDuration duration <> ")")
-        else ""
+    durationLabel = renderDurationLabel reporter duration
 
 -- Verbose is the same as full, except with some minor changes, so
 -- we'll re-use full and inspect format directly
 formatActionsVerbose :: FormatActions
 formatActionsVerbose = formatActionsFull
+
+renderDurationLabel :: TestReporter -> NominalDiffTime -> Text
+renderDurationLabel reporter duration =
+  if reporter.format == FormatFlag_Verbose || duration > 0.1
+    then " " <> Color.gray ("(" <> renderDuration duration <> ")")
+    else ""
+
+renderTestResultMessage :: IndentLevel -> TestResult -> IO ()
+renderTestResultMessage indentLevel result =
+  case result.testResultMessage of
+    TestResultMessageNone -> pure ()
+    TestResultMessageInline msg -> do
+      Term.output $ fullIndent (indentLevel + 1) msg
+    TestResultMessageBox box -> do
+      Term.outputN $ drawBoxBody box
+      Term.output drawBoxFooter
 
 {----- BoxSpec -----}
 

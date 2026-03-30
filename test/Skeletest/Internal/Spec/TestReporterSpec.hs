@@ -32,5 +32,5 @@ spec = do
           stdout `shouldSatisfy` P.matchesSnapshot
       | useANSI <- [True, False]
       , let ansiLabel = if useANSI then "ANSI" else "non-ANSI"
-      , format <- ["full", "verbose"]
+      , format <- ["minimal", "full", "verbose"]
       ]

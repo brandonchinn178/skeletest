@@ -26,6 +26,7 @@ data TestExitCode
   | ExitOutdatedSnapshots
   | ExitPreprocessorFailure
   | ExitOther
+  deriving (Show, Eq, Ord)
 
 fromExitCode :: TestExitCode -> Exit.ExitCode
 fromExitCode = \case

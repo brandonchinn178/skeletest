@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoFieldSelectors #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
@@ -21,6 +22,7 @@ module Skeletest.Internal.Utils.Term (
   outputN,
   outputErr,
   outputErrN,
+  resetLine,
 ) where
 
 import Control.Exception (evaluate)
@@ -109,3 +111,6 @@ outputErrN = hPutStrFlush globalTermData.stderr.handle
 
 hPutStrFlush :: IO.Handle -> Text -> IO ()
 hPutStrFlush h s = Text.hPutStr h s *> IO.hFlush h
+
+resetLine :: IO ()
+resetLine = outputN "\r\ESC[0K"

@@ -129,9 +129,16 @@ spec = do
       ]
     runner.addTestFile "__snapshots__/ExampleSpec.snap.md" ["asdf"]
 
-    (stdout, stderr) <- expectCode 5 runner.runTests
-    stderr `shouldBe` ""
-    stdout `shouldSatisfy` P.matchesSnapshot
+    (stdout1, stderr1) <- expectCode 5 $ runner.runTestsWith def{cliArgs = []}
+    stderr1 `shouldBe` ""
+    stdout1 `shouldSatisfy` P.matchesSnapshot
+
+    (stdout2, stderr2) <- expectSuccess $ runner.runTestsWith def{cliArgs = ["-u"]}
+    stderr2 `shouldBe` ""
+    stdout2 `shouldSatisfy` P.matchesSnapshot
+
+    runner.readTestFile "__snapshots__/ExampleSpec.snap.md"
+      `shouldReturn` "# ./ExampleSpec.hs\n\n## should error\n\n```\n\n```\n"
 
   integration . it "uses registered snapshot renderers" $ do
     runner <- getFixture @TestRunner

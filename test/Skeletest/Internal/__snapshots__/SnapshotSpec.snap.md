@@ -68,6 +68,15 @@
   • 1 test failed ✘
 ```
 
+```
+./ExampleSpec.hs
+    should error: OK
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+➤ 1 snapshot updated
+```
+
 ## renders JSON values
 
 ```json

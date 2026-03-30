@@ -53,6 +53,7 @@ library
     Skeletest.Internal.Snapshot.Renderer
     Skeletest.Internal.Spec
     Skeletest.Internal.Spec.Output
+    Skeletest.Internal.Spec.TestReporter
     Skeletest.Internal.Spec.Tree
     Skeletest.Internal.TestInfo
     Skeletest.Internal.TestRunner
@@ -61,6 +62,7 @@ library
     Skeletest.Internal.Utils.Diff
     Skeletest.Internal.Utils.HList
     Skeletest.Internal.Utils.Map
+    Skeletest.Internal.Utils.Term
     Skeletest.Internal.Utils.Text
     Skeletest.Main
     Skeletest.Plugin
@@ -132,6 +134,7 @@ test-suite skeletest-tests
     Skeletest.Internal.FixturesSpec
     Skeletest.Internal.SnapshotSpec
     Skeletest.Internal.SpecSpec
+    Skeletest.Internal.Spec.TestReporterSpec
     Skeletest.Internal.TestTargetsSpec
     Skeletest.MainSpec
     Skeletest.OptionsSpec
@@ -148,6 +151,7 @@ test-suite skeletest-tests
     , directory
     , filepath
     , skeletest
+    , strip-ansi-escape
     , process
     , text
     , unliftio

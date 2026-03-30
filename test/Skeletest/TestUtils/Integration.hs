@@ -27,6 +27,7 @@ import Control.Monad (guard)
 import Data.Char (isDigit)
 import Data.Default (Default (..))
 import Data.IORef (IORef, modifyIORef, newIORef, readIORef)
+import Data.String.AnsiEscapeCodes.Strip.Text (stripAnsiEscapeCodes)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
@@ -99,6 +100,7 @@ data TestArgs = TestArgs
   , cliArgs :: [String]
   , ghcArgs :: [String]
   , mainFile :: String
+  , simulateANSI :: Bool
   }
 
 instance Default TestArgs where
@@ -108,6 +110,7 @@ instance Default TestArgs where
       , cliArgs = []
       , ghcArgs = []
       , mainFile = "Main.hs"
+      , simulateANSI = True
       }
 
 instance HasField "runTests" TestRunner (IO (ExitCode, String, String)) where
@@ -132,9 +135,15 @@ instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, S
         runProcWith
           (maybe id setCWD args.cwd)
           (runner.dir </> "test-runner")
-          args.cliArgs
+          cliArgs
       result -> pure result
    where
+    cliArgs =
+      concat
+        [ args.cliArgs
+        , [if args.simulateANSI then "--ansi=always" else "--ansi=never"]
+        ]
+
     setCWD dir p = p{Process.cwd = Just dir}
     runProcWith f cmd args_ = do
       let proc = f . setCWD runner.dir $ Process.proc cmd args_
@@ -144,8 +153,8 @@ instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, S
     sanitize =
       Text.unpack
         . scrubDurations
-        . stripOverwrites
-        . stripControlChars
+        . (if args.simulateANSI then resolveANSI else id)
+        . stripAnsiEscapeCodes
         . Text.strip
         . Text.pack
     scrubDurations s =
@@ -162,14 +171,10 @@ instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, S
           -- 'post' is empty; we've checked the whole string
           | otherwise ->
               pre
-    stripOverwrites s =
+    resolveANSI s =
       case Text.breakOn "\r" s of
         (_, "") -> s
-        (pre, post) -> Text.dropWhileEnd (/= '\n') pre <> stripOverwrites (Text.drop 1 post)
-    stripControlChars s =
-      case Text.breakOn "\x1b" s of
-        (_, "") -> s
-        (pre, post) -> pre <> stripControlChars (Text.drop 1 . Text.dropWhile (/= 'm') $ post)
+        (pre, post) -> Text.dropWhileEnd (/= '\n') pre <> resolveANSI (Text.drop 1 post)
 
 expectCode :: (HasCallStack) => Int -> IO (ExitCode, String, String) -> IO (String, String)
 expectCode expected m = do

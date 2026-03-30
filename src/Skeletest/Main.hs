@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -22,9 +23,9 @@ module Skeletest.Main (
 ) where
 
 import Control.Monad (when)
-import Data.Text.IO qualified as Text
-import Skeletest.Internal.CLI (Flag, flag, loadCliArgs)
-import Skeletest.Internal.Capture (captureOutputPlugin)
+import Data.Foldable (traverse_)
+import Skeletest.Internal.CLI (ANSIFlag (..), Flag, flag, getFlag, loadCliArgs)
+import Skeletest.Internal.Capture (CaptureOutputFlag (..), captureOutputPlugin)
 import Skeletest.Internal.Exit (TestExitCode (..), exitWith, handleUnknownErrors)
 import Skeletest.Internal.Snapshot (
   SnapshotRenderer (..),
@@ -38,21 +39,25 @@ import Skeletest.Internal.Spec (
   newSpecRunner,
   specTreePlugin,
  )
+import Skeletest.Internal.Spec.TestReporter (testReporterPlugin)
 import Skeletest.Internal.Spec.Tree (getSpecTests)
 import Skeletest.Internal.Utils.Color qualified as Color
+import Skeletest.Internal.Utils.Term qualified as Term
 import Skeletest.Plugin (Hooks (..), Plugin (..))
 import Skeletest.Prop.Internal (propPlugin)
-import System.IO qualified as IO
 
 runSkeletest :: [Plugin] -> [(FilePath, Spec)] -> IO ()
 runSkeletest userPlugins testModules = handleUnknownErrors $ do
+  Term.init
   selections <- loadCliArgs builtinFlags cliFlags
+  resolveANSISupport
+
   setSnapshotRenderers snapshotRenderers
 
   let initialSpecs = map mkSpec testModules
   specs <- hooks.modifySpecRegistry selections pure initialSpecs
   when (null $ concatMap (getSpecTests . (.specSpec)) specs) $ do
-    Text.hPutStrLn IO.stderr $ Color.red "ERROR: No tests selected!"
+    Term.outputErr $ Color.red "ERROR: No tests selected!"
     exitWith ExitNoTests
 
   runner <- newSpecRunner hooks initialSpecs
@@ -65,16 +70,30 @@ runSkeletest userPlugins testModules = handleUnknownErrors $ do
     , snapshotPlugin
     , captureOutputPlugin
     , propPlugin
+    , testReporterPlugin
     ]
 
   hooks = foldMap (.hooks) $ builtinPlugins <> userPlugins
   snapshotRenderers = foldMap (.snapshotRenderers) $ builtinPlugins <> userPlugins
 
   cliFlags = foldMap (.cliFlags) userPlugins
-  builtinFlags = foldMap (.cliFlags) builtinPlugins
+  builtinFlags = foldMap (.cliFlags) builtinPlugins <> generalFlags
+  generalFlags =
+    [ flag @ANSIFlag
+    ]
 
   mkSpec (specPath, specSpec) =
     SpecInfo
       { specPath
       , specSpec
       }
+
+resolveANSISupport :: IO ()
+resolveANSISupport = do
+  CaptureOutputFlag captureOutput <- getFlag
+  ANSIFlag mUseANSI <- getFlag
+  traverse_ Term.setANSISupport $
+    if
+      | Just userANSI <- mUseANSI -> Just userANSI
+      | not captureOutput -> Just False -- if --capture-output=off, ANSI could mess up output
+      | otherwise -> Nothing

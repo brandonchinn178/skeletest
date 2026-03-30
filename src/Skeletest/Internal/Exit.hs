@@ -6,8 +6,9 @@ module Skeletest.Internal.Exit (
   handleUnknownErrors,
 ) where
 
+import Data.Text qualified as Text
+import Skeletest.Internal.Utils.Term qualified as Term
 import System.Exit qualified as Exit
-import System.IO qualified as IO
 import UnliftIO.Exception (
   displayException,
   fromException,
@@ -41,7 +42,7 @@ exitWith = Exit.exitWith . fromExitCode
 
 handleUnknownErrors :: IO a -> IO a
 handleUnknownErrors = handleJust isUnknown $ \e -> do
-  IO.hPutStrLn IO.stderr $ displayException e
+  Term.outputErr $ (Text.pack . displayException) e
   exitWith ExitOther
  where
   isUnknown e =

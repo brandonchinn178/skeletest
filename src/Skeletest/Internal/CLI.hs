@@ -17,6 +17,9 @@ module Skeletest.Internal.CLI (
   getFlag,
   loadCliArgs,
 
+  -- * General flags
+  ANSIFlag (..),
+
   -- * Internal
   parseCliArgsWith,
   FlagInfos,
@@ -41,14 +44,13 @@ import Data.Sequence (Seq)
 import Data.Sequence qualified as Seq
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Text.IO qualified as Text
 import Data.Typeable (TypeRep, Typeable, typeOf, typeRep)
 import Skeletest.Internal.Error (invariantViolation, skeletestError)
 import Skeletest.Internal.Exit (TestExitCode (..), exitWith)
 import Skeletest.Internal.TestTargets (TestTargets, parseTestTargets)
 import Skeletest.Internal.Utils.Color qualified as Color
+import Skeletest.Internal.Utils.Term qualified as Term
 import System.Environment (getArgs)
-import System.IO (stderr)
 import System.IO.Unsafe (unsafePerformIO)
 
 #if !MIN_VERSION_base(4, 20, 0)
@@ -151,6 +153,22 @@ getFlag =
  where
   rep = typeRep (Proxy @a)
 
+{----- General flags -----}
+
+newtype ANSIFlag = ANSIFlag (Maybe Bool)
+instance IsFlag ANSIFlag where
+  flagName = "ansi"
+  flagHelp = "Whether to enable ANSI output: auto (default), always, never"
+  flagSpec =
+    OptionalFlag
+      { flagDefault = ANSIFlag Nothing
+      , flagParse = \case
+          "auto" -> Right . ANSIFlag $ Nothing
+          "always" -> Right . ANSIFlag $ Just True
+          "never" -> Right . ANSIFlag $ Just False
+          s -> Left $ "invalid value: " <> s
+      }
+
 {----- Load CLI arguments -----}
 
 -- | Parse the CLI arguments using the given user-defined flags, then
@@ -161,13 +179,13 @@ loadCliArgs builtinFlags flags = do
   args0 <- getArgs
   case parseCliArgs (builtinFlags <> flags) args0 of
     CLISetupFailure msg -> do
-      Text.hPutStrLn stderr $ Color.red $ "ERROR: " <> msg
+      Term.outputErr $ Color.red $ "ERROR: " <> msg
       exitWith ExitCLIFailure
     CLIHelpRequested -> do
-      Text.putStrLn helpText
+      Term.output helpText
       exitWith ExitSuccess
     CLIParseFailure msg -> do
-      Text.hPutStrLn stderr $ msg <> "\n\n" <> helpText
+      Term.outputErr $ msg <> "\n\n" <> helpText
       exitWith ExitCLIFailure
     CLIParseSuccess{testTargets, flagStore} -> do
       setCliFlagStore flagStore

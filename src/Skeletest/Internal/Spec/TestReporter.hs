@@ -9,50 +9,41 @@
 module Skeletest.Internal.Spec.TestReporter (
   TestReporter,
   newTestReporter,
-  testReporterPlugin,
 ) where
 
-import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import GHC.Records (HasField (..))
-import Skeletest.Internal.CLI qualified as CLI
+import Skeletest.Internal.CLI (FormatFlag (..), getFormatFlag)
 import Skeletest.Internal.Exit (TestExitCode)
 import Skeletest.Internal.Spec.Output (BoxSpec, BoxSpecContent (..))
 import Skeletest.Internal.TestInfo (TestInfo (..))
 import Skeletest.Internal.TestRunner (TestResult (..), TestResultMessage (..))
 import Skeletest.Internal.Utils.Term qualified as Term
 import Skeletest.Internal.Utils.Text (indentWith)
-import Skeletest.Plugin (Plugin (..), defaultPlugin)
 import System.IO qualified as IO
 
 {----- TestReporter -----}
 
 data TestReporter = TestReporter
-  { format :: ReportFormat
+  { format :: FormatFlag
   , supportsANSI :: Bool
   }
 
 newTestReporter :: IO TestReporter
 newTestReporter = do
-  format <- fromMaybe ReportFormat_Full <$> CLI.getFlag -- TODO: change default to minimal
+  format <- getFormatFlag
   supportsANSI <- Term.supportsANSI Term.stdout
   pure TestReporter{format, supportsANSI}
-
-testReporterPlugin :: Plugin
-testReporterPlugin =
-  defaultPlugin
-    { cliFlags = [CLI.flag @(Maybe ReportFormat)]
-    }
 
 getFormatAction :: forall field a. (HasField field FormatActions (TestReporter -> a)) => TestReporter -> a
 getFormatAction reporter = getField @field formatActions reporter
  where
   formatActions =
     case reporter.format of
-      ReportFormat_Minimal -> formatActionsMinimal
-      ReportFormat_Full -> formatActionsFull
-      ReportFormat_Verbose -> formatActionsVerbose
+      FormatFlag_Minimal -> formatActionsMinimal
+      FormatFlag_Full -> formatActionsFull
+      FormatFlag_Verbose -> formatActionsVerbose
 
 instance HasField "reportFilePre" TestReporter (FilePath -> IO ()) where
   getField = getFormatAction @"reportFilePre"
@@ -68,25 +59,6 @@ instance HasField "reportTestPost" TestReporter (TestInfo -> TestResult -> IO ()
   getField = getFormatAction @"reportTestPost"
 
 {----- Report formats -----}
-
-data ReportFormat
-  = ReportFormat_Minimal
-  | ReportFormat_Full
-  | ReportFormat_Verbose
-  deriving (Show, Eq)
-
-instance CLI.IsFlag (Maybe ReportFormat) where
-  flagName = "format"
-  flagHelp = "The format of the output"
-  flagSpec =
-    CLI.OptionalFlag
-      { flagDefault = Nothing
-      , flagParse = \case
-          "minimal" -> Right $ Just ReportFormat_Minimal
-          "full" -> Right $ Just ReportFormat_Full
-          "verbose" -> Right $ Just ReportFormat_Verbose
-          s -> Left $ "Unknown format: " <> s
-      }
 
 data FormatActions = FormatActions
   { reportFilePre :: TestReporter -> FilePath -> IO ()

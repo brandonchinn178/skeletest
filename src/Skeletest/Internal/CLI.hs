@@ -19,6 +19,8 @@ module Skeletest.Internal.CLI (
 
   -- * General flags
   ANSIFlag (..),
+  FormatFlag (..),
+  getFormatFlag,
 
   -- * Internal
   parseCliArgsWith,
@@ -168,6 +170,30 @@ instance IsFlag ANSIFlag where
           "never" -> Right . ANSIFlag $ Just False
           s -> Left $ "invalid value: " <> s
       }
+
+data FormatFlag
+  = FormatFlag_Minimal
+  | FormatFlag_Full
+  | FormatFlag_Verbose
+  deriving (Show, Eq)
+
+instance IsFlag (Maybe FormatFlag) where
+  flagName = "format"
+  flagHelp = "The format of the output"
+  flagSpec =
+    OptionalFlag
+      { flagDefault = Nothing
+      , flagParse = \case
+          "minimal" -> Right $ Just FormatFlag_Minimal
+          "full" -> Right $ Just FormatFlag_Full
+          "verbose" -> Right $ Just FormatFlag_Verbose
+          s -> Left $ "Unknown format: " <> s
+      }
+
+getFormatFlag :: IO FormatFlag
+getFormatFlag = do
+  -- TODO: change default to minimal if ANSI
+  fromMaybe FormatFlag_Full <$> getFlag
 
 {----- Load CLI arguments -----}
 

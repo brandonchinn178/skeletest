@@ -24,7 +24,14 @@ module Skeletest.Main (
 
 import Control.Monad (when)
 import Data.Foldable (traverse_)
-import Skeletest.Internal.CLI (ANSIFlag (..), Flag, flag, getFlag, loadCliArgs)
+import Skeletest.Internal.CLI (
+  ANSIFlag (..),
+  Flag,
+  FormatFlag,
+  flag,
+  getFlag,
+  loadCliArgs,
+ )
 import Skeletest.Internal.Capture (CaptureOutputFlag (..), captureOutputPlugin)
 import Skeletest.Internal.Exit (TestExitCode (..), exitWith, handleUnknownErrors)
 import Skeletest.Internal.Snapshot (
@@ -39,7 +46,6 @@ import Skeletest.Internal.Spec (
   newSpecRunner,
   specTreePlugin,
  )
-import Skeletest.Internal.Spec.TestReporter (testReporterPlugin)
 import Skeletest.Internal.Spec.Tree (getSpecTests)
 import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Internal.Utils.Term qualified as Term
@@ -70,7 +76,6 @@ runSkeletest userPlugins testModules = handleUnknownErrors $ do
     , snapshotPlugin
     , captureOutputPlugin
     , propPlugin
-    , testReporterPlugin
     ]
 
   hooks = foldMap (.hooks) $ builtinPlugins <> userPlugins
@@ -80,6 +85,7 @@ runSkeletest userPlugins testModules = handleUnknownErrors $ do
   builtinFlags = foldMap (.cliFlags) builtinPlugins <> generalFlags
   generalFlags =
     [ flag @ANSIFlag
+    , flag @(Maybe FormatFlag)
     ]
 
   mkSpec (specPath, specSpec) =

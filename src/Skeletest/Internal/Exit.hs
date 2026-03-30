@@ -38,7 +38,9 @@ fromExitCode = \case
   ExitOther -> Exit.ExitFailure 99
 
 exitWith :: TestExitCode -> IO a
-exitWith = Exit.exitWith . fromExitCode
+exitWith code = do
+  Term.flush -- Be absolutely sure to flush everything
+  Exit.exitWith $ fromExitCode code
 
 handleUnknownErrors :: IO a -> IO a
 handleUnknownErrors = handleJust isUnknown $ \e -> do

@@ -374,7 +374,10 @@ recordSnapshotsToFileFixture testInfo = do
 finalizeUpdateSnapshotFixture :: TestInfo -> IORef (Map TestId [SnapshotValue]) -> IO ()
 finalizeUpdateSnapshotFixture testInfo newFileSnapshotsRef = do
   let snapshotPath = getSnapshotPath testInfo.file
-  snapshotFile <- fromMaybe newSnapshotFile <$> loadSnapshotFile snapshotPath
+  snapshotFile <-
+    loadSnapshotFile snapshotPath >>= \case
+      SnapshotFileLoadResult_Exists file -> pure file
+      _ -> pure $ emptySnapshotFile (Text.pack testInfo.file)
   newSnapshots <- Map.map Seq.toList <$> readIORef newFileSnapshotsRef
   let snapshots' = mergeSnapshots snapshotFile.snapshots newSnapshots
   when (snapshots' /= snapshotFile.snapshots) $ do
@@ -382,7 +385,6 @@ finalizeUpdateSnapshotFixture testInfo newFileSnapshotsRef = do
       store{numSnapshotsUpdated = store.numSnapshotsUpdated + countChanges snapshotFile.snapshots snapshots'}
     saveSnapshotFile snapshotPath snapshotFile{snapshots = snapshots'}
  where
-  newSnapshotFile = emptySnapshotFile (Text.pack testInfo.file)
   countChanges old new =
     flip State.execState 0 $
       Map.mergeA
@@ -423,7 +425,11 @@ instance Fixture CheckSnapshotFixture_File where
   fixtureAction = do
     testFile <- (.file) <$> getTestInfo
     let snapshotPath = getSnapshotPath testFile
-    mSnapshotFile <- loadSnapshotFile snapshotPath
+    mSnapshotFile <-
+      loadSnapshotFile snapshotPath >>= \case
+        SnapshotFileLoadResult_Exists file -> pure $ Just file
+        SnapshotFileLoadResult_Missing -> pure Nothing
+        SnapshotFileLoadResult_Corrupted -> skeletestError $ "Snapshot file was corrupted: " <> Text.pack snapshotPath
     pure $ noCleanup CheckSnapshotFixture_File{mSnapshotFile}
 
 data CheckSnapshotFixture = CheckSnapshotFixture
@@ -516,13 +522,19 @@ emptySnapshotFile testFile =
     , snapshots = Map.empty
     }
 
-loadSnapshotFile :: FilePath -> IO (Maybe SnapshotFile)
+data SnapshotFileLoadResult
+  = SnapshotFileLoadResult_Missing
+  | SnapshotFileLoadResult_Corrupted
+  | SnapshotFileLoadResult_Exists SnapshotFile
+
+loadSnapshotFile :: FilePath -> IO SnapshotFileLoadResult
 loadSnapshotFile path =
-  handleDNE (\_ -> pure Nothing) . fmap Just $ do
+  handleDNE (\_ -> pure SnapshotFileLoadResult_Missing) $ do
     contents <- readTestFile path
-    case decodeSnapshotFile contents of
-      Just file -> pure file
-      Nothing -> skeletestError $ "Snapshot file was corrupted: " <> Text.pack path
+    pure $
+      case decodeSnapshotFile contents of
+        Just file -> SnapshotFileLoadResult_Exists file
+        Nothing -> SnapshotFileLoadResult_Corrupted
  where
   handleDNE = handleJust (\e -> guard (isDoesNotExistError e) *> Just e)
 

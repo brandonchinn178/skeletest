@@ -50,9 +50,10 @@ listTestFiles = do
   listDirectoryRecursive dir = do
     entries <- filter (`notElem` ignoredDirs) <$> listDirectory dir
     fmap concat . forM entries $ \entry -> do
-      isDir <- doesDirectoryExist entry
+      let absEntry = dir </> entry
+      isDir <- doesDirectoryExist absEntry
       if isDir
-        then map (entry </>) <$> listDirectoryRecursive entry
+        then map (entry </>) <$> listDirectoryRecursive absEntry
         else pure [entry]
 
   -- Hardcode some paths to ignore

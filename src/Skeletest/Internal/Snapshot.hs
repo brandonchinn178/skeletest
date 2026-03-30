@@ -501,11 +501,13 @@ data SnapshotValue = SnapshotValue
   deriving (Show, Eq, Ord)
 
 getSnapshotPath :: FilePath -> FilePath
-getSnapshotPath testFile = testDir' </> "__snapshots__" </> snapshotFileName
+getSnapshotPath testFile = stripDotSlash $ testDir </> "__snapshots__" </> snapshotFileName
  where
   (testDir, testFileName) = splitFileName testFile
-  testDir' = if testDir == "./" then "" else testDir
   snapshotFileName = replaceExtension testFileName ".snap.md"
+  stripDotSlash = \case
+    '.' : '/' : dir -> dir
+    dir -> dir
 
 emptySnapshotFile :: Text -> SnapshotFile
 emptySnapshotFile testFile =

@@ -150,6 +150,7 @@ test-suite skeletest-tests
     , directory
     , filepath
     , skeletest
+    , strip-ansi-escape
     , process
     , text
     , unliftio

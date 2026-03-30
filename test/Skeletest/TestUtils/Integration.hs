@@ -27,6 +27,7 @@ import Control.Monad (guard)
 import Data.Char (isDigit)
 import Data.Default (Default (..))
 import Data.IORef (IORef, modifyIORef, newIORef, readIORef)
+import Data.String.AnsiEscapeCodes.Strip.Text (stripAnsiEscapeCodes)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
@@ -145,7 +146,7 @@ instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, S
       Text.unpack
         . scrubDurations
         . stripOverwrites
-        . stripControlChars
+        . stripAnsiEscapeCodes
         . Text.strip
         . Text.pack
     scrubDurations s =
@@ -166,10 +167,6 @@ instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, S
       case Text.breakOn "\r" s of
         (_, "") -> s
         (pre, post) -> Text.dropWhileEnd (/= '\n') pre <> stripOverwrites (Text.drop 1 post)
-    stripControlChars s =
-      case Text.breakOn "\x1b" s of
-        (_, "") -> s
-        (pre, post) -> pre <> stripControlChars (Text.drop 1 . Text.dropWhile (/= 'm') $ post)
 
 expectCode :: (HasCallStack) => Int -> IO (ExitCode, String, String) -> IO (String, String)
 expectCode expected m = do

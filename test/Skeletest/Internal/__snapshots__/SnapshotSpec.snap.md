@@ -82,25 +82,25 @@
 ## cleans up outdated snapshots
 
 ```
-./Test1Spec.hs
+./Foo/Test1Spec.hs
     test other: OK
-./Test2Spec.hs
+./Foo/Test2Spec.hs
     test other: OK
-./Test3Spec.hs
+./Foo/Test3Spec.hs
     test: OK
     test other: OK
-./Test4Spec.hs
+./Foo/Test4Spec.hs
     test: OK
-./Test5Spec.hs
+./Foo/Test5Spec.hs
     test: OK
 
 ╓─ 🚨 Outdated snapshots detected ────────────────
-║  * __snapshots__/Test1Spec.snap.md
-║  * __snapshots__/Test2Spec.snap.md
-║  * __snapshots__/Test3Spec.snap.md
-║  * __snapshots__/Test4Spec.snap.md
-║  * __snapshots__/Test5Spec.snap.md
-║  * __snapshots__/Test6Spec.snap.md
+║  * Foo/__snapshots__/Test1Spec.snap.md
+║  * Foo/__snapshots__/Test2Spec.snap.md
+║  * Foo/__snapshots__/Test3Spec.snap.md
+║  * Foo/__snapshots__/Test4Spec.snap.md
+║  * Foo/__snapshots__/Test5Spec.snap.md
+║  * Foo/__snapshots__/Test6Spec.snap.md
 ║
 ║  Update/remove these files with --update.
 ╙─────────────────────────────────────────────────
@@ -110,16 +110,16 @@
 ```
 
 ```
-./Test1Spec.hs
+./Foo/Test1Spec.hs
     test other: OK
-./Test2Spec.hs
+./Foo/Test2Spec.hs
     test other: OK
-./Test3Spec.hs
+./Foo/Test3Spec.hs
     test: OK
     test other: OK
-./Test4Spec.hs
+./Foo/Test4Spec.hs
     test: OK
-./Test5Spec.hs
+./Foo/Test5Spec.hs
     test: OK
 
 ═════ Test report ═════

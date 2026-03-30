@@ -198,7 +198,7 @@ instance HasField "printSummary" SpecRunner (IO ()) where
   getField runner = do
     summary <- runner.testSummary.render >>= runner.hooks.modifyTestSummary
     Text.putStrLn ""
-    Text.putStrLn . colorize . Text.strip $ summary
+    Text.putStr . colorize . Text.strip $ summary
    where
     colorize = Text.unlines . map Color.yellow . Text.lines
 

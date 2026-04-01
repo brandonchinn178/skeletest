@@ -15,6 +15,7 @@ import Skeletest.Internal.Snapshot (
   SnapshotValue (..),
   decodeSnapshotFile,
   encodeSnapshotFile,
+  mkSnapshotTestId,
   normalizeSnapshotFile,
  )
 import Skeletest.Predicate qualified as P
@@ -40,6 +41,9 @@ spec = do
     roundtrip $ mkSnapshot "```"
     roundtrip $ mkSnapshot "    ```"
     roundtrip $ mkSnapshot "a```b"
+
+  it "handles snapshots for test with ≫ in the name" $ do
+    () `shouldSatisfy` P.matchesSnapshot
 
   integration . it "creates a new snapshot" $ do
     runner <- getFixture @TestRunner
@@ -129,9 +133,16 @@ spec = do
       ]
     runner.addTestFile "__snapshots__/ExampleSpec.snap.md" ["asdf"]
 
-    (stdout, stderr) <- expectCode 5 runner.runTests
-    stderr `shouldBe` ""
-    stdout `shouldSatisfy` P.matchesSnapshot
+    (stdout1, stderr1) <- expectCode 5 $ runner.runTestsWith def{cliArgs = []}
+    stderr1 `shouldBe` ""
+    stdout1 `shouldSatisfy` P.matchesSnapshot
+
+    (stdout2, stderr2) <- expectSuccess $ runner.runTestsWith def{cliArgs = ["-u"]}
+    stderr2 `shouldBe` ""
+    stdout2 `shouldSatisfy` P.matchesSnapshot
+
+    runner.readTestFile "__snapshots__/ExampleSpec.snap.md"
+      `shouldReturn` "# ./ExampleSpec.hs\n\n## should error\n\n```\n\n```\n"
 
   integration . it "uses registered snapshot renderers" $ do
     runner <- getFixture @TestRunner
@@ -169,16 +180,16 @@ spec = do
   integration . it "cleans up outdated snapshots" $ do
     runner <- getFixture @TestRunner
     -- snapshot test was deleted, file has no other snapshot tests
-    runner.addTestFile "Test1Spec.hs" $
-      [ "module Test1Spec (spec) where"
+    runner.addTestFile "Foo/Test1Spec.hs" $
+      [ "module Foo.Test1Spec (spec) where"
       , "import Skeletest"
       , "import qualified Skeletest.Predicate as P"
       , "spec = do"
       , "  it \"test other\" $ do"
       , "    pure ()"
       ]
-    runner.addTestFile "__snapshots__/Test1Spec.snap.md" $
-      [ "# Test1Spec.hs"
+    runner.addTestFile "Foo/__snapshots__/Test1Spec.snap.md" $
+      [ "# Foo/Test1Spec.hs"
       , ""
       , "## test"
       , ""
@@ -188,16 +199,16 @@ spec = do
       ]
     let expected1 = Nothing
     -- snapshot test was deleted, file still has other snapshots
-    runner.addTestFile "Test2Spec.hs" $
-      [ "module Test2Spec (spec) where"
+    runner.addTestFile "Foo/Test2Spec.hs" $
+      [ "module Foo.Test2Spec (spec) where"
       , "import Skeletest"
       , "import qualified Skeletest.Predicate as P"
       , "spec = do"
       , "  it \"test other\" $ do"
       , "    \"result\" `shouldSatisfy` P.matchesSnapshot"
       ]
-    runner.addTestFile "__snapshots__/Test2Spec.snap.md" $
-      [ "# Test2Spec.hs"
+    runner.addTestFile "Foo/__snapshots__/Test2Spec.snap.md" $
+      [ "# Foo/Test2Spec.hs"
       , ""
       , "## test"
       , ""
@@ -213,7 +224,7 @@ spec = do
       ]
     let expected2 =
           Just . Text.unlines $
-            [ "# Test2Spec.hs"
+            [ "# Foo/Test2Spec.hs"
             , ""
             , "## test other"
             , ""
@@ -222,8 +233,8 @@ spec = do
             , "```"
             ]
     -- test still exists without snapshots
-    runner.addTestFile "Test3Spec.hs" $
-      [ "module Test3Spec (spec) where"
+    runner.addTestFile "Foo/Test3Spec.hs" $
+      [ "module Foo.Test3Spec (spec) where"
       , "import Skeletest"
       , "import qualified Skeletest.Predicate as P"
       , "spec = do"
@@ -232,8 +243,8 @@ spec = do
       , "  it \"test other\" $ do"
       , "    \"result\" `shouldSatisfy` P.matchesSnapshot"
       ]
-    runner.addTestFile "__snapshots__/Test3Spec.snap.md" $
-      [ "# Test3Spec.hs"
+    runner.addTestFile "Foo/__snapshots__/Test3Spec.snap.md" $
+      [ "# Foo/Test3Spec.hs"
       , ""
       , "## test"
       , ""
@@ -249,7 +260,7 @@ spec = do
       ]
     let expected3 =
           Just . Text.unlines $
-            [ "# Test3Spec.hs"
+            [ "# Foo/Test3Spec.hs"
             , ""
             , "## test other"
             , ""
@@ -258,15 +269,15 @@ spec = do
             , "```"
             ]
     -- test still exists with fewer snapshots
-    runner.addTestFile "Test4Spec.hs" $
-      [ "module Test4Spec (spec) where"
+    runner.addTestFile "Foo/Test4Spec.hs" $
+      [ "module Foo.Test4Spec (spec) where"
       , "import Skeletest"
       , "import qualified Skeletest.Predicate as P"
       , "spec = it \"test\" $ do"
       , "  \"result\" `shouldSatisfy` P.matchesSnapshot"
       ]
-    runner.addTestFile "__snapshots__/Test4Spec.snap.md" $
-      [ "# Test4Spec.hs"
+    runner.addTestFile "Foo/__snapshots__/Test4Spec.snap.md" $
+      [ "# Foo/Test4Spec.hs"
       , ""
       , "## test"
       , ""
@@ -280,7 +291,7 @@ spec = do
       ]
     let expected4 =
           Just . Text.unlines $
-            [ "# Test4Spec.hs"
+            [ "# Foo/Test4Spec.hs"
             , ""
             , "## test"
             , ""
@@ -289,16 +300,16 @@ spec = do
             , "```"
             ]
     -- test file still exists, no tests with snapshots
-    runner.addTestFile "Test5Spec.hs" $
-      [ "module Test5Spec (spec) where"
+    runner.addTestFile "Foo/Test5Spec.hs" $
+      [ "module Foo.Test5Spec (spec) where"
       , "import Skeletest"
       , "import qualified Skeletest.Predicate as P"
       , "spec = do"
       , "  it \"test\" $ do"
       , "    pure ()"
       ]
-    runner.addTestFile "__snapshots__/Test5Spec.snap.md" $
-      [ "# Test5Spec.hs"
+    runner.addTestFile "Foo/__snapshots__/Test5Spec.snap.md" $
+      [ "# Foo/Test5Spec.hs"
       , ""
       , "## test"
       , ""
@@ -308,8 +319,8 @@ spec = do
       ]
     let expected5 = Nothing
     -- test file no longer exists
-    runner.addTestFile "__snapshots__/Test6Spec.snap.md" $
-      [ "# Test6Spec.hs"
+    runner.addTestFile "Foo/__snapshots__/Test6Spec.snap.md" $
+      [ "# Foo/Test6Spec.hs"
       , ""
       , "## test"
       , ""
@@ -327,17 +338,17 @@ spec = do
     stderr2 `shouldBe` ""
     stdout2 `shouldSatisfy` P.matchesSnapshot
 
-    runner.lookupTestFile "__snapshots__/Test1Spec.snap.md"
+    runner.lookupTestFile "Foo/__snapshots__/Test1Spec.snap.md"
       `shouldReturn` expected1
-    runner.lookupTestFile "__snapshots__/Test2Spec.snap.md"
+    runner.lookupTestFile "Foo/__snapshots__/Test2Spec.snap.md"
       `shouldReturn` expected2
-    runner.lookupTestFile "__snapshots__/Test3Spec.snap.md"
+    runner.lookupTestFile "Foo/__snapshots__/Test3Spec.snap.md"
       `shouldReturn` expected3
-    runner.lookupTestFile "__snapshots__/Test4Spec.snap.md"
+    runner.lookupTestFile "Foo/__snapshots__/Test4Spec.snap.md"
       `shouldReturn` expected4
-    runner.lookupTestFile "__snapshots__/Test5Spec.snap.md"
+    runner.lookupTestFile "Foo/__snapshots__/Test5Spec.snap.md"
       `shouldReturn` expected5
-    runner.lookupTestFile "__snapshots__/Test6Spec.snap.md"
+    runner.lookupTestFile "Foo/__snapshots__/Test6Spec.snap.md"
       `shouldReturn` expected6
 
   integration . it "does not clean up deselected tests" $ do
@@ -435,9 +446,11 @@ genSnapshotFileRaw = do
   genHsModuleName = Gen.text (Range.linear 0 50) $ Gen.choice [Gen.alphaNum, pure '\'']
 
   genSnapshot = do
-    ident <- Gen.list (Range.linear 1 10) (Gen.text (Range.linear 1 100) Gen.unicode)
+    -- ≫ in test names should be sanitized prior to this
+    let chars = Gen.filter (/= '≫') Gen.unicode
+    ident <- Gen.list (Range.linear 1 10) (Gen.text (Range.linear 1 100) chars)
     vals <- Gen.list rangeSnapshotsPerTest genSnapshotVal
-    pure (ident, vals)
+    pure (mkSnapshotTestId ident, vals)
 
   genSnapshotVal = do
     content <- Gen.text rangeSnapshotSize Gen.unicode
@@ -453,7 +466,7 @@ mkSnapshot content =
     SnapshotFile
       { testFile = "FooSpec.hs"
       , snapshots =
-          Map.singleton ["test"] . (: []) $
+          Map.singleton (mkSnapshotTestId ["test"]) . (: []) $
             SnapshotValue
               { content
               , lang = Nothing

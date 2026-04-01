@@ -6,7 +6,6 @@
 
 module Skeletest.Internal.TestInfo (
   TestInfo (..),
-  TestId,
   withTestInfo,
   getTestInfo,
   lookupTestInfo,
@@ -16,7 +15,6 @@ import Control.Monad.IO.Class (MonadIO)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Text (Text)
-import GHC.Records (HasField (..))
 import GHC.Stack (HasCallStack)
 import Skeletest.Internal.Error (skeletestError)
 import Skeletest.Internal.Markers (SomeMarker)
@@ -34,10 +32,6 @@ data TestInfo = TestInfo
   -- ^ Relative to CWD
   }
   deriving (Show)
-
-type TestId = [Text]
-instance HasField "testId" TestInfo TestId where
-  getField testInfo = testInfo.contexts <> [testInfo.name]
 
 type TestInfoMap = Map ThreadId TestInfo
 

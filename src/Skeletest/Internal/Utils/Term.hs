@@ -16,6 +16,7 @@ module Skeletest.Internal.Utils.Term (
   supportsANSI,
 
   -- * Output helpers
+  flush,
   output,
   outputN,
   outputErr,
@@ -88,6 +89,11 @@ setANSISupport :: Bool -> IO ()
 setANSISupport x = do
   writeIORef globalTermData.stdout.supportsANSI x
   writeIORef globalTermData.stderr.supportsANSI x
+
+flush :: IO ()
+flush = do
+  IO.hFlush globalTermData.stdout.handle
+  IO.hFlush globalTermData.stderr.handle
 
 output :: Text -> IO ()
 output = Text.hPutStrLn globalTermData.stdout.handle

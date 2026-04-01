@@ -21,6 +21,8 @@ module Skeletest.Internal.Snapshot (
 
   -- ** SnapshotFile
   SnapshotFile (..),
+  SnapshotTestId,
+  mkSnapshotTestId,
   SnapshotValue (..),
   decodeSnapshotFile,
   encodeSnapshotFile,
@@ -77,7 +79,7 @@ import Skeletest.Internal.Snapshot.Renderer (
   getSnapshotRenderers,
  )
 import Skeletest.Internal.Snapshot.Renderer qualified as X
-import Skeletest.Internal.TestInfo (TestId, TestInfo (..), getTestInfo)
+import Skeletest.Internal.TestInfo (TestInfo (..), getTestInfo)
 import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Internal.Utils.Diff (showLineDiff)
 import Skeletest.Internal.Utils.Term qualified as Term
@@ -212,7 +214,7 @@ snapshotsHook =
 
 -- | Snapshot-related information to store globally.
 data SnapshotInfoStore = SnapshotInfoStore
-  { allSnapshotTestIds :: !(Map FilePath [TestId])
+  { allSnapshotTestIds :: !(Map FilePath [SnapshotTestId])
   -- ^ Map from a test file's snapshot path to all test ids in the file
   , snapshotFilesWithExtraSnapshots :: !(Set FilePath)
   -- ^ Snapshot files that contain tests that contain extraneous snapshots.
@@ -234,12 +236,12 @@ snapshotInfoStoreRef =
       }
 {-# NOINLINE snapshotInfoStoreRef #-}
 
-getTestIds :: Spec -> [TestId]
+getTestIds :: Spec -> [SnapshotTestId]
 getTestIds = concatMap (go Seq.empty) . getSpecTrees
  where
   go context = \case
     group@SpecTree_Group{} -> concatMap (go (context Seq.|> group.label)) group.trees
-    SpecTree_Test test -> [Seq.toList $ context Seq.|> test.name]
+    SpecTree_Test test -> [mkSnapshotTestId . Seq.toList $ context Seq.|> test.name]
 
 -- | Detect outdated snapshots, returning the filepath to the outdated
 -- snapshot and the action to clean it up.
@@ -332,7 +334,7 @@ getSnapshotSummary = do
 -- When test file is done, merge new snapshots into the existing snapshot file
 -- and write to disk if it's changed.
 data UpdateSnapshotFixture_File = UpdateSnapshotFixture_File
-  { newFileSnapshotsRef :: IORef (Map TestId [SnapshotValue])
+  { newFileSnapshotsRef :: IORef (Map SnapshotTestId [SnapshotValue])
   }
 
 instance Fixture UpdateSnapshotFixture_File where
@@ -369,12 +371,15 @@ recordSnapshotsToFileFixture testInfo = do
   UpdateSnapshotFixture_File{newFileSnapshotsRef} <- getFixture
   UpdateSnapshotFixture{newSnapshotsRef} <- getFixture
   newSnapshots <- Seq.toList <$> readIORef newSnapshotsRef
-  modifyIORef' newFileSnapshotsRef (Map.insert testInfo.testId newSnapshots)
+  modifyIORef' newFileSnapshotsRef (Map.insert (getSnapshotTestId testInfo) newSnapshots)
 
-finalizeUpdateSnapshotFixture :: TestInfo -> IORef (Map TestId [SnapshotValue]) -> IO ()
+finalizeUpdateSnapshotFixture :: TestInfo -> IORef (Map SnapshotTestId [SnapshotValue]) -> IO ()
 finalizeUpdateSnapshotFixture testInfo newFileSnapshotsRef = do
   let snapshotPath = getSnapshotPath testInfo.file
-  snapshotFile <- fromMaybe newSnapshotFile <$> loadSnapshotFile snapshotPath
+  snapshotFile <-
+    loadSnapshotFile snapshotPath >>= \case
+      SnapshotFileLoadResult_Exists file -> pure file
+      _ -> pure $ emptySnapshotFile (Text.pack testInfo.file)
   newSnapshots <- Map.map Seq.toList <$> readIORef newFileSnapshotsRef
   let snapshots' = mergeSnapshots snapshotFile.snapshots newSnapshots
   when (snapshots' /= snapshotFile.snapshots) $ do
@@ -382,7 +387,6 @@ finalizeUpdateSnapshotFixture testInfo newFileSnapshotsRef = do
       store{numSnapshotsUpdated = store.numSnapshotsUpdated + countChanges snapshotFile.snapshots snapshots'}
     saveSnapshotFile snapshotPath snapshotFile{snapshots = snapshots'}
  where
-  newSnapshotFile = emptySnapshotFile (Text.pack testInfo.file)
   countChanges old new =
     flip State.execState 0 $
       Map.mergeA
@@ -423,7 +427,11 @@ instance Fixture CheckSnapshotFixture_File where
   fixtureAction = do
     testFile <- (.file) <$> getTestInfo
     let snapshotPath = getSnapshotPath testFile
-    mSnapshotFile <- loadSnapshotFile snapshotPath
+    mSnapshotFile <-
+      loadSnapshotFile snapshotPath >>= \case
+        SnapshotFileLoadResult_Exists file -> pure $ Just file
+        SnapshotFileLoadResult_Missing -> pure Nothing
+        SnapshotFileLoadResult_Corrupted -> skeletestError $ "Snapshot file was corrupted: " <> Text.pack snapshotPath
     pure $ noCleanup CheckSnapshotFixture_File{mSnapshotFile}
 
 data CheckSnapshotFixture = CheckSnapshotFixture
@@ -450,7 +458,7 @@ runCheckSnapshot testInfo snapshotIndexRef val = runReturnE $ do
   index <- atomicModifyIORef' snapshotIndexRef $ \index -> (index + 1, index)
 
   snapshotFile <- maybe (returnE snapshotMissing) pure mSnapshotFile
-  let testSnapshots = Map.findWithDefault [] testInfo.testId snapshotFile.snapshots
+  let testSnapshots = Map.findWithDefault [] (getSnapshotTestId testInfo) snapshotFile.snapshots
   snapshot <-
     maybe (returnE snapshotMissing) (pure . NonEmpty.head) $
       (NonEmpty.nonEmpty . drop index) testSnapshots
@@ -473,7 +481,7 @@ checkExtraTestSnapshots testInfo = do
   CheckSnapshotFixture_File{mSnapshotFile} <- getFixture
   fmap (fromMaybe ()) . Maybe.runMaybeT $ do
     snapshotFile <- Maybe.hoistMaybe mSnapshotFile
-    testSnapshots <- Maybe.hoistMaybe $ Map.lookup testInfo.testId snapshotFile.snapshots
+    testSnapshots <- Maybe.hoistMaybe $ Map.lookup (getSnapshotTestId testInfo) snapshotFile.snapshots
     CheckSnapshotFixture{snapshotIndexRef} <- getFixture
     index <- readIORef snapshotIndexRef
     when (length testSnapshots > index) $ do
@@ -488,11 +496,14 @@ checkExtraTestSnapshots testInfo = do
 
 data SnapshotFile = SnapshotFile
   { testFile :: Text
-  , snapshots :: Map TestId [SnapshotValue]
-  -- ^ full test identifier => snapshots
-  -- e.g. ["group1", "group2", "returns val1 and val2"] => ["val1", "val2"]
+  , snapshots :: Map SnapshotTestId [SnapshotValue]
+  -- ^ Map from test identifier to its snapshots, e.g.
+  -- "group1 ≫ group2 ≫ returns val1 and val2" => ["val1", "val2"]
   }
   deriving (Show, Eq)
+
+newtype SnapshotTestId = SnapshotTestId Text
+  deriving (Show, Eq, Ord)
 
 data SnapshotValue = SnapshotValue
   { content :: Text
@@ -500,12 +511,36 @@ data SnapshotValue = SnapshotValue
   }
   deriving (Show, Eq, Ord)
 
+mkSnapshotTestId :: [Text] -> SnapshotTestId
+mkSnapshotTestId =
+  SnapshotTestId
+    . Text.intercalate " ≫ "
+    . map (sanitizeNonPrint . sanitizeArrows . Text.strip)
+ where
+  sanitizeArrows = Text.replace "≫" ">>"
+
+  -- Replace non-print characters with their escaped representations
+  sanitizeNonPrint s =
+    case Text.break (not . isPrint) s of
+      (_, "") -> s -- quick exit in common case where text names are all printable chars
+      (pre, post) -> pre <> Text.concatMap escapeChar post
+   where
+    escapeChar c =
+      if isPrint c
+        then Text.singleton c
+        else Text.drop 1 . Text.dropEnd 1 . showT $ c
+
+getSnapshotTestId :: TestInfo -> SnapshotTestId
+getSnapshotTestId testInfo = mkSnapshotTestId $ testInfo.contexts <> [testInfo.name]
+
 getSnapshotPath :: FilePath -> FilePath
-getSnapshotPath testFile = testDir' </> "__snapshots__" </> snapshotFileName
+getSnapshotPath testFile = stripDotSlash $ testDir </> "__snapshots__" </> snapshotFileName
  where
   (testDir, testFileName) = splitFileName testFile
-  testDir' = if testDir == "./" then "" else testDir
   snapshotFileName = replaceExtension testFileName ".snap.md"
+  stripDotSlash = \case
+    '.' : '/' : dir -> dir
+    dir -> dir
 
 emptySnapshotFile :: Text -> SnapshotFile
 emptySnapshotFile testFile =
@@ -514,13 +549,19 @@ emptySnapshotFile testFile =
     , snapshots = Map.empty
     }
 
-loadSnapshotFile :: FilePath -> IO (Maybe SnapshotFile)
+data SnapshotFileLoadResult
+  = SnapshotFileLoadResult_Missing
+  | SnapshotFileLoadResult_Corrupted
+  | SnapshotFileLoadResult_Exists SnapshotFile
+
+loadSnapshotFile :: FilePath -> IO SnapshotFileLoadResult
 loadSnapshotFile path =
-  handleDNE (\_ -> pure Nothing) . fmap Just $ do
+  handleDNE (\_ -> pure SnapshotFileLoadResult_Missing) $ do
     contents <- readTestFile path
-    case decodeSnapshotFile contents of
-      Just file -> pure file
-      Nothing -> skeletestError $ "Snapshot file was corrupted: " <> Text.pack path
+    pure $
+      case decodeSnapshotFile contents of
+        Just file -> SnapshotFileLoadResult_Exists file
+        Nothing -> SnapshotFileLoadResult_Corrupted
  where
   handleDNE = handleJust (\e -> guard (isDoesNotExistError e) *> Just e)
 
@@ -559,7 +600,7 @@ decodeSnapshotFile = parseFile . Text.lines
 
   parseSections ::
     SnapshotFile -> -- The parsed snapshot file so far
-    Maybe [Text] -> -- The current test identifier, if one is set
+    Maybe SnapshotTestId -> -- The current test identifier, if one is set
     [Text] -> -- The rest of the lines to process
     Maybe SnapshotFile
   parseSections snapshotFile mTest = \case
@@ -571,8 +612,8 @@ decodeSnapshotFile = parseFile . Text.lines
       | Just sectionName <- Text.stripPrefix "## " line -> do
           let testIdentifier
                 -- Backwards compat, skeletest < 0.4 separated with "/"
-                | not $ "≫" `Text.isInfixOf` sectionName = map Text.strip $ Text.splitOn " / " sectionName
-                | otherwise = map Text.strip $ Text.splitOn "≫" sectionName
+                | not $ "≫" `Text.isInfixOf` sectionName = mkSnapshotTestId $ Text.splitOn " / " sectionName
+                | otherwise = SnapshotTestId sectionName
           let snapshotFile' = snapshotFile{snapshots = Map.insert testIdentifier [] snapshotFile.snapshots}
           parseSections snapshotFile' (Just testIdentifier) rest
       -- found the beginning of a snapshot
@@ -596,14 +637,12 @@ decodeSnapshotFile = parseFile . Text.lines
       | "```" <- line -> pure (Text.unlines $ Seq.toList snapshot, rest)
       | otherwise -> parseSnapshot (snapshot Seq.|> line) rest
 
-encodeSnapshotFile :: (TestId -> Int) -> SnapshotFile -> Text
+encodeSnapshotFile :: (SnapshotTestId -> Int) -> SnapshotFile -> Text
 encodeSnapshotFile rankTestId snapshotFile =
   Text.intercalate "\n" $ h1 snapshotFile.testFile : concatMap toSection snapshots
  where
   snapshots = sortOn (rankTestId . fst) . Map.toList $ snapshotFile.snapshots
-  toSection (testIdentifier, snaps) =
-    let testIdentifier' = map (Text.replace "≫" ">>") testIdentifier
-     in h2 (Text.intercalate " ≫ " testIdentifier') : map codeBlock snaps
+  toSection (SnapshotTestId testId, snaps) = h2 testId : map codeBlock snaps
 
   h1 s = "# " <> s <> "\n"
   h2 s = "## " <> s <> "\n"
@@ -617,19 +656,8 @@ encodeSnapshotFile rankTestId snapshotFile =
 normalizeSnapshotFile :: SnapshotFile -> SnapshotFile
 normalizeSnapshotFile file =
   file
-    { snapshots = Map.fromList . map normalize . Map.toList $ file.snapshots
+    { snapshots = map normalizeSnapshotVal <$> file.snapshots
     }
- where
-  normalize (testIdentifier, vals) =
-    ( map (sanitizeNonPrint . sanitizeSlashes . Text.strip) testIdentifier
-    , map normalizeSnapshotVal vals
-    )
-
-  sanitizeSlashes = Text.replace " /" " \\/"
-
-  sanitizeNonPrint = Text.concatMap $ \case
-    c | (not . isPrint) c -> Text.drop 1 . Text.dropEnd 1 . showT $ c
-    c -> Text.singleton c
 
 {----- Render values -----}
 

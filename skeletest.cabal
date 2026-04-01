@@ -64,6 +64,7 @@ library
     Skeletest.Internal.Utils.Map
     Skeletest.Internal.Utils.Term
     Skeletest.Internal.Utils.Text
+    Skeletest.Internal.Utils.Timer
     Skeletest.Main
     Skeletest.Plugin
     Skeletest.Predicate

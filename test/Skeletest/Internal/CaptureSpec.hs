@@ -46,6 +46,28 @@ runtimeSpec handle = do
       stdout `shouldSatisfy` P.matchesSnapshot
       code `shouldBe` ExitSuccess
 
+    integration . it "is rendered on test success with --format=verbose" $ do
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
+        [ "{-# LANGUAGE OverloadedRecordDot #-}"
+        , "{-# LANGUAGE OverloadedStrings #-}"
+        , "module ExampleSpec (spec) where"
+        , ""
+        , "import Skeletest"
+        , "import System.IO qualified as IO"
+        , ""
+        , "spec = do"
+        , "  it \"before\" $ do"
+        , "    " <> render_hPutStrLn handle "before"
+        , "  it \"test\" $ do"
+        , "    " <> render_hPutStrLn handle "line1"
+        , "    " <> render_hPutStrLn handle "line2"
+        ]
+      (code, stdout, stderr) <- runner.runTestsWith def{cliArgs = ["--format=verbose"]}
+      stderr `shouldBe` ""
+      stdout `shouldSatisfy` P.matchesSnapshot
+      code `shouldBe` ExitSuccess
+
     integration . it "is rendered on test failure" $ do
       runner <- getFixture @TestRunner
       runner.addTestFile "ExampleSpec.hs" $

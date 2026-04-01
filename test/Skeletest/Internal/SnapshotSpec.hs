@@ -15,6 +15,7 @@ import Skeletest.Internal.Snapshot (
   SnapshotValue (..),
   decodeSnapshotFile,
   encodeSnapshotFile,
+  mkSnapshotTestId,
   normalizeSnapshotFile,
  )
 import Skeletest.Predicate qualified as P
@@ -40,6 +41,9 @@ spec = do
     roundtrip $ mkSnapshot "```"
     roundtrip $ mkSnapshot "    ```"
     roundtrip $ mkSnapshot "a```b"
+
+  it "handles snapshots for test with ≫ in the name" $ do
+    () `shouldSatisfy` P.matchesSnapshot
 
   integration . it "creates a new snapshot" $ do
     runner <- getFixture @TestRunner
@@ -442,9 +446,11 @@ genSnapshotFileRaw = do
   genHsModuleName = Gen.text (Range.linear 0 50) $ Gen.choice [Gen.alphaNum, pure '\'']
 
   genSnapshot = do
-    ident <- Gen.list (Range.linear 1 10) (Gen.text (Range.linear 1 100) Gen.unicode)
+    -- ≫ in test names should be sanitized prior to this
+    let chars = Gen.filter (/= '≫') Gen.unicode
+    ident <- Gen.list (Range.linear 1 10) (Gen.text (Range.linear 1 100) chars)
     vals <- Gen.list rangeSnapshotsPerTest genSnapshotVal
-    pure (ident, vals)
+    pure (mkSnapshotTestId ident, vals)
 
   genSnapshotVal = do
     content <- Gen.text rangeSnapshotSize Gen.unicode
@@ -460,7 +466,7 @@ mkSnapshot content =
     SnapshotFile
       { testFile = "FooSpec.hs"
       , snapshots =
-          Map.singleton ["test"] . (: []) $
+          Map.singleton (mkSnapshotTestId ["test"]) . (: []) $
             SnapshotValue
               { content
               , lang = Nothing

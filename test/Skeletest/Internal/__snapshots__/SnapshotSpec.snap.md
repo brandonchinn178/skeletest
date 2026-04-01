@@ -1,5 +1,11 @@
 # test/Skeletest/Internal/SnapshotSpec.hs
 
+## handles snapshots for test with >> in the name
+
+```
+()
+```
+
 ## creates a new snapshot
 
 ```

@@ -29,7 +29,7 @@ spec = do
         , "import Skeletest"
         , "spec = it \"should run\" $ pure ()"
         ]
-      (stdout, _) <- expectSuccess runner.runTests
+      (stdout, _) <- expectSuccess $ runner.runTestsWith def{simulateANSI = False}
       stdout `shouldSatisfy` P.matchesSnapshot
 
   describe "modifySpecRegistry" $ do

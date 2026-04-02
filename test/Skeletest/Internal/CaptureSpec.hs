@@ -130,7 +130,7 @@ runtimeSpec handle = do
         , "    " <> render_hPutStrLn handle "line1"
         , "    " <> render_hPutStrLn handle "line2"
         ]
-      (code, stdout, stderr) <- runner.runTestsWith def{cliArgs = ["--capture-output=off"]}
+      (code, stdout, stderr) <- runner.runTestsWith def{cliArgs = ["--capture-output=off"], simulateANSI = False}
       List.intercalate "\n\n" [">>> stdout", stdout, ">>> stderr", stderr] `shouldSatisfy` P.matchesSnapshot
       code `shouldBe` ExitSuccess
 

@@ -11,7 +11,9 @@ module Skeletest.Internal.Spec.TestReporter (
   newTestReporter,
 ) where
 
+import Control.Concurrent (threadDelay)
 import Control.Monad (when)
+import Data.Foldable (traverse_)
 import Data.IORef (IORef, atomicModifyIORef', newIORef)
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -28,12 +30,16 @@ import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Internal.Utils.Term qualified as Term
 import Skeletest.Internal.Utils.Text (indentWith)
 import Skeletest.Internal.Utils.Timer (renderDuration)
+import UnliftIO.Async (Async)
+import UnliftIO.Async qualified as Async
+import UnliftIO.MVar (MVar, modifyMVar_, newMVar)
 
 {----- TestReporter -----}
 
 data TestReporter = TestReporter
   { format :: FormatFlag
   , supportsANSI :: Bool
+  , animationThread :: AnimationThread
   , minimalFormatFailures :: IORef (Set FilePath)
   }
 
@@ -41,8 +47,9 @@ newTestReporter :: IO TestReporter
 newTestReporter = do
   format <- getFormatFlag
   supportsANSI <- Term.supportsANSI Term.stdout
+  animationThread <- newAnimationThread
   minimalFormatFailures <- newIORef Set.empty
-  pure TestReporter{format, supportsANSI, minimalFormatFailures}
+  pure TestReporter{format, supportsANSI, animationThread, minimalFormatFailures}
 
 getFormatAction :: forall field a. (HasField field FormatActions (TestReporter -> a)) => TestReporter -> a
 getFormatAction reporter = getField @field formatActions reporter
@@ -116,10 +123,17 @@ formatActionsMinimal =
 
   reportTestPre reporter testInfo = do
     when reporter.supportsANSI $ do
-      Term.outputInPlace $ "RUNNING: " <> minimalTestLabel reporter testInfo
+      reporter.animationThread.start
+        Animation
+          { fps = 5
+          , render = \t -> spinner t <> " " <> minimalTestLabel reporter testInfo
+          }
+   where
+    spinner = mkAnimation $ map Color.yellow ["▶ ▷ ▷", "▷ ▶ ▷", "▷ ▷ ▶"]
 
   reportTestPost reporter testInfo (result, duration) = do
-    when reporter.supportsANSI Term.clearInPlace
+    when reporter.supportsANSI $ do
+      reporter.animationThread.clear
     when (not result.testResultSuccess) $ do
       hadPreviousFailure <-
         atomicModifyIORef' reporter.minimalFormatFailures $ \failures ->
@@ -138,7 +152,6 @@ formatActionsMinimal =
         ]
       renderTestResultMessage 0 result
 
-  minimalTestLabel :: TestReporter -> TestInfo -> Text
   minimalTestLabel reporter testInfo =
     Text.intercalate " ≫ " . concat $
       [ if reporter.supportsANSI then [Text.pack testInfo.file] else []
@@ -164,12 +177,23 @@ formatActionsFull =
     indentLevel = getIndentLevel testInfo
 
   reportTestPre reporter testInfo = do
-    let output = if reporter.supportsANSI then Term.outputInPlace else Term.outputN
-    output $ fullIndent indentLevel (testInfo.name <> ": ")
+    let testLabel = getTestLabel testInfo
+    if reporter.supportsANSI
+      then do
+        reporter.animationThread.start
+          Animation
+            { fps = 12
+            , render = \t -> testLabel <> spinner t
+            }
+      else do
+        Term.outputN testLabel
    where
-    indentLevel = getIndentLevel testInfo
+    spinner = mkAnimation $ map Color.yellow ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
   reportTestPost reporter testInfo (result, duration) = do
+    when reporter.supportsANSI $ do
+      reporter.animationThread.clear
+      Term.outputInPlace $ getTestLabel testInfo
     withBoxHeader $ do
       Term.output $ result.testResultLabel <> durationLabel
     renderTestResultMessage indentLevel result
@@ -188,6 +212,8 @@ formatActionsFull =
           action
           Term.output $ drawBoxHeader indentLevel BoxHeaderType_NextLine
     durationLabel = renderDurationLabel reporter duration
+
+  getTestLabel testInfo = fullIndent (getIndentLevel testInfo) (testInfo.name <> ": ")
 
 -- Verbose is the same as full, except with some minor changes, so
 -- we'll re-use full and inspect format directly
@@ -255,3 +281,39 @@ getIndentLevel testInfo = length testInfo.contexts + 1
 
 fullIndent :: IndentLevel -> Text -> Text
 fullIndent = indentWith 4 " "
+
+{----- Animation -----}
+
+newtype AnimationThread = AnimationThread (MVar (Maybe (Async ())))
+
+newAnimationThread :: IO AnimationThread
+newAnimationThread = AnimationThread <$> newMVar Nothing
+
+data Animation = Animation
+  { fps :: Int
+  , render :: Int -> Text
+  }
+
+mkAnimation :: [Text] -> Int -> Text
+mkAnimation frames =
+  -- Do not eta-expand this; this should cache the frames correctly
+  (frames !!) . toIndex
+ where
+  toIndex t = t `mod` length frames
+
+instance HasField "start" AnimationThread (Animation -> IO ()) where
+  getField (AnimationThread mThreadVar) animation = modifyMVar_ mThreadVar $ \mThread -> do
+    traverse_ Async.uninterruptibleCancel mThread
+    thread <- Async.async (loop 0)
+    pure $ Just thread
+   where
+    loop (i :: Int) = do
+      Term.outputInPlace $ animation.render i
+      threadDelay (1000000 `div` animation.fps)
+      loop (i + 1)
+
+instance HasField "clear" AnimationThread (IO ()) where
+  getField (AnimationThread mThreadVar) = modifyMVar_ mThreadVar $ \mThread -> do
+    traverse_ Async.uninterruptibleCancel mThread
+    Term.clearInPlace
+    pure Nothing

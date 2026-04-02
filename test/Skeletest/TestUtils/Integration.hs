@@ -27,12 +27,12 @@ import Control.Monad (guard)
 import Data.Char (isDigit)
 import Data.Default (Default (..))
 import Data.IORef (IORef, modifyIORef, newIORef, readIORef)
-import Data.String.AnsiEscapeCodes.Strip.Text (stripAnsiEscapeCodes)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
 import GHC.Records (HasField (..))
 import Skeletest
+import Skeletest.TestUtils.ANSI (Terminal (..), TerminalType (..), defaultTerminal)
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode (..))
 import System.FilePath (takeDirectory, (</>))
@@ -150,12 +150,17 @@ instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, S
       (code, stdout, stderr) <- Process.readCreateProcessWithExitCode proc ""
       pure (code, sanitize stdout, sanitize stderr)
 
+    term =
+      defaultTerminal
+        { type_ = if args.simulateANSI then AnsiTerminal else LogTerminal
+        , width = 80 -- Default for non-ANSI terminals in Skeletest.Internal.Utils.Term
+        }
+
     sanitize =
       Text.unpack
-        . scrubDurations
-        . (if args.simulateANSI then resolveANSI else id)
-        . stripAnsiEscapeCodes
         . Text.strip
+        . term.resolve
+        . scrubDurations
         . Text.pack
     scrubDurations s =
       case Text.break isDigit s of
@@ -171,10 +176,6 @@ instance HasField "runTestsWith" TestRunner (TestArgs -> IO (ExitCode, String, S
           -- 'post' is empty; we've checked the whole string
           | otherwise ->
               pre
-    resolveANSI s =
-      case Text.breakOn "\r" s of
-        (_, "") -> s
-        (pre, post) -> Text.dropWhileEnd (/= '\n') pre <> resolveANSI (Text.drop 1 post)
 
 expectCode :: (HasCallStack) => Int -> IO (ExitCode, String, String) -> IO (String, String)
 expectCode expected m = do

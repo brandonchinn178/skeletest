@@ -35,7 +35,8 @@
 ╭── fails: FAIL
 │ ./ExampleSpec.hs:7:
 │ │
-│ │   unlines ["new1", "same1", "same2", "new2"] `shouldSatisfy` P.matchesSnapshot
+│ │   unlines ["new1", "same1", "same2", "new2"] `shouldSatisfy` P.matchesSnapsh
+ot
 │ │                                              ^^^^^^^^^^^^^^^
 │ 
 │ Result differed from snapshot. Update snapshot with --update.

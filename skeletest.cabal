@@ -143,6 +143,7 @@ test-suite skeletest-tests
     Skeletest.PluginSpec
     Skeletest.PredicateSpec
     Skeletest.PropSpec
+    Skeletest.TestUtils.ANSI
     Skeletest.TestUtils.CallStack
     Skeletest.TestUtils.Integration
   build-depends:
@@ -153,9 +154,9 @@ test-suite skeletest-tests
     , directory
     , filepath
     , skeletest
-    , strip-ansi-escape
     , process
     , text
+    , transformers
     , unliftio
   default-language: GHC2021
   ghc-options: -Wall -Wcompat

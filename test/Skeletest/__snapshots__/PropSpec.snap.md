@@ -107,7 +107,8 @@
 ╭── is isomorphic: FAIL
 │ ./ExampleSpec.hs:10:
 │ │
-│ │     (read . show) P.=== (+ 1) `shouldSatisfy` P.isoWith (Gen.int $ Range.linear 0 10)
+│ │     (read . show) P.=== (+ 1) `shouldSatisfy` P.isoWith (Gen.int $ Range.lin
+ear 0 10)
 │ │                               ^^^^^^^^^^^^^^^
 │ 
 │ Failed after 1 tests.
@@ -123,7 +124,8 @@
 ╭── is not isomorphic: FAIL
 │ ./ExampleSpec.hs:12:
 │ │
-│ │     (read . show) P.=== id `shouldNotSatisfy` P.isoWith (Gen.int $ Range.linear 0 10)
+│ │     (read . show) P.=== id `shouldNotSatisfy` P.isoWith (Gen.int $ Range.lin
+ear 0 10)
 │ │                            ^^^^^^^^^^^^^^^^^^
 │ 
 │ Failed after 1 tests.

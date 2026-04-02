@@ -28,7 +28,6 @@ import Skeletest.Internal.Utils.Color qualified as Color
 import Skeletest.Internal.Utils.Term qualified as Term
 import Skeletest.Internal.Utils.Text (indentWith)
 import Skeletest.Internal.Utils.Timer (renderDuration)
-import System.IO qualified as IO
 
 {----- TestReporter -----}
 
@@ -117,11 +116,10 @@ formatActionsMinimal =
 
   reportTestPre reporter testInfo = do
     when reporter.supportsANSI $ do
-      Term.resetLine
-      Term.outputN $ "RUNNING: " <> minimalTestLabel reporter testInfo
+      Term.outputInPlace $ "RUNNING: " <> minimalTestLabel reporter testInfo
 
   reportTestPost reporter testInfo (result, duration) = do
-    when reporter.supportsANSI Term.resetLine
+    when reporter.supportsANSI Term.clearInPlace
     when (not result.testResultSuccess) $ do
       hadPreviousFailure <-
         atomicModifyIORef' reporter.minimalFormatFailures $ \failures ->
@@ -165,9 +163,9 @@ formatActionsFull =
    where
     indentLevel = getIndentLevel testInfo
 
-  reportTestPre _ testInfo = do
-    Term.outputN $ fullIndent indentLevel (testInfo.name <> ": ")
-    IO.hFlush IO.stdout
+  reportTestPre reporter testInfo = do
+    let output = if reporter.supportsANSI then Term.outputInPlace else Term.outputN
+    output $ fullIndent indentLevel (testInfo.name <> ": ")
    where
     indentLevel = getIndentLevel testInfo
 
@@ -184,8 +182,7 @@ formatActionsFull =
       | not $ isBox result.testResultMessage = do
           action
       | reporter.supportsANSI = do
-          Term.resetLine
-          Term.outputN $ drawBoxHeader indentLevel (BoxHeaderType_Inline $ testInfo.name <> ": ")
+          Term.outputInPlace $ drawBoxHeader indentLevel (BoxHeaderType_Inline $ testInfo.name <> ": ")
           action
       | otherwise = do
           action

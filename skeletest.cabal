@@ -102,6 +102,7 @@ library
     , pretty
     , process
     , recover-rtti
+    , strip-ansi-escape
     , template-haskell
     , terminal-size >= 0.2.0
     , text

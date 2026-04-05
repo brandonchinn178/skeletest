@@ -62,7 +62,7 @@ runSkeletest userPlugins testModules = handleUnknownErrors $ do
 
   let initialSpecs = map mkSpec testModules
   specs <- hooks.modifySpecRegistry selections pure initialSpecs
-  when (null $ concatMap (getSpecTests . (.specSpec)) specs) $ do
+  when (null $ concatMap (getSpecTests . (.spec)) specs) $ do
     Term.outputErr $ Color.red "ERROR: No tests selected!"
     exitWith ExitNoTests
 
@@ -88,10 +88,10 @@ runSkeletest userPlugins testModules = handleUnknownErrors $ do
     , flag @(Maybe FormatFlag)
     ]
 
-  mkSpec (specPath, specSpec) =
+  mkSpec (specPath, spec) =
     SpecInfo
       { specPath
-      , specSpec
+      , spec
       }
 
 resolveANSISupport :: IO ()

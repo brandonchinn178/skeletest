@@ -129,7 +129,7 @@ instance HasField "runFile" SpecRunner (SpecInfo -> IO TestExitCode) where
       runner.testReporter.reportFilePost info.specPath (code, duration)
       pure code
    where
-    trees = getSpecTrees info.specSpec
+    trees = getSpecTrees info.spec
     emptyTestInfo =
       TestInfo
         { contexts = []
@@ -336,7 +336,7 @@ focusHook =
     }
  where
   applyFocus specs = if hasFocus specs then mapSpecs hideNotFocused specs else specs
-  hasFocus = any (anySpecTests isFocused . (.specSpec))
+  hasFocus = any (anySpecTests isFocused . (.spec))
   anySpecTests f spec =
     let go = \case
           SpecTree_Group{trees} -> concatMap go trees

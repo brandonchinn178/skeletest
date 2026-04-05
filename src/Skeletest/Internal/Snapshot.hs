@@ -182,7 +182,7 @@ snapshotsHook =
           store
             { allSnapshotTestIds =
                 Map.fromList
-                  [ (getSnapshotPath specPath, getTestIds specSpec)
+                  [ (getSnapshotPath specPath, getTestIds spec)
                   | SpecInfo{..} <- registry
                   ]
             }

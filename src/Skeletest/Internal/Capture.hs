@@ -121,7 +121,7 @@ addCapturedOutput mCapturedOutput result = do
   shouldShowOutput format output
     | null output = False
     | format == FormatFlag_Verbose = True
-    | result.success = False
+    | result.status.success = False
     | otherwise = True
 
   addOutput output resultMessage =

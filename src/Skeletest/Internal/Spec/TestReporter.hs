@@ -134,7 +134,7 @@ formatActionsMinimal =
   reportTestPost reporter testInfo (result, duration) = do
     when reporter.supportsANSI $ do
       reporter.animationThread.clear
-    when (not result.success) $ do
+    when (not result.status.success) $ do
       hadPreviousFailure <-
         atomicModifyIORef' reporter.minimalFormatFailures $ \failures ->
           (Set.insert testInfo.file failures, testInfo.file `Set.member` failures)

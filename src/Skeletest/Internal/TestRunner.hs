@@ -1,4 +1,6 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoFieldSelectors #-}
@@ -9,6 +11,7 @@ module Skeletest.Internal.TestRunner (
 
   -- * TestResult
   TestResult (..),
+  TestResultStatus (..),
   TestResultMessage (..),
   testResultPass,
   testResultFromAssertionFail,
@@ -26,6 +29,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Typeable (typeOf)
 import GHC.IO.Exception qualified as GHC
+import GHC.Records (HasField (..))
 import GHC.Stack (CallStack)
 import GHC.Stack qualified as GHC
 import Skeletest.Internal.Error (SkeletestError)
@@ -62,10 +66,32 @@ class (MonadIO m) => Testable m where
 -- TODO: Change success -> PASS/FAIL/SKIP
 -- https://github.com/brandonchinn178/skeletest/issues/89
 data TestResult = TestResult
-  { success :: Bool
+  { status :: TestResultStatus
   , label :: Text
   , message :: TestResultMessage
   }
+
+data TestResultStatus
+  = TestPassed
+  | TestFailed
+  | TestSkipped
+  | TestStatus
+      { name_ :: Text
+      , success_ :: Bool
+      }
+
+instance HasField "name" TestResultStatus Text where
+  getField = \case
+    TestPassed -> "passed"
+    TestFailed -> "failed"
+    TestSkipped -> "skipped"
+    TestStatus{name_} -> name_
+instance HasField "success" TestResultStatus Bool where
+  getField = \case
+    TestPassed -> True
+    TestFailed -> False
+    TestSkipped -> True
+    TestStatus{success_} -> success_
 
 data TestResultMessage
   = TestResultMessageNone
@@ -75,7 +101,7 @@ data TestResultMessage
 testResultPass :: TestResult
 testResultPass =
   TestResult
-    { success = True
+    { status = TestPassed
     , label = Color.green "OK"
     , message = TestResultMessageNone
     }
@@ -85,7 +111,7 @@ testResultFromAssertionFail e = do
   msg <- renderAssertionFail e
   pure
     TestResult
-      { success = False
+      { status = TestFailed
       , label = Color.red "FAIL"
       , message = TestResultMessageBox [BoxText msg]
       }
@@ -98,7 +124,7 @@ testResultFromErrorWith f e = do
   msg <- f <$> renderMsg
   pure
     TestResult
-      { success = False
+      { status = TestFailed
       , label = Color.red "ERROR"
       , message = TestResultMessageBox [BoxText msg]
       }

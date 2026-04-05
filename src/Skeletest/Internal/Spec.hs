@@ -78,6 +78,7 @@ import Skeletest.Internal.TestInfo qualified as TestInfo
 import Skeletest.Internal.TestRunner (
   TestResult (..),
   TestResultMessage (..),
+  TestResultStatus (..),
   testResultFromAssertionFail,
   testResultFromError,
  )
@@ -176,7 +177,7 @@ instance HasField "runTest" SpecRunner (TestInfo -> SpecTest -> IO TestExitCode)
         | result.success -> d{testsPassed = d.testsPassed + 1}
         | otherwise -> d{testsFailed = d.testsFailed + 1}
 
-    pure $ if result.success then ExitSuccess else ExitTestFailure
+    pure $ if result.status.success then ExitSuccess else ExitTestFailure
    where
     mkTestResultError e =
       case fromException e of
@@ -300,16 +301,20 @@ xfailHook =
     }
  where
   modify reason result =
-    if result.success
+    if result.status.success
       then
         TestResult
-          { success = False
+          { status =
+              TestStatus
+                { name_ = "xpassed"
+                , success_ = False
+                }
           , label = Color.red "XPASS"
           , message = TestResultMessageInline reason
           }
       else
         TestResult
-          { success = True
+          { status = TestPassed
           , label = Color.yellow "XFAIL"
           , message = TestResultMessageInline reason
           }
@@ -322,7 +327,7 @@ skipHook =
           Just (MarkerSkip reason) ->
             pure
               TestResult
-                { success = True
+                { status = TestSkipped
                 , label = Color.yellow "SKIP"
                 , message = TestResultMessageInline reason
                 }

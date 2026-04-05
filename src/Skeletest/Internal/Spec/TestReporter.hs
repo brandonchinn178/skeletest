@@ -134,7 +134,7 @@ formatActionsMinimal =
   reportTestPost reporter testInfo (result, duration) = do
     when reporter.supportsANSI $ do
       reporter.animationThread.clear
-    when (not result.testResultSuccess) $ do
+    when (not result.success) $ do
       hadPreviousFailure <-
         atomicModifyIORef' reporter.minimalFormatFailures $ \failures ->
           (Set.insert testInfo.file failures, testInfo.file `Set.member` failures)
@@ -147,7 +147,7 @@ formatActionsMinimal =
       Term.output . Text.concat $
         [ minimalTestLabel reporter testInfo
         , ": "
-        , result.testResultLabel
+        , result.label
         , renderDurationLabel reporter duration
         ]
       renderTestResultMessage 0 result
@@ -195,7 +195,7 @@ formatActionsFull =
       reporter.animationThread.clear
       Term.outputInPlace $ getTestLabel testInfo
     withBoxHeader $ do
-      Term.output $ result.testResultLabel <> durationLabel
+      Term.output $ result.label <> durationLabel
     renderTestResultMessage indentLevel result
    where
     indentLevel = getIndentLevel testInfo
@@ -203,7 +203,7 @@ formatActionsFull =
       TestResultMessageBox _ -> True
       _ -> False
     withBoxHeader action
-      | not $ isBox result.testResultMessage = do
+      | not $ isBox result.message = do
           action
       | reporter.supportsANSI = do
           Term.outputInPlace $ drawBoxHeader indentLevel (BoxHeaderType_Inline $ testInfo.name <> ": ")
@@ -228,7 +228,7 @@ renderDurationLabel reporter duration =
 
 renderTestResultMessage :: IndentLevel -> TestResult -> IO ()
 renderTestResultMessage indentLevel result =
-  case result.testResultMessage of
+  case result.message of
     TestResultMessageNone -> pure ()
     TestResultMessageInline msg -> do
       Term.output $ fullIndent (indentLevel + 1) msg

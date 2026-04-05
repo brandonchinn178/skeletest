@@ -59,13 +59,12 @@ class (MonadIO m) => Testable m where
 
 {----- TestResult -----}
 
--- TODO: Remove 'testResult' prefix
 -- TODO: Change success -> PASS/FAIL/SKIP
 -- https://github.com/brandonchinn178/skeletest/issues/89
 data TestResult = TestResult
-  { testResultSuccess :: Bool
-  , testResultLabel :: Text
-  , testResultMessage :: TestResultMessage
+  { success :: Bool
+  , label :: Text
+  , message :: TestResultMessage
   }
 
 data TestResultMessage
@@ -76,9 +75,9 @@ data TestResultMessage
 testResultPass :: TestResult
 testResultPass =
   TestResult
-    { testResultSuccess = True
-    , testResultLabel = Color.green "OK"
-    , testResultMessage = TestResultMessageNone
+    { success = True
+    , label = Color.green "OK"
+    , message = TestResultMessageNone
     }
 
 testResultFromAssertionFail :: AssertionFail -> IO TestResult
@@ -86,9 +85,9 @@ testResultFromAssertionFail e = do
   msg <- renderAssertionFail e
   pure
     TestResult
-      { testResultSuccess = False
-      , testResultLabel = Color.red "FAIL"
-      , testResultMessage = TestResultMessageBox [BoxText msg]
+      { success = False
+      , label = Color.red "FAIL"
+      , message = TestResultMessageBox [BoxText msg]
       }
 
 testResultFromError :: SomeException -> IO TestResult
@@ -99,9 +98,9 @@ testResultFromErrorWith f e = do
   msg <- f <$> renderMsg
   pure
     TestResult
-      { testResultSuccess = False
-      , testResultLabel = Color.red "ERROR"
-      , testResultMessage = TestResultMessageBox [BoxText msg]
+      { success = False
+      , label = Color.red "ERROR"
+      , message = TestResultMessageBox [BoxText msg]
       }
  where
   renderMsg

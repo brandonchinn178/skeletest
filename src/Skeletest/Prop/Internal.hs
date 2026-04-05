@@ -242,7 +242,7 @@ fromPropertyIO m = do
 toTestResultPass :: Hedgehog.Report Hedgehog.Result -> TestResult
 toTestResultPass report =
   testResultPass
-    { testResultMessage =
+    { message =
         TestResultMessageInline . Color.gray . Text.pack . List.intercalate "\n" . concat $
           [ [show testCount <> " tests, " <> show discards <> " discards"]
           , renderCoverage report.reportCoverage testCount

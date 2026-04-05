@@ -196,7 +196,7 @@ snapshotsHook =
           _ <- getFixture @UpdateSnapshotFixture_File
           pure ()
         result <- getResult
-        when result.testResultSuccess $ do
+        when result.success $ do
           if isUpdate
             then recordSnapshotsToFileFixture testInfo
             else checkExtraTestSnapshots testInfo

@@ -9,6 +9,7 @@ API changes:
 * Added `modifyTestSummary` to `Hooks`
 * New `P.empty` predicate for checking empty lists/texts/etc.
 * Add `HasSubsequences` instance for lazy `Text`
+* Remove field prefixes from more constructors (`FlagSpec`, `TestResult`, `SpecInfo`)
 
 Runtime changes:
 * Sanitize a literal "\`\`\`" line in snapshots ([#27](https://github.com/brandonchinn178/skeletest/issues/27))

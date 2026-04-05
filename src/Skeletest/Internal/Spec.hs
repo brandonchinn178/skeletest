@@ -172,11 +172,11 @@ instance HasField "runTest" SpecRunner (TestInfo -> SpecTest -> IO TestExitCode)
 
     runner.testSummary.update $ \d ->
       if
-        | "SKIP" `Text.isInfixOf` result.testResultLabel -> d
-        | result.testResultSuccess -> d{testsPassed = d.testsPassed + 1}
+        | "SKIP" `Text.isInfixOf` result.label -> d
+        | result.success -> d{testsPassed = d.testsPassed + 1}
         | otherwise -> d{testsFailed = d.testsFailed + 1}
 
-    pure $ if result.testResultSuccess then ExitSuccess else ExitTestFailure
+    pure $ if result.success then ExitSuccess else ExitTestFailure
    where
     mkTestResultError e =
       case fromException e of
@@ -299,19 +299,19 @@ xfailHook =
           Nothing -> runTest
     }
  where
-  modify reason TestResult{..} =
-    if testResultSuccess
+  modify reason result =
+    if result.success
       then
         TestResult
-          { testResultSuccess = False
-          , testResultLabel = Color.red "XPASS"
-          , testResultMessage = TestResultMessageInline reason
+          { success = False
+          , label = Color.red "XPASS"
+          , message = TestResultMessageInline reason
           }
       else
         TestResult
-          { testResultSuccess = True
-          , testResultLabel = Color.yellow "XFAIL"
-          , testResultMessage = TestResultMessageInline reason
+          { success = True
+          , label = Color.yellow "XFAIL"
+          , message = TestResultMessageInline reason
           }
 
 skipHook :: Hooks
@@ -322,9 +322,9 @@ skipHook =
           Just (MarkerSkip reason) ->
             pure
               TestResult
-                { testResultSuccess = True
-                , testResultLabel = Color.yellow "SKIP"
-                , testResultMessage = TestResultMessageInline reason
+                { success = True
+                , label = Color.yellow "SKIP"
+                , message = TestResultMessageInline reason
                 }
           Nothing -> runTest
     }

@@ -189,9 +189,14 @@ instance IsFlag (Maybe FormatFlag) where
       }
 
 getFormatFlag :: IO FormatFlag
-getFormatFlag = do
-  -- TODO: change default to minimal if ANSI
-  fromMaybe FormatFlag_Full <$> getFlag
+getFormatFlag = getFlag >>= maybe getDefault pure
+ where
+  getDefault = do
+    supportsANSI <- Term.supportsANSI Term.stdout
+    pure $
+      if supportsANSI
+        then FormatFlag_Minimal
+        else FormatFlag_Full
 
 {----- Load CLI arguments -----}
 

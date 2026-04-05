@@ -38,7 +38,7 @@ spec_parseCliArgsWith = do
     let flags =
           mkFlagInfos "foo" Nothing $
             RequiredFlag
-              { flagParse = pure . MyFlag
+              { parse = pure . MyFlag
               }
     describe "long flag" $ do
       it "parses" $ do
@@ -58,7 +58,7 @@ spec_parseCliArgsWith = do
     let flags =
           mkFlagInfos "foo" (Just 'f') $
             RequiredFlag
-              { flagParse = pure . MyFlag
+              { parse = pure . MyFlag
               }
     describe "short flag" $ do
       it "parses" $ do
@@ -80,7 +80,7 @@ spec_parseCliArgsWith = do
         let flags' =
               mkFlagInfos "foo" (Just 'f') $
                 RequiredFlag
-                  { flagParse = pure . MyFlag
+                  { parse = pure . MyFlag
                   }
         parseCliArgsWith flags' ["-fasdf"]
           `shouldSatisfy` P.con CLIParseSuccess{flagStore = containsFlag (MyFlag "asdf")}
@@ -92,8 +92,8 @@ spec_parseCliArgsWith = do
     let flags =
           mkFlagInfos "foo" Nothing $
             OptionalFlag
-              { flagDefault = MyFlag ""
-              , flagParse = pure . MyFlag
+              { default_ = MyFlag ""
+              , parse = pure . MyFlag
               }
     describe "OptionalFlag" $ do
       it "returns last flag" $ do
@@ -110,7 +110,7 @@ spec_parseCliArgsWith = do
     let flags =
           mkFlagInfos "foo" Nothing $
             RequiredFlag
-              { flagParse = pure . MyFlag
+              { parse = pure . MyFlag
               }
     describe "RequiredFlag" $ do
       it "returns last flag" $ do
@@ -127,7 +127,7 @@ spec_parseCliArgsWith = do
     let flags =
           mkFlagInfos "foo" Nothing $
             SwitchFlag
-              { flagFromBool = MyFlag . show
+              { fromBool = MyFlag . show
               }
     describe "SwitchFlag" $ do
       it "returns True if set" $ do

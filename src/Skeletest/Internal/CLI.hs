@@ -73,8 +73,8 @@ import Data.Foldable (foldl')
 --   flagHelp = "The value for MyFixture"
 --   flagSpec =
 --     OptionalFlag
---       { flagDefault = "foo"
---       , flagParse = \case
+--       { default_ = "foo"
+--       , parse = \case
 --           "illegal" -> Left "invalid flag value"
 --           s -> Right (MyFlag s)
 --       }
@@ -111,18 +111,16 @@ class (Typeable a) => IsFlag a where
 
   flagSpec :: FlagSpec a
 
--- TODO: Remove 'flag' prefix from these fields
--- https://github.com/brandonchinn178/skeletest/issues/89
 data FlagSpec a
   = SwitchFlag
-      { flagFromBool :: Bool -> a
+      { fromBool :: Bool -> a
       }
   | RequiredFlag
-      { flagParse :: String -> Either String a
+      { parse :: String -> Either String a
       }
   | OptionalFlag
-      { flagDefault :: a
-      , flagParse :: String -> Either String a
+      { default_ :: a
+      , parse :: String -> Either String a
       }
   | forall x.
     MultiFlag
@@ -163,8 +161,8 @@ instance IsFlag ANSIFlag where
   flagHelp = "Whether to enable ANSI output: auto (default), always, never"
   flagSpec =
     OptionalFlag
-      { flagDefault = ANSIFlag Nothing
-      , flagParse = \case
+      { default_ = ANSIFlag Nothing
+      , parse = \case
           "auto" -> Right . ANSIFlag $ Nothing
           "always" -> Right . ANSIFlag $ Just True
           "never" -> Right . ANSIFlag $ Just False
@@ -182,8 +180,8 @@ instance IsFlag (Maybe FormatFlag) where
   flagHelp = "The format of the output"
   flagSpec =
     OptionalFlag
-      { flagDefault = Nothing
-      , flagParse = \case
+      { default_ = Nothing
+      , parse = \case
           "minimal" -> Right $ Just FormatFlag_Minimal
           "full" -> Right $ Just FormatFlag_Full
           "verbose" -> Right $ Just FormatFlag_Verbose
@@ -437,14 +435,14 @@ parseCLIFlags flagInfos flagVals = first CLIParseFailure $ foldlM go Map.empty f
   parse name spec0 vals =
     case spec0 of
       spec@SwitchFlag{} -> do
-        pure (spec.flagFromBool $ (not . null) vals)
+        pure (spec.fromBool $ (not . null) vals)
       spec@RequiredFlag{} -> do
         val <- maybe (throwRequired name) pure $ getLast vals
-        spec.flagParse val
+        spec.parse val
       spec@OptionalFlag{} -> do
         case getLast vals of
-          Nothing -> pure spec.flagDefault
-          Just val -> spec.flagParse val
+          Nothing -> pure spec.default_
+          Just val -> spec.parse val
       MultiFlag{type_, parseMulti} -> do
         parseMulti $
           case type_ of

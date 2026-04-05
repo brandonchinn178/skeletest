@@ -64,8 +64,8 @@ instance IsFlag CaptureOutputFlag where
   flagHelp = "Whether to capture stdout/stderr: on (default), off"
   flagSpec =
     OptionalFlag
-      { flagDefault = CaptureOutputFlag True
-      , flagParse = \case
+      { default_ = CaptureOutputFlag True
+      , parse = \case
           "off" -> Right $ CaptureOutputFlag False
           "on" -> Right $ CaptureOutputFlag True
           s -> Left $ "invalid value: " <> s

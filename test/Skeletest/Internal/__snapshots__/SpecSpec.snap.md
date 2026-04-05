@@ -25,6 +25,7 @@
 
 ═════ Test report ═════
 ➤ 2 tests ran in 0.00s
+  • 2 tests passed ✔
 ```
 
 ## xfail ≫ errors on unexpected passes
@@ -38,7 +39,7 @@
 
 ═════ Test report ═════
 ➤ 2 tests ran in 0.00s
-  • 2 tests failed ✘
+  • 2 tests xpassed ✘
 ```
 
 ## focus ≫ only runs focused test
@@ -49,6 +50,7 @@
 
 ═════ Test report ═════
 ➤ 1 test ran in 0.00s
+  • 1 test passed ✔
   • 1 test deselected
 ```
 

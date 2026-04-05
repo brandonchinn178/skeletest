@@ -43,6 +43,9 @@ module Skeletest.Internal.Spec (
 import Control.Concurrent (myThreadId)
 import Control.Monad.Trans.State.Strict qualified as State
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (NominalDiffTime)
@@ -172,10 +175,13 @@ instance HasField "runTest" SpecRunner (TestInfo -> SpecTest -> IO TestExitCode)
     runner.testReporter.reportTestPost testInfo (result, duration)
 
     runner.testSummary.update $ \d ->
-      if
-        | "SKIP" `Text.isInfixOf` result.label -> d
-        | result.success -> d{testsPassed = d.testsPassed + 1}
-        | otherwise -> d{testsFailed = d.testsFailed + 1}
+      d
+        { testCategories =
+            Map.alter
+              (Just . (+ 1) . fromMaybe 0)
+              result.status
+              d.testCategories
+        }
 
     pure $ if result.status.success then ExitSuccess else ExitTestFailure
    where
@@ -208,8 +214,7 @@ newtype TestSummary = TestSummary (IORef TestSummaryData)
 data TestSummaryData = TestSummaryData
   { totalTests :: !Int
   , testsSelected :: !Int
-  , testsPassed :: !Int
-  , testsFailed :: !Int
+  , testCategories :: !(Map TestResultStatus Int)
   , snapshotsUpdated :: !Int
   , totalDuration :: !NominalDiffTime
   }
@@ -220,8 +225,7 @@ newTestSummary specs = do
     TestSummaryData
       { totalTests = getTotalTests specs
       , testsSelected = 0
-      , testsPassed = 0
-      , testsFailed = 0
+      , testCategories = Map.empty
       , snapshotsUpdated = 0
       , totalDuration = 0
       }
@@ -243,14 +247,20 @@ instance HasField "render" TestSummary (IO Text) where
   getField (TestSummary ref) = do
     TestSummaryData{..} <- readIORef ref
     let testsDeselected = totalTests - testsSelected
-    let testsSkipped = testsSelected - testsPassed - testsFailed
     pure . Text.unlines . concat $
       [ ["═════ Test report ═════"]
       , ["➤ " <> pluralize testsSelected "test" <> " ran in " <> renderDuration totalDuration]
-      , when_ (testsFailed > 0) $
-          "  • " <> pluralize testsFailed "test" <> " failed " <> Color.red "✘"
-      , when_ (testsSkipped > 0) $
-          "  • " <> pluralize testsSkipped "test" <> " skipped " <> Color.yellow "≫"
+      , [ "  • " <> pluralize count "test" <> " " <> status.name <> " " <> icon
+        | (status, count) <- Map.toAscList testCategories
+        , let icon =
+                case status of
+                  TestPassed -> Color.green "✔"
+                  TestFailed -> Color.red "✘"
+                  TestSkipped -> Color.yellow "≫"
+                  TestStatus{success_}
+                    | success_ -> Color.green "✔"
+                    | otherwise -> Color.red "✘"
+        ]
       , when_ (testsDeselected > 0) $
           "  • " <> pluralize testsDeselected "test" <> " deselected"
       ]

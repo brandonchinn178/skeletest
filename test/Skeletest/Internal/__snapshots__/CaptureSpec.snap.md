@@ -9,6 +9,7 @@
 
 ═════ Test report ═════
 ➤ 2 tests ran in 0.00s
+  • 2 tests passed ✔
 ```
 
 ## stdout ≫ is rendered on test success with --format=verbose
@@ -29,6 +30,7 @@
 
 ═════ Test report ═════
 ➤ 2 tests ran in 0.00s
+  • 2 tests passed ✔
 ```
 
 ## stdout ≫ is rendered on test failure
@@ -51,6 +53,7 @@
 
 ═════ Test report ═════
 ➤ 2 tests ran in 0.00s
+  • 1 test passed ✔
   • 1 test failed ✘
 ```
 
@@ -74,6 +77,7 @@
 
 ═════ Test report ═════
 ➤ 2 tests ran in 0.00s
+  • 1 test passed ✔
   • 1 test failed ✘
 ```
 
@@ -91,6 +95,7 @@ OK
 
 ═════ Test report ═════
 ➤ 2 tests ran in 0.00s
+  • 2 tests passed ✔
 
 >>> stderr
 ```
@@ -104,6 +109,7 @@ OK
 
 ═════ Test report ═════
 ➤ 2 tests ran in 0.00s
+  • 2 tests passed ✔
 ```
 
 ## stderr ≫ is rendered on test success with --format=verbose
@@ -124,6 +130,7 @@ OK
 
 ═════ Test report ═════
 ➤ 2 tests ran in 0.00s
+  • 2 tests passed ✔
 ```
 
 ## stderr ≫ is rendered on test failure
@@ -146,6 +153,7 @@ OK
 
 ═════ Test report ═════
 ➤ 2 tests ran in 0.00s
+  • 1 test passed ✔
   • 1 test failed ✘
 ```
 
@@ -169,6 +177,7 @@ OK
 
 ═════ Test report ═════
 ➤ 2 tests ran in 0.00s
+  • 1 test passed ✔
   • 1 test failed ✘
 ```
 
@@ -183,6 +192,7 @@ OK
 
 ═════ Test report ═════
 ➤ 2 tests ran in 0.00s
+  • 2 tests passed ✔
 
 >>> stderr
 

@@ -10,6 +10,7 @@ OK
 
 ═════ Test report ═════
 ➤ 1 test ran in 0.00s
+  • 1 test passed ✔
 ```
 
 ## modifySpecRegistry ≫ allows modifying specs
@@ -20,5 +21,6 @@ OK
 
 ═════ Test report ═════
 ➤ 1 test ran in 0.00s
+  • 1 test passed ✔
   • 1 test deselected
 ```

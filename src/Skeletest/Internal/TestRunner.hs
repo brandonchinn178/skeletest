@@ -79,6 +79,7 @@ data TestResultStatus
       { name_ :: Text
       , success_ :: Bool
       }
+  deriving (Eq, Ord)
 
 instance HasField "name" TestResultStatus Text where
   getField = \case

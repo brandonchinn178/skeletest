@@ -81,6 +81,7 @@ ot
 
 ═════ Test report ═════
 ➤ 1 test ran in 0.00s
+  • 1 test passed ✔
 ➤ 1 snapshot updated
 ```
 
@@ -123,6 +124,7 @@ ot
 
 ═════ Test report ═════
 ➤ 6 tests ran in 0.00s
+  • 6 tests passed ✔
 ```
 
 ```
@@ -140,6 +142,7 @@ ot
 
 ═════ Test report ═════
 ➤ 6 tests ran in 0.00s
+  • 6 tests passed ✔
 ➤ 5 snapshots updated
 ➤ 1 snapshot file cleaned up
 ```

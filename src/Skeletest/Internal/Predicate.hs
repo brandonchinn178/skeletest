@@ -18,6 +18,8 @@ module Skeletest.Internal.Predicate (
 
   -- * General
   anything,
+  anythingDeep,
+  anyThunk,
 
   -- * Ord
   eq,
@@ -71,6 +73,7 @@ module Skeletest.Internal.Predicate (
   render,
 ) where
 
+import Control.DeepSeq (NFData)
 import Control.Monad.IO.Class (MonadIO)
 import Data.Foldable (toList)
 import Data.Foldable1 qualified as Foldable1
@@ -91,7 +94,7 @@ import Skeletest.Internal.Utils.HList (HList (..))
 import Skeletest.Internal.Utils.HList qualified as HList
 import Skeletest.Internal.Utils.Text (indent, parens)
 import UnliftIO (MonadUnliftIO)
-import UnliftIO.Exception (Exception, displayException, try)
+import UnliftIO.Exception (Exception, displayException, evaluate, evaluateDeep, try)
 import Prelude hiding (abs, all, and, any, elem, not, or, (&&), (||))
 import Prelude qualified
 
@@ -188,11 +191,12 @@ showCtx result = result{predicateShowFailCtx = max ShowFailCtx result.predicateS
 
 {----- General -----}
 
--- | A predicate that matches any value
-anything :: forall a m. (Monad m) => Predicate m a
+-- | A predicate that matches any value after evaluating to WHNF.
+anything :: forall a m. (MonadIO m) => Predicate m a
 anything =
   Predicate
-    { predicateFunc = \_ ->
+    { predicateFunc = \a -> do
+        _ <- evaluate a
         pure
           PredicateFuncResult
             { predicateSuccess = True
@@ -201,6 +205,37 @@ anything =
             }
     , predicateDisp = "anything"
     , predicateDispNeg = "not anything"
+    }
+
+-- | A predicate that matches any value after evaluating it deeply.
+anythingDeep :: forall a m. (MonadIO m, NFData a) => Predicate m a
+anythingDeep =
+  Predicate
+    { predicateFunc = \a -> do
+        _ <- evaluateDeep a
+        pure
+          PredicateFuncResult
+            { predicateSuccess = True
+            , predicateExplain = "anything"
+            , predicateShowFailCtx = noCtx
+            }
+    , predicateDisp = "anything"
+    , predicateDispNeg = "not anything"
+    }
+
+-- | A predicate that matches any value without evaluating to WHNF.
+anyThunk :: forall a m. (Monad m) => Predicate m a
+anyThunk =
+  Predicate
+    { predicateFunc = \_ ->
+        pure
+          PredicateFuncResult
+            { predicateSuccess = True
+            , predicateExplain = "any thunk"
+            , predicateShowFailCtx = noCtx
+            }
+    , predicateDisp = "any thunk"
+    , predicateDispNeg = "not any thunk"
     }
 
 {----- Ord -----}

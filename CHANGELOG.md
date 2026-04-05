@@ -11,6 +11,9 @@ API changes:
 * Add `HasSubsequences` instance for lazy `Text`
 * Remove field prefixes from more constructors (`FlagSpec`, `TestResult`, `SpecInfo`)
 * Change `testResultSuccess` from `Bool` to `TestResultStatus`
+* `P.anything` now forces its argument to WHNF
+  * Added `P.anythingDeep` for forcing its argument deeply
+  * Added `P.anyThunk` to recover the old behavior
 
 Runtime changes:
 * Sanitize a literal "\`\`\`" line in snapshots ([#27](https://github.com/brandonchinn178/skeletest/issues/27))

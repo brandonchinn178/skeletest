@@ -64,8 +64,8 @@ instance IsFlag CaptureOutputFlag where
   flagHelp = "Whether to capture stdout/stderr: on (default), off"
   flagSpec =
     OptionalFlag
-      { flagDefault = CaptureOutputFlag True
-      , flagParse = \case
+      { default_ = CaptureOutputFlag True
+      , parse = \case
           "off" -> Right $ CaptureOutputFlag False
           "on" -> Right $ CaptureOutputFlag True
           s -> Left $ "invalid value: " <> s
@@ -105,7 +105,7 @@ addCapturedOutput mCapturedOutput result = do
   let output = maybe [] renderOutput mCapturedOutput
   pure $
     if shouldShowOutput format output
-      then result{testResultMessage = addOutput output result.testResultMessage}
+      then result{message = addOutput output result.message}
       else result
  where
   renderOutput (stdout, stderr) =
@@ -121,7 +121,7 @@ addCapturedOutput mCapturedOutput result = do
   shouldShowOutput format output
     | null output = False
     | format == FormatFlag_Verbose = True
-    | result.testResultSuccess = False
+    | result.status.success = False
     | otherwise = True
 
   addOutput output resultMessage =

@@ -14,6 +14,7 @@
 
 ═════ Test report ═════
 ➤ 3 tests ran in 0.00s
+  • 1 test passed ✔
   • 1 test failed ✘
   • 1 test skipped ≫
 ```
@@ -36,6 +37,7 @@
 
 ═════ Test report ═════
 ➤ 3 tests ran in 0.00s
+  • 1 test passed ✔
   • 1 test failed ✘
   • 1 test skipped ≫
 ```
@@ -58,6 +60,7 @@
 
 ═════ Test report ═════
 ➤ 3 tests ran in 0.00s
+  • 1 test passed ✔
   • 1 test failed ✘
   • 1 test skipped ≫
 ```
@@ -77,6 +80,7 @@
 
 ═════ Test report ═════
 ➤ 3 tests ran in 0.00s
+  • 1 test passed ✔
   • 1 test failed ✘
   • 1 test skipped ≫
 ```
@@ -100,6 +104,7 @@
 
 ═════ Test report ═════
 ➤ 3 tests ran in 0.00s
+  • 1 test passed ✔
   • 1 test failed ✘
   • 1 test skipped ≫
 ```
@@ -123,6 +128,7 @@
 
 ═════ Test report ═════
 ➤ 3 tests ran in 0.00s
+  • 1 test passed ✔
   • 1 test failed ✘
   • 1 test skipped ≫
 ```

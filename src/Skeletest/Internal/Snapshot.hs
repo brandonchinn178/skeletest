@@ -182,7 +182,7 @@ snapshotsHook =
           store
             { allSnapshotTestIds =
                 Map.fromList
-                  [ (getSnapshotPath specPath, getTestIds specSpec)
+                  [ (getSnapshotPath specPath, getTestIds spec)
                   | SpecInfo{..} <- registry
                   ]
             }
@@ -196,7 +196,7 @@ snapshotsHook =
           _ <- getFixture @UpdateSnapshotFixture_File
           pure ()
         result <- getResult
-        when result.testResultSuccess $ do
+        when result.status.success $ do
           if isUpdate
             then recordSnapshotsToFileFixture testInfo
             else checkExtraTestSnapshots testInfo

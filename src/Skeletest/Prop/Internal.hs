@@ -242,7 +242,7 @@ fromPropertyIO m = do
 toTestResultPass :: Hedgehog.Report Hedgehog.Result -> TestResult
 toTestResultPass report =
   testResultPass
-    { testResultMessage =
+    { message =
         TestResultMessageInline . Color.gray . Text.pack . List.intercalate "\n" . concat $
           [ [show testCount <> " tests, " <> show discards <> " discards"]
           , renderCoverage report.reportCoverage testCount
@@ -508,8 +508,8 @@ instance IsFlag PropSeedFlag where
   flagHelp = "The seed to use for property tests"
   flagSpec =
     OptionalFlag
-      { flagDefault = PropSeedFlag Nothing
-      , flagParse = parse
+      { default_ = PropSeedFlag Nothing
+      , parse = parse
       }
    where
     parse s = maybe (Left $ "Invalid seed: " <> s) Right $ do
@@ -526,6 +526,6 @@ instance IsFlag PropLimitFlag where
   flagHelp = "The number of tests to run per property test"
   flagSpec =
     OptionalFlag
-      { flagDefault = PropLimitFlag Nothing
-      , flagParse = fmap (PropLimitFlag . Just) . readEither
+      { default_ = PropLimitFlag Nothing
+      , parse = fmap (PropLimitFlag . Just) . readEither
       }

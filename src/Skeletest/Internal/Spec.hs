@@ -43,6 +43,9 @@ module Skeletest.Internal.Spec (
 import Control.Concurrent (myThreadId)
 import Control.Monad.Trans.State.Strict qualified as State
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (NominalDiffTime)
@@ -78,6 +81,7 @@ import Skeletest.Internal.TestInfo qualified as TestInfo
 import Skeletest.Internal.TestRunner (
   TestResult (..),
   TestResultMessage (..),
+  TestResultStatus (..),
   testResultFromAssertionFail,
   testResultFromError,
  )
@@ -129,7 +133,7 @@ instance HasField "runFile" SpecRunner (SpecInfo -> IO TestExitCode) where
       runner.testReporter.reportFilePost info.specPath (code, duration)
       pure code
    where
-    trees = getSpecTrees info.specSpec
+    trees = getSpecTrees info.spec
     emptyTestInfo =
       TestInfo
         { contexts = []
@@ -171,12 +175,15 @@ instance HasField "runTest" SpecRunner (TestInfo -> SpecTest -> IO TestExitCode)
     runner.testReporter.reportTestPost testInfo (result, duration)
 
     runner.testSummary.update $ \d ->
-      if
-        | "SKIP" `Text.isInfixOf` result.testResultLabel -> d
-        | result.testResultSuccess -> d{testsPassed = d.testsPassed + 1}
-        | otherwise -> d{testsFailed = d.testsFailed + 1}
+      d
+        { testCategories =
+            Map.alter
+              (Just . (+ 1) . fromMaybe 0)
+              result.status
+              d.testCategories
+        }
 
-    pure $ if result.testResultSuccess then ExitSuccess else ExitTestFailure
+    pure $ if result.status.success then ExitSuccess else ExitTestFailure
    where
     mkTestResultError e =
       case fromException e of
@@ -207,8 +214,7 @@ newtype TestSummary = TestSummary (IORef TestSummaryData)
 data TestSummaryData = TestSummaryData
   { totalTests :: !Int
   , testsSelected :: !Int
-  , testsPassed :: !Int
-  , testsFailed :: !Int
+  , testCategories :: !(Map TestResultStatus Int)
   , snapshotsUpdated :: !Int
   , totalDuration :: !NominalDiffTime
   }
@@ -219,8 +225,7 @@ newTestSummary specs = do
     TestSummaryData
       { totalTests = getTotalTests specs
       , testsSelected = 0
-      , testsPassed = 0
-      , testsFailed = 0
+      , testCategories = Map.empty
       , snapshotsUpdated = 0
       , totalDuration = 0
       }
@@ -242,14 +247,20 @@ instance HasField "render" TestSummary (IO Text) where
   getField (TestSummary ref) = do
     TestSummaryData{..} <- readIORef ref
     let testsDeselected = totalTests - testsSelected
-    let testsSkipped = testsSelected - testsPassed - testsFailed
     pure . Text.unlines . concat $
       [ ["═════ Test report ═════"]
       , ["➤ " <> pluralize testsSelected "test" <> " ran in " <> renderDuration totalDuration]
-      , when_ (testsFailed > 0) $
-          "  • " <> pluralize testsFailed "test" <> " failed " <> Color.red "✘"
-      , when_ (testsSkipped > 0) $
-          "  • " <> pluralize testsSkipped "test" <> " skipped " <> Color.yellow "≫"
+      , [ "  • " <> pluralize count "test" <> " " <> status.name <> " " <> icon
+        | (status, count) <- Map.toAscList testCategories
+        , let icon =
+                case status of
+                  TestPassed -> Color.green "✔"
+                  TestFailed -> Color.red "✘"
+                  TestSkipped -> Color.yellow "≫"
+                  TestStatus{success_}
+                    | success_ -> Color.green "✔"
+                    | otherwise -> Color.red "✘"
+        ]
       , when_ (testsDeselected > 0) $
           "  • " <> pluralize testsDeselected "test" <> " deselected"
       ]
@@ -299,19 +310,23 @@ xfailHook =
           Nothing -> runTest
     }
  where
-  modify reason TestResult{..} =
-    if testResultSuccess
+  modify reason result =
+    if result.status.success
       then
         TestResult
-          { testResultSuccess = False
-          , testResultLabel = Color.red "XPASS"
-          , testResultMessage = TestResultMessageInline reason
+          { status =
+              TestStatus
+                { name_ = "xpassed"
+                , success_ = False
+                }
+          , label = Color.red "XPASS"
+          , message = TestResultMessageInline reason
           }
       else
         TestResult
-          { testResultSuccess = True
-          , testResultLabel = Color.yellow "XFAIL"
-          , testResultMessage = TestResultMessageInline reason
+          { status = TestPassed
+          , label = Color.yellow "XFAIL"
+          , message = TestResultMessageInline reason
           }
 
 skipHook :: Hooks
@@ -322,9 +337,9 @@ skipHook =
           Just (MarkerSkip reason) ->
             pure
               TestResult
-                { testResultSuccess = True
-                , testResultLabel = Color.yellow "SKIP"
-                , testResultMessage = TestResultMessageInline reason
+                { status = TestSkipped
+                , label = Color.yellow "SKIP"
+                , message = TestResultMessageInline reason
                 }
           Nothing -> runTest
     }
@@ -336,7 +351,7 @@ focusHook =
     }
  where
   applyFocus specs = if hasFocus specs then mapSpecs hideNotFocused specs else specs
-  hasFocus = any (anySpecTests isFocused . (.specSpec))
+  hasFocus = any (anySpecTests isFocused . (.spec))
   anySpecTests f spec =
     let go = \case
           SpecTree_Group{trees} -> concatMap go trees

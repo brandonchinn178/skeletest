@@ -160,11 +160,11 @@ type SpecRegistry = [SpecInfo]
 
 data SpecInfo = SpecInfo
   { specPath :: FilePath
-  , specSpec :: Spec
+  , spec :: Spec
   }
 
 traverseSpecs :: (Applicative f) => (Spec -> f Spec) -> SpecRegistry -> f SpecRegistry
-traverseSpecs f = traverse $ \info -> (\spec -> info{specSpec = spec}) <$> f info.specSpec
+traverseSpecs f = traverse $ \info -> (\spec -> info{spec = spec}) <$> f info.spec
 
 mapSpecs :: (Spec -> Spec) -> SpecRegistry -> SpecRegistry
 mapSpecs f = runIdentity . traverseSpecs (pure . f)
@@ -172,16 +172,16 @@ mapSpecs f = runIdentity . traverseSpecs (pure . f)
 -- | Remove specs with no tests.
 pruneSpec :: SpecRegistry -> SpecRegistry
 pruneSpec = mapMaybe $ \info -> do
-  let spec = mapSpecTrees (\go -> filter (not . isEmptySpec) . map go) info.specSpec
+  let spec = mapSpecTrees (\go -> filter (not . isEmptySpec) . map go) info.spec
   guard $ (not . null . getSpecTrees) spec
-  pure info{specSpec = spec}
+  pure info{spec = spec}
  where
   isEmptySpec = \case
     SpecTree_Group _ [] -> True
     _ -> False
 
 applyTestSelections :: TestTarget -> SpecInfo -> SpecInfo
-applyTestSelections selections info = info{specSpec = applySelections info.specSpec}
+applyTestSelections selections info = info{spec = applySelections info.spec}
  where
   applySelections = (`Trans.runReader` []) . traverseSpecTrees apply
 

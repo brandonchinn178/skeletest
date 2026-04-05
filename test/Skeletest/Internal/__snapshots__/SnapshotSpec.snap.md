@@ -9,8 +9,7 @@
 ## creates a new snapshot
 
 ```
-./ExampleSpec.hs
-╭── test: FAIL
+◈ ./ExampleSpec.hs ≫ test: FAIL
 │ ./ExampleSpec.hs:7:
 │ │
 │ │   "example result" `shouldSatisfy` P.matchesSnapshot
@@ -31,8 +30,7 @@
 ## updates an existing snapshot
 
 ```
-./ExampleSpec.hs
-╭── fails: FAIL
+◈ ./ExampleSpec.hs ≫ fails: FAIL
 │ ./ExampleSpec.hs:7:
 │ │
 │ │   unlines ["new1", "same1", "same2", "new2"] `shouldSatisfy` P.matchesSnapsh
@@ -59,8 +57,7 @@ ot
 ## detects corrupted snapshot files
 
 ```
-./ExampleSpec.hs
-╭── should error: ERROR
+◈ ./ExampleSpec.hs ≫ should error: ERROR
 │ Snapshot file was corrupted: __snapshots__/ExampleSpec.snap.md
 ╰───────────────────────────────────────────────────────────────────────────────
 
@@ -76,8 +73,7 @@ ot
 ```
 
 ```
-./ExampleSpec.hs
-    should error: OK
+◈ ./ExampleSpec.hs: OK
 
 ═════ Test report ═════
 ➤ 1 test ran in 0.00s
@@ -128,17 +124,11 @@ ot
 ```
 
 ```
-./Foo/Test1Spec.hs
-    test other: OK
-./Foo/Test2Spec.hs
-    test other: OK
-./Foo/Test3Spec.hs
-    test: OK
-    test other: OK
-./Foo/Test4Spec.hs
-    test: OK
-./Foo/Test5Spec.hs
-    test: OK
+◈ ./Foo/Test1Spec.hs: OK
+◈ ./Foo/Test2Spec.hs: OK
+◈ ./Foo/Test3Spec.hs: OK
+◈ ./Foo/Test4Spec.hs: OK
+◈ ./Foo/Test5Spec.hs: OK
 
 ═════ Test report ═════
 ➤ 6 tests ran in 0.00s

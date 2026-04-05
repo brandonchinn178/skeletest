@@ -130,7 +130,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (stdout, stderr) <- expectSuccess $ runner.runTestsWith def{cliArgs = ["*"]}
+      (stdout, stderr) <- expectSuccess $ runner.runTestsWith def{cliArgs = ["*", "--format=full"]}
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and
@@ -156,7 +156,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (stdout, stderr) <- expectSuccess $ runner.runTestsWith def{cliArgs = ["@foo"]}
+      (stdout, stderr) <- expectSuccess $ runner.runTestsWith def{cliArgs = ["@foo", "--format=full"]}
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and
@@ -185,7 +185,7 @@ spec = do
         , "  it \"bar2\" $ pure ()"
         ]
 
-      (stdout, stderr) <- expectSuccess $ runner.runTestsWith def{cliArgs = ["@my-marker"]}
+      (stdout, stderr) <- expectSuccess $ runner.runTestsWith def{cliArgs = ["@my-marker", "--format=full"]}
       stderr `shouldBe` ""
       stdout
         `shouldSatisfy` P.and

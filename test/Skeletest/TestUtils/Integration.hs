@@ -107,7 +107,7 @@ instance Default TestArgs where
   def =
     TestArgs
       { cwd = Nothing
-      , cliArgs = []
+      , cliArgs = ["--format=full"]
       , ghcArgs = []
       , mainFile = "Main.hs"
       , simulateANSI = True

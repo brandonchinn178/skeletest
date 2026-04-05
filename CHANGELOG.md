@@ -3,6 +3,7 @@
 New features:
 * Long tests now display the duration of the test ([#23](https://github.com/brandonchinn178/skeletest/issues/23))
 * Summary of test results now displayed at end of test ([#21](https://github.com/brandonchinn178/skeletest/issues/21))
+* Added `--format` for customizing the report format; `--format=minimal` is now the default in a terminal that supports ANSI
 
 API changes:
 * Added `runSpecs` to `Hooks`

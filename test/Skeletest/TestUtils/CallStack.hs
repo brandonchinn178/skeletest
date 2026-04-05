@@ -16,14 +16,15 @@ sanitizeTraceback :: String -> String
 #if __GLASGOW_HASKELL__ == 910
 sanitizeTraceback s =
   let (pre, post) = break ("HasCallStack backtrace:" `Text.isInfixOf`) $ Text.lines $ Text.pack s
-      (_, post2) = span (", called at" `Text.isInfixOf`) $ drop 1 post
-      post2' = map trimBorder post2
-   in Text.unpack . Text.unlines $ pre ++ post2'
+      (_, post2) = span isCallStackLine $ drop 1 post
+   in Text.unpack . Text.unlines $ pre ++ post2
  where
-  trimBorder line =
-    if Text.all (== '─') . Text.drop 1 $ line
-      then Text.take 80 line
-      else line
+  isCallStackLine line =
+    or
+      [ ", called at" `Text.isInfixOf` line
+      , -- True if this line is the wrapped continuation of the previous line
+        (fmap fst . Text.uncons) line `notElem` map Just ['│', '╰']
+      ]
 #else
 sanitizeTraceback = id
 #endif

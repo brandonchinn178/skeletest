@@ -7,7 +7,8 @@
 Could not find Skeletest.Main import in Main module
 
 Main.hs:1:1: error:
-    `skeletest-preprocessor' failed in phase `Haskell pre-processor'. (Exit code: 10)
+    `skeletest-preprocessor' failed in phase `Haskell pre-processor'. (Exit code
+: 10)
 ```
 
 ## errors if main function defined

@@ -55,7 +55,8 @@
 ## focus ≫ fails with -Werror
 
 ```
-ExampleSpec.hs:6:3: error: [GHC-63394] [-Wx-focused-tests, -Werror=x-focused-tests]
+ExampleSpec.hs:6:3: error: [GHC-63394] [-Wx-focused-tests, -Werror=x-focused-tes
+ts]
     In the use of ‘focus’
     (imported from Skeletest, but defined in Skeletest.Internal.Spec.Tree):
     "focus should only be used in development"

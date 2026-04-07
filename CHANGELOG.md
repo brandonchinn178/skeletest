@@ -6,8 +6,9 @@ New features:
 * Added `--format` for customizing the report format; `--format=minimal` is now the default in a terminal that supports ANSI
 
 API changes:
-* Added `runSpecs` to `Hooks`
-* Added `modifyTestSummary` to `Hooks`
+* Re-designed how hooks are defined
+  * Also added `runSpecs` to `Hooks`
+  * Also added `modifyTestSummary` to `Hooks`
 * New `P.empty` predicate for checking empty lists/texts/etc.
 * Add `HasSubsequences` instance for lazy `Text`
 * Remove field prefixes from more constructors (`FlagSpec`, `TestResult`, `SpecInfo`)

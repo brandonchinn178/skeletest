@@ -52,6 +52,12 @@ import Data.Time (NominalDiffTime)
 import GHC.Records (HasField (..))
 import Skeletest.Internal.Exit (TestExitCode (..))
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
+import Skeletest.Internal.Hooks (
+  ModifyTestSummaryHookContext (..),
+  RunTestHookContext (..),
+  userHooks,
+ )
+import Skeletest.Internal.Hooks qualified as Hooks
 import Skeletest.Internal.Markers (
   findMarker,
  )
@@ -100,19 +106,17 @@ import UnliftIO.Exception (
 {----- Execute spec -----}
 
 data SpecRunner = SpecRunner
-  { hooks :: Hooks
-  , testSummary :: TestSummary
+  { testSummary :: TestSummary
   , testReporter :: TestReporter
   }
 
-newSpecRunner :: Hooks -> SpecRegistry -> IO SpecRunner
-newSpecRunner hooks initialSpecs = do
+newSpecRunner :: SpecRegistry -> IO SpecRunner
+newSpecRunner initialSpecs = do
   testSummary <- newTestSummary initialSpecs
   testReporter <- newTestReporter
   pure
     SpecRunner
-      { hooks
-      , testSummary
+      { testSummary
       , testReporter
       }
 
@@ -170,8 +174,13 @@ instance HasField "runTest" SpecRunner (TestInfo -> SpecTest -> IO TestExitCode)
     tid <- myThreadId
     (result, duration) <-
       (`finally` cleanupFixtures (PerTestFixtureKey tid)) $ do
-        withTimer . runner.hooks.runTest testInfo $ do
-          test.action `catch` mkTestResultError
+        withTimer $
+          userHooks.runTest
+            RunTestHookContext
+              { testInfo
+              }
+            ()
+            (\_ -> test.action `catch` mkTestResultError)
     runner.testReporter.reportTestPost testInfo (result, duration)
 
     runner.testSummary.update $ \d ->
@@ -192,7 +201,12 @@ instance HasField "runTest" SpecRunner (TestInfo -> SpecTest -> IO TestExitCode)
 
 instance HasField "printSummary" SpecRunner (IO ()) where
   getField runner = do
-    summary <- runner.testSummary.render >>= runner.hooks.modifyTestSummary
+    summary0 <- runner.testSummary.render
+    summary <-
+      userHooks.modifyTestSummary
+        ModifyTestSummaryHookContext
+        summary0
+        pure
     Term.output ""
     Term.outputN . colorize . Text.strip $ summary
    where
@@ -285,18 +299,22 @@ specTreePlugin =
 applyTestSelectionsHook :: Hooks
 applyTestSelectionsHook =
   defaultHooks
-    { modifySpecRegistry = \case
-        Just selections -> \modify -> fmap (map (applyTestSelections selections)) . modify
-        Nothing -> id
+    { modifySpecRegistry = Hooks.runLate . Hooks.mkPreHook $ \ctx inp ->
+        pure $
+          case ctx.testTargets of
+            Just selections -> map (applyTestSelections selections) inp
+            Nothing -> inp
     }
 
 manualTestsHook :: Hooks
 manualTestsHook =
   defaultHooks
-    { modifySpecRegistry = \case
-        -- only hide manual tests when no selections are specified
-        Just _ -> id
-        Nothing -> \modify -> fmap (mapSpecs hideManual) . modify
+    { modifySpecRegistry = Hooks.mkPreHook $ \ctx inp ->
+        pure $
+          case ctx.testTargets of
+            -- only hide manual tests when no selections are specified
+            Just _ -> inp
+            Nothing -> mapSpecs hideManual inp
     }
  where
   hideManual = filterSpecTests (not . hasMarker @MarkerManual . (.markers))
@@ -304,10 +322,10 @@ manualTestsHook =
 xfailHook :: Hooks
 xfailHook =
   defaultHooks
-    { runTest = \testInfo runTest ->
-        case findMarker testInfo.markers of
-          Just (MarkerXFail reason) -> modify reason <$> runTest
-          Nothing -> runTest
+    { runTest = Hooks.mkPostHook $ \ctx _ ->
+        case findMarker ctx.testInfo.markers of
+          Just (MarkerXFail reason) -> pure . modify reason
+          Nothing -> pure
     }
  where
   modify reason result =
@@ -332,25 +350,28 @@ xfailHook =
 skipHook :: Hooks
 skipHook =
   defaultHooks
-    { runTest = \testInfo runTest ->
-        case findMarker (testInfo.markers) of
+    { runTest = Hooks.mkHook $ \ctx run ->
+        case findMarker (ctx.testInfo.markers) of
           Just (MarkerSkip reason) ->
-            pure
+            const . pure $
               TestResult
                 { status = TestSkipped
                 , label = Color.yellow "SKIP"
                 , message = TestResultMessageInline reason
                 }
-          Nothing -> runTest
+          Nothing -> run
     }
 
 focusHook :: Hooks
 focusHook =
   defaultHooks
-    { modifySpecRegistry = \_ modify -> fmap applyFocus . modify
+    { modifySpecRegistry = Hooks.runEarly . Hooks.mkPreHook $ \_ specs ->
+        pure $
+          if hasFocus specs
+            then mapSpecs hideNotFocused specs
+            else specs
     }
  where
-  applyFocus specs = if hasFocus specs then mapSpecs hideNotFocused specs else specs
   hasFocus = any (anySpecTests isFocused . (.spec))
   anySpecTests f spec =
     let go = \case

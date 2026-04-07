@@ -28,6 +28,9 @@ data TestInfo = TestInfo
   { contexts :: [Text]
   , name :: Text
   , markers :: [SomeMarker]
+  -- ^ Markers this test was tagged with or inherited from its groups.
+  --
+  -- May be queried with 'Skeletest.Plugin.findMarker' or 'Skeletest.Plugin.hasMarker'.
   , file :: FilePath
   -- ^ Relative to CWD
   }

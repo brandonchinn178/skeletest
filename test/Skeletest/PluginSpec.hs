@@ -17,11 +17,9 @@ spec = do
         , ""
         , "plugins = [defaultPlugin{hooks = myHooks}]"
         , "myHooks = defaultHooks"
-        , "  { runTest = \\_ run -> do"
-        , "      putStrLn \"before test\""
-        , "      result <- run"
-        , "      putStrLn \"after test\""
-        , "      pure result"
+        , "  { runTest = runEarly $ mkHook_"
+        , "      (\\_ _ -> putStrLn \"before test\")"
+        , "      (\\_ _ _ -> putStrLn \"after test\")"
         , "  }"
         ]
       runner.addTestFile "ExampleSpec.hs" $
@@ -48,7 +46,7 @@ spec = do
         , ""
         , "plugins = [defaultPlugin{hooks = myHooks}]"
         , "myHooks = defaultHooks"
-        , "  { modifySpecRegistry = \\_ modify -> (fmap . mapSpecs . filterSpecTests) isValid . modify"
+        , "  { modifySpecRegistry = mkPreHook $ \\_ -> pure . mapSpecs (filterSpecTests isValid)"
         , "  }"
         , " where"
         , "  isValid = not . (\"SKIP\" `T.isPrefixOf`) . (.name)"

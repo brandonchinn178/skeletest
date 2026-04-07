@@ -67,6 +67,7 @@ import Skeletest.Internal.Fixtures (
   noCleanup,
   withCleanup,
  )
+import Skeletest.Internal.Hooks qualified as Hooks
 import Skeletest.Internal.Paths (listTestFiles, readTestFile)
 import Skeletest.Internal.Predicate (
   Predicate (..),
@@ -175,7 +176,7 @@ data SnapshotResult
 snapshotsHook :: Hooks
 snapshotsHook =
   defaultHooks
-    { modifySpecRegistry = \_ modify registry -> do
+    { modifySpecRegistry = Hooks.mkPreHook_ $ \_ registry -> do
         -- Collect before the applyTestSelections hook to check for snapshots
         -- that don't correspond to any tests anymore
         modifyIORef' snapshotInfoStoreRef $ \store ->
@@ -186,28 +187,32 @@ snapshotsHook =
                   | SpecInfo{..} <- registry
                   ]
             }
-        modify registry
-    , runTest = \testInfo getResult -> do
+        pure ()
+    , runTest =
+        Hooks.mkHook_
+          ( \_ _ -> do
+              SnapshotUpdateFlag isUpdate <- getFlag
+              when isUpdate $ do
+                -- Always initialize the file fixture to ensure snapshots get
+                -- cleaned up for a test that removed all `P.matchesSnapshot`
+                -- checks
+                _ <- getFixture @UpdateSnapshotFixture_File
+                pure ()
+          )
+          ( \ctx _ result -> do
+              SnapshotUpdateFlag isUpdate <- getFlag
+              when result.status.success $ do
+                if isUpdate
+                  then recordSnapshotsToFileFixture ctx.testInfo
+                  else checkExtraTestSnapshots ctx.testInfo
+              pure ()
+          )
+    , runSpecs = Hooks.mkPostHook $ \_ _ code -> do
         SnapshotUpdateFlag isUpdate <- getFlag
-        when isUpdate $ do
-          -- Always initialize the file fixture to ensure snapshots get
-          -- cleaned up for a test that removed all `P.matchesSnapshot`
-          -- checks
-          _ <- getFixture @UpdateSnapshotFixture_File
-          pure ()
-        result <- getResult
-        when result.status.success $ do
-          if isUpdate
-            then recordSnapshotsToFileFixture testInfo
-            else checkExtraTestSnapshots testInfo
-        pure result
-    , runSpecs = \run specs -> do
-        SnapshotUpdateFlag isUpdate <- getFlag
-        code <- run specs
         if isUpdate
           then removeOutdatedSnapshots *> pure code
           else checkOutdatedSnapshots code
-    , modifyTestSummary = \summary -> do
+    , modifyTestSummary = Hooks.mkPreHook $ \_ summary -> do
         snapshotSummary <- getSnapshotSummary
         pure $ summary <> snapshotSummary
     }

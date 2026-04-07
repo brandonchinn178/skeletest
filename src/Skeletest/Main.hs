@@ -34,6 +34,12 @@ import Skeletest.Internal.CLI (
  )
 import Skeletest.Internal.Capture (CaptureOutputFlag (..), captureOutputPlugin)
 import Skeletest.Internal.Exit (TestExitCode (..), exitWith, handleUnknownErrors)
+import Skeletest.Internal.Hooks (
+  ModifySpecRegistryHookContext (..),
+  RunSpecsHookContext (..),
+  setUserHooks,
+  userHooks,
+ )
 import Skeletest.Internal.Snapshot (
   SnapshotRenderer (..),
   renderWithShow,
@@ -59,15 +65,26 @@ runSkeletest userPlugins testModules = handleUnknownErrors $ do
   resolveANSISupport
 
   setSnapshotRenderers snapshotRenderers
+  setUserHooks hooks
 
   let initialSpecs = map mkSpec testModules
-  specs <- hooks.modifySpecRegistry selections pure initialSpecs
+  specs <-
+    userHooks.modifySpecRegistry
+      ModifySpecRegistryHookContext
+        { testTargets = selections
+        }
+      initialSpecs
+      pure
   when (null $ concatMap (getSpecTests . (.spec)) specs) $ do
     Term.outputErr $ Color.red "ERROR: No tests selected!"
     exitWith ExitNoTests
 
-  runner <- newSpecRunner hooks initialSpecs
-  exitCode <- hooks.runSpecs runner.run specs
+  runner <- newSpecRunner initialSpecs
+  exitCode <-
+    userHooks.runSpecs
+      RunSpecsHookContext
+      specs
+      runner.run
   runner.printSummary
   exitWith exitCode
  where

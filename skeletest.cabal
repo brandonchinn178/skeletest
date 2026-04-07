@@ -38,6 +38,15 @@ library
   exposed-modules:
     Skeletest
     Skeletest.Assertions
+    Skeletest.Hooks
+    Skeletest.Main
+    Skeletest.Plugin
+    Skeletest.Predicate
+    Skeletest.Prop
+    Skeletest.Prop.Gen
+    Skeletest.Prop.Internal
+    Skeletest.Prop.Range
+    -- Internal modules
     Skeletest.Internal.CLI
     Skeletest.Internal.Capture
     Skeletest.Internal.Constants
@@ -46,6 +55,8 @@ library
     Skeletest.Internal.Fixtures
     Skeletest.Internal.GHC
     Skeletest.Internal.GHC.Compat
+    Skeletest.Internal.Hooks
+    Skeletest.Internal.Hooks.HookDef
     Skeletest.Internal.Markers
     Skeletest.Internal.Paths
     Skeletest.Internal.Predicate
@@ -67,13 +78,6 @@ library
     Skeletest.Internal.Utils.Term
     Skeletest.Internal.Utils.Text
     Skeletest.Internal.Utils.Timer
-    Skeletest.Main
-    Skeletest.Plugin
-    Skeletest.Predicate
-    Skeletest.Prop
-    Skeletest.Prop.Gen
-    Skeletest.Prop.Internal
-    Skeletest.Prop.Range
   if impl(ghc >= 9.8) && impl(ghc < 9.10)
     other-modules:
         Skeletest.Internal.GHC.Compat_9_8

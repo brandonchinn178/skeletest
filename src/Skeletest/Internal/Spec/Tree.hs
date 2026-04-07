@@ -6,6 +6,7 @@
 module Skeletest.Internal.Spec.Tree (
   -- * Spec interface
   Spec,
+  SpecM,
   SpecTree (..),
   SpecTest (..),
 
@@ -68,9 +69,9 @@ import Skeletest.Internal.TestRunner (TestResult)
 import Skeletest.Internal.TestTargets (TestTarget, matchesTest)
 import Skeletest.Internal.TestTargets qualified as TestTargets
 
-type Spec = Spec' ()
+type Spec = SpecM ()
 
-newtype Spec' a = Spec (Writer [SpecTree] a)
+newtype SpecM a = Spec (Writer [SpecTree] a)
   deriving (Functor, Applicative, Monad)
 
 data SpecTree

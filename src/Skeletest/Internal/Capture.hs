@@ -32,6 +32,7 @@ import Skeletest.Internal.Fixtures (
   noCleanup,
   withCleanup,
  )
+import Skeletest.Internal.Hooks qualified as Hooks
 import Skeletest.Internal.Spec.Output (BoxSpecContent (..))
 import Skeletest.Internal.TestRunner (
   TestResult (..),
@@ -52,8 +53,8 @@ captureOutputPlugin =
 captureOutputHooks :: Hooks
 captureOutputHooks =
   defaultHooks
-    { runTest = \_ getResult -> do
-        (output, result) <- withCaptureOutput getResult
+    { runTest = Hooks.mkHook $ \_ run inp -> do
+        (output, result) <- withCaptureOutput (run inp)
         addCapturedOutput output result
     }
 

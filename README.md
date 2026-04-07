@@ -461,12 +461,19 @@ Skeletest respects the following environment variables at runtime:
 
 ### Hooks
 
-Skeletest lets you hook into specific parts of test execution. Skeletest currently supports the following hooks:
+Skeletest lets you hook into specific parts of test execution. See [Hackage](https://hackage-content.haskell.org/package/skeletest/docs/Skeletest-Hooks.html) for more info.
 
-* `modifySpecRegistry` - Modify all the specs in the test suite. This can be used to do your own test selection, test transformations, etc.
-* `runTest` - Modify how/if a test is run. Takes the `TestInfo` of the currently running test. `TestInfo` contains `testInfoMarkers`, which you can query with `findMarker` or `hasMarkerNamed`.
-* `runSpecs` - Modify running specs
-* `modifyTestSummary` - Modify the test summary message
+```haskell
+import Skeletest.Hooks
+
+hooks :: Hooks
+hooks =
+  defaultHooks
+    { runTest = mkHook_
+        (\_ _ -> putStrLn "before test")
+        (\_ _ _ -> putStrLn "after test")
+    }
+```
 
 ### Plugins
 
@@ -480,14 +487,8 @@ import Skeletest.Plugin
 myPlugin :: Plugin
 myPlugin =
   defaultPlugin
-    { hooks =
-        defaultHooks
-          { runTest = \testInfo run -> do
-              putStrLn "before test"
-              result <- run
-              putStrLn "after test"
-              pure result
-          }
+    { cliFlags = myPluginFlags
+    , hooks = myPluginHooks
     }
 ```
 

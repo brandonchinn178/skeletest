@@ -9,6 +9,7 @@
 module Skeletest.Internal.Spec (
   -- * Spec interface
   X.Spec,
+  X.SpecM,
   X.SpecTree (..),
 
   -- ** Execution

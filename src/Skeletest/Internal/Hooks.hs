@@ -1,3 +1,4 @@
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -36,6 +37,10 @@ module Skeletest.Internal.Hooks (
   RunTestHook,
   RunTestHookContext (..),
 
+  -- ** onTestFailure
+  OnTestFailureHook,
+  OnTestFailureHookContext (..),
+
   -- ** runSpecs
   RunSpecsHook,
   RunSpecsHookContext (..),
@@ -55,6 +60,7 @@ import Skeletest.Internal.TestInfo (TestInfo)
 import Skeletest.Internal.TestRunner (TestResult)
 import Skeletest.Internal.TestTargets (TestTargets)
 import System.IO.Unsafe (unsafePerformIO)
+import UnliftIO.Exception (SomeException)
 
 -- | Hooks for extending Skeletest.
 --
@@ -63,6 +69,7 @@ import System.IO.Unsafe (unsafePerformIO)
 data Hooks = Hooks
   { modifySpecRegistry :: ModifySpecRegistryHook
   , runTest :: RunTestHook
+  , onTestFailure :: OnTestFailureHook
   , runSpecs :: RunSpecsHook
   , modifyTestSummary :: ModifyTestSummaryHook
   }
@@ -72,6 +79,7 @@ instance Semigroup Hooks where
     Hooks
       { modifySpecRegistry = hooks1.modifySpecRegistry <> hooks2.modifySpecRegistry
       , runTest = hooks1.runTest <> hooks2.runTest
+      , onTestFailure = hooks1.onTestFailure <> hooks2.onTestFailure
       , runSpecs = hooks1.runSpecs <> hooks2.runSpecs
       , modifyTestSummary = hooks1.modifyTestSummary <> hooks2.modifyTestSummary
       }
@@ -83,6 +91,7 @@ defaultHooks =
   Hooks
     { modifySpecRegistry = mempty
     , runTest = mempty
+    , onTestFailure = mempty
     , runSpecs = mempty
     , modifyTestSummary = mempty
     }
@@ -129,6 +138,19 @@ type RunTestHook =
     TestResult
 
 data RunTestHookContext = RunTestHookContext
+  { testInfo :: TestInfo
+  }
+
+{----- onTestFailure -----}
+
+-- | Modify what happens if a test fails.
+type OnTestFailureHook =
+  Hook
+    OnTestFailureHookContext
+    SomeException
+    TestResult
+
+data OnTestFailureHookContext = OnTestFailureHookContext
   { testInfo :: TestInfo
   }
 

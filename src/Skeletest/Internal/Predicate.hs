@@ -208,6 +208,8 @@ anything =
     }
 
 -- | A predicate that matches any value after evaluating it deeply.
+--
+-- @since 0.4.0
 anythingDeep :: forall a m. (MonadIO m, NFData a) => Predicate m a
 anythingDeep =
   Predicate
@@ -224,6 +226,8 @@ anythingDeep =
     }
 
 -- | A predicate that matches any value without evaluating to WHNF.
+--
+-- @since 0.4.0
 anyThunk :: forall a m. (Monad m) => Predicate m a
 anyThunk =
   Predicate
@@ -634,6 +638,8 @@ instance HasSubsequences Text where
   isInfixOf = Text.isInfixOf
   isSuffixOf = Text.isSuffixOf
   isEmpty = Text.null
+
+-- | @since 0.4.0
 instance HasSubsequences LazyText.Text where
   isPrefixOf = LazyText.isPrefixOf
   isInfixOf = LazyText.isInfixOf
@@ -719,6 +725,8 @@ hasSuffix suffix =
 --
 -- >>> [] `shouldSatisfy` P.empty
 -- >>> "" `shouldSatisfy` P.empty
+--
+-- @since 0.4.0
 empty :: (HasSubsequences a, Monad m) => Predicate m a
 empty =
   Predicate

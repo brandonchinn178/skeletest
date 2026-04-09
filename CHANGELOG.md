@@ -1,5 +1,7 @@
 ## Unreleased
 
+## v0.4.0
+
 New features:
 * Long tests now display the duration of the test ([#23](https://github.com/brandonchinn178/skeletest/issues/23))
 * Summary of test results now displayed at end of test ([#21](https://github.com/brandonchinn178/skeletest/issues/21))
@@ -7,8 +9,10 @@ New features:
 
 API changes:
 * Re-designed how hooks are defined
-  * Also added `runSpecs` to `Hooks`
-  * Also added `modifyTestSummary` to `Hooks`
+* New hooks:
+  * `runSpecs`
+  * `modifyTestSummary`
+  * `onTestFailure`
 * New `P.empty` predicate for checking empty lists/texts/etc.
 * Add `HasSubsequences` instance for lazy `Text`
 * Remove field prefixes from more constructors (`FlagSpec`, `TestResult`, `SpecInfo`)
@@ -16,6 +20,7 @@ API changes:
 * `P.anything` now forces its argument to WHNF
   * Added `P.anythingDeep` for forcing its argument deeply
   * Added `P.anyThunk` to recover the old behavior
+* New `skipTest` function for skipping tests at runtime
 
 Runtime changes:
 * Sanitize a literal "\`\`\`" line in snapshots ([#27](https://github.com/brandonchinn178/skeletest/issues/27))

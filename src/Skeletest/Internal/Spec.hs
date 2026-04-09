@@ -382,6 +382,8 @@ skipHook =
       }
 
 -- | Like 'X.skip', except allows skipping tests at runtime.
+--
+-- @since 0.4.0
 skipTest :: (MonadIO m) => String -> m a
 skipTest reason = throwIO $ SkipTest (Text.pack reason)
 

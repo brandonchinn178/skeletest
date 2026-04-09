@@ -323,7 +323,7 @@ applyTestSelectionsHook =
 manualTestsHook :: Hooks
 manualTestsHook =
   defaultHooks
-    { modifySpecRegistry = Hooks.mkPreHook $ \ctx inp ->
+    { modifySpecRegistry = Hooks.runLate . Hooks.mkPreHook $ \ctx inp ->
         pure $
           case ctx.testTargets of
             -- only hide manual tests when no selections are specified

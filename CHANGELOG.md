@@ -1,5 +1,8 @@
 ## Unreleased
 
+Bug fixes:
+* Fix snapshots for manual tests detected as outdated when no test selections are specified on the command line
+
 ## v0.4.0
 
 New features:

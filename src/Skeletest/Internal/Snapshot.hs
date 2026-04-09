@@ -176,9 +176,7 @@ data SnapshotResult
 snapshotsHook :: Hooks
 snapshotsHook =
   defaultHooks
-    { modifySpecRegistry = Hooks.mkPreHook_ $ \_ registry -> do
-        -- Collect before the applyTestSelections hook to check for snapshots
-        -- that don't correspond to any tests anymore
+    { modifySpecRegistry = Hooks.runEarly . Hooks.mkPreHook_ $ \_ registry -> do
         modifyIORef' snapshotInfoStoreRef $ \store ->
           store
             { allSnapshotTestIds =

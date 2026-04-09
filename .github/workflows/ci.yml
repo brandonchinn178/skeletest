@@ -73,7 +73,7 @@ jobs:
                ${{ runner.os }}-cabal-cache-${{ env.CURR_MONTH }}-${{ matrix.ghc_version }}-
       -
         name: Build + Test
-        run: cabal test --test-option='not @integration'
+        run: cabal test
       -
         name: Check tests were run
         # check if test log file contains at least 10 lines. can't be 0 because the log
@@ -88,8 +88,8 @@ jobs:
             exit 1
           fi
       -
-        name: Run integration tests
-        run: cabal exec -- cabal test --test-option='@integration'
+        name: Run all tests
+        run: cabal exec -- cabal test --test-option='*'
 
   lint:
     runs-on: ubuntu-latest

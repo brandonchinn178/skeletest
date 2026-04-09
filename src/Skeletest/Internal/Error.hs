@@ -20,6 +20,8 @@ data SkeletestError
     SkeletestError Text
   | -- | A user error during compilation, e.g. during the preprocessor or plugin phases.
     CompilationError (Maybe GHC.SrcSpan) Text
+  | -- | Skip the currently running test
+    SkipTest Text
   deriving (Show)
 
 instance Exception SkeletestError where
@@ -32,6 +34,7 @@ instance Exception SkeletestError where
           , "******************** skeletest failure ********************"
           , msg
           ]
+      SkipTest msg -> "SKIP: " <> msg
 
 skeletestError :: (MonadIO m) => Text -> m a
 skeletestError = throwIO . SkeletestError

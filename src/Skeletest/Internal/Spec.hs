@@ -37,11 +37,15 @@ module Skeletest.Internal.Spec (
   X.withMarkers,
   X.withMarker,
 
+  -- ** Runtime functionality
+  skipTest,
+
   -- ** Plugin
   specTreePlugin,
 ) where
 
 import Control.Concurrent (myThreadId)
+import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.State.Strict qualified as State
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Map.Strict (Map)
@@ -51,10 +55,12 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time (NominalDiffTime)
 import GHC.Records (HasField (..))
+import Skeletest.Internal.Error (SkeletestError (..))
 import Skeletest.Internal.Exit (TestExitCode (..))
 import Skeletest.Internal.Fixtures (FixtureScopeKey (..), cleanupFixtures)
 import Skeletest.Internal.Hooks (
   ModifyTestSummaryHookContext (..),
+  OnTestFailureHookContext (..),
   RunTestHookContext (..),
   userHooks,
  )
@@ -102,6 +108,7 @@ import UnliftIO.Exception (
   catch,
   finally,
   fromException,
+  throwIO,
  )
 
 {----- Execute spec -----}
@@ -175,13 +182,7 @@ instance HasField "runTest" SpecRunner (TestInfo -> SpecTest -> IO TestExitCode)
     tid <- myThreadId
     (result, duration) <-
       (`finally` cleanupFixtures (PerTestFixtureKey tid)) $ do
-        withTimer $
-          userHooks.runTest
-            RunTestHookContext
-              { testInfo
-              }
-            ()
-            (\_ -> test.action `catch` mkTestResultError)
+        withTimer . runTestHook $ test.action `catch` onTestFailureHook mkTestResultError
     runner.testReporter.reportTestPost testInfo (result, duration)
 
     runner.testSummary.update $ \d ->
@@ -195,6 +196,18 @@ instance HasField "runTest" SpecRunner (TestInfo -> SpecTest -> IO TestExitCode)
 
     pure $ if result.status.success then ExitSuccess else ExitTestFailure
    where
+    runTestHook action =
+      let ctx =
+            RunTestHookContext
+              { testInfo
+              }
+       in userHooks.runTest ctx () $ \() -> action
+    onTestFailureHook action e =
+      let ctx =
+            OnTestFailureHookContext
+              { testInfo
+              }
+       in userHooks.onTestFailure ctx e action
     mkTestResultError e =
       case fromException e of
         Just e' -> testResultFromAssertionFail e'
@@ -353,15 +366,24 @@ skipHook =
   defaultHooks
     { runTest = Hooks.mkHook $ \ctx run ->
         case findMarker (ctx.testInfo.markers) of
-          Just (MarkerSkip reason) ->
-            const . pure $
-              TestResult
-                { status = TestSkipped
-                , label = Color.yellow "SKIP"
-                , message = TestResultMessageInline reason
-                }
+          Just (MarkerSkip reason) -> \_ -> pure $ skipResult reason
           Nothing -> run
+    , onTestFailure = Hooks.mkHook $ \_ run e ->
+        case fromException e of
+          Just (SkipTest reason) -> pure $ skipResult reason
+          _ -> run e
     }
+ where
+  skipResult reason =
+    TestResult
+      { status = TestSkipped
+      , label = Color.yellow "SKIP"
+      , message = TestResultMessageInline reason
+      }
+
+-- | Like 'X.skip', except allows skipping tests at runtime.
+skipTest :: (MonadIO m) => String -> m a
+skipTest reason = throwIO $ SkipTest (Text.pack reason)
 
 focusHook :: Hooks
 focusHook =

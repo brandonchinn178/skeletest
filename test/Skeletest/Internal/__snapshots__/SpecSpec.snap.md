@@ -14,6 +14,18 @@
   • 2 tests skipped ≫
 ```
 
+## skipTest ≫ skips tests at runtime
+
+```
+./ExampleSpec.hs
+    should be skipped: SKIP
+        reason
+
+═════ Test report ═════
+➤ 1 test ran in 0.00s
+  • 1 test skipped ≫
+```
+
 ## xfail ≫ checks for expected failures
 
 ```

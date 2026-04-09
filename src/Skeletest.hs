@@ -16,7 +16,9 @@ module Skeletest (
   withMarkers,
   withMarker,
 
-  -- * Assertions
+  -- * Implementing tests
+
+  -- ** Assertions
   shouldBe,
   shouldNotBe,
   shouldSatisfy,
@@ -27,6 +29,9 @@ module Skeletest (
   HasCallStack,
   Predicate,
   Testable,
+
+  -- ** Modify test execution
+  skipTest,
 
   -- * Properties
   Property,

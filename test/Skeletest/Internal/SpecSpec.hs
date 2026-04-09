@@ -20,7 +20,23 @@ spec = do
         , "  it \"should not run\" $ undefined"
         , "  it \"should not run either\" $ undefined"
         ]
+      (stdout, stderr) <- expectSuccess runner.runTests
+      stderr `shouldBe` ""
+      stdout `shouldSatisfy` P.matchesSnapshot
 
+  describe "skipTest" $ do
+    integration . it "skips tests at runtime" $ do
+      runner <- getFixture @TestRunner
+      runner.addTestFile "ExampleSpec.hs" $
+        [ "module ExampleSpec (spec) where"
+        , ""
+        , "import Skeletest"
+        , ""
+        , "spec = do"
+        , "  it \"should be skipped\" $ do"
+        , "    skipTest \"reason\""
+        , "    error \"fail\""
+        ]
       (stdout, stderr) <- expectSuccess runner.runTests
       stderr `shouldBe` ""
       stdout `shouldSatisfy` P.matchesSnapshot

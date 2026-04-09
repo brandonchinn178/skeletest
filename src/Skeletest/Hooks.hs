@@ -17,6 +17,10 @@ module Skeletest.Hooks (
   X.RunTestHook,
   X.RunTestHookContext (..),
 
+  -- *** onTestFailure
+  X.OnTestFailureHook,
+  X.OnTestFailureHookContext (..),
+
   -- *** runSpecs
   X.RunSpecsHook,
   X.RunSpecsHookContext (..),

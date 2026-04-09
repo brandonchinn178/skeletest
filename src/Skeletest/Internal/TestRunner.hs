@@ -63,8 +63,6 @@ class (MonadIO m) => Testable m where
 
 {----- TestResult -----}
 
--- TODO: Change success -> PASS/FAIL/SKIP
--- https://github.com/brandonchinn178/skeletest/issues/89
 data TestResult = TestResult
   { status :: TestResultStatus
   , label :: Text

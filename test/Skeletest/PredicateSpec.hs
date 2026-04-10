@@ -11,7 +11,7 @@ import Skeletest
 import Skeletest.Internal.Predicate (PredicateResult (..), runPredicate)
 import Skeletest.Predicate qualified as P
 import Skeletest.TestUtils.Integration
-import UnliftIO.Exception (Exception, SomeException, throwIO)
+import UnliftIO.Exception (Exception, throwIO)
 
 data User = User
   { name :: String
@@ -34,7 +34,7 @@ spec = do
         "hello" `shouldSatisfy` P.anything
       it "finds bottom" $ do
         let action = bottom `shouldSatisfy` P.anything
-        action `shouldSatisfy` P.throws @SomeException P.anything
+        action `shouldSatisfy` P.throwsAny
       it "ignores nested bottom" $ do
         Just bottom `shouldSatisfy` P.anything
 
@@ -44,10 +44,10 @@ spec = do
         "hello" `shouldSatisfy` P.anythingDeep
       it "finds bottom" $ do
         let action = bottom `shouldSatisfy` P.anythingDeep
-        action `shouldSatisfy` P.throws @SomeException P.anything
+        action `shouldSatisfy` P.throwsAny
       it "finds nested bottom" $ do
         let action = Just bottom `shouldSatisfy` P.anythingDeep
-        action `shouldSatisfy` P.throws @SomeException P.anything
+        action `shouldSatisfy` P.throwsAny
 
     describe "anyThunk" $ do
       it "matches anything" $ do
@@ -408,6 +408,11 @@ spec = do
         snapshotFailure (P.throws (exc 500)) throw404
         snapshotFailure (P.throws (exc 500)) (pure 1)
         snapshotFailure (P.not $ P.throws (exc 404)) throw404
+
+    describe "throwsAny" $ do
+      it "checks exception" $ do
+        throwIO (HttpException 404) `shouldSatisfy` P.throwsAny
+        (error "bad") `shouldSatisfy` P.throwsAny
 
 snapshotFailure :: (HasCallStack) => Predicate IO a -> a -> IO ()
 snapshotFailure p x = runPredicate p x `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)

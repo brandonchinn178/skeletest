@@ -51,6 +51,7 @@ module Skeletest.Predicate (
   -- * IO
   returns,
   throws,
+  throwsAny,
 
   -- * Functions
   (===),

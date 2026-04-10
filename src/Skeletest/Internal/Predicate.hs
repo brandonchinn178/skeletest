@@ -68,6 +68,7 @@ module Skeletest.Internal.Predicate (
   -- * IO
   returns,
   throws,
+  throwsAny,
 
   -- * Utilities
   render,
@@ -94,7 +95,14 @@ import Skeletest.Internal.Utils.HList (HList (..))
 import Skeletest.Internal.Utils.HList qualified as HList
 import Skeletest.Internal.Utils.Text (indent, parens)
 import UnliftIO (MonadUnliftIO)
-import UnliftIO.Exception (Exception, displayException, evaluate, evaluateDeep, try)
+import UnliftIO.Exception (
+  Exception,
+  SomeException,
+  displayException,
+  evaluate,
+  evaluateDeep,
+  try,
+ )
 import Prelude hiding (abs, all, and, any, elem, not, or, (&&), (||))
 import Prelude qualified
 
@@ -821,6 +829,10 @@ throws Predicate{..} =
  where
   disp = "throws (" <> predicateDisp <> ")"
   dispNeg = "does not throw (" <> predicateDisp <> ")"
+
+-- | Same as 'throws', except matches any exception.
+throwsAny :: (MonadUnliftIO m) => Predicate m (m a)
+throwsAny = throws @SomeException anything
 
 {----- Utilities -----}
 

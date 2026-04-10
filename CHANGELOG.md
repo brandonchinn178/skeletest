@@ -1,5 +1,11 @@
 ## Unreleased
 
+Bug fixes:
+* Fix exporting `P.anythingDeep` / `P.anyThunk`
+
+API changes:
+* Add `P.throwsAny`
+
 ## v0.4.1
 
 Bug fixes:

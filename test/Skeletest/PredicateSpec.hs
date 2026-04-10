@@ -11,7 +11,7 @@ import Skeletest
 import Skeletest.Internal.Predicate (PredicateResult (..), runPredicate)
 import Skeletest.Predicate qualified as P
 import Skeletest.TestUtils.Integration
-import UnliftIO.Exception (Exception, throwIO)
+import UnliftIO.Exception (Exception, SomeException, throwIO)
 
 data User = User
   { name :: String
@@ -26,10 +26,37 @@ instance Exception HttpException
 spec :: Spec
 spec = do
   describe "General" $ do
+    let bottom = error "boom" :: ()
+
     describe "anything" $ do
       it "matches anything" $ do
-        1 `shouldSatisfy` P.anything
+        (1 :: Int) `shouldSatisfy` P.anything
         "hello" `shouldSatisfy` P.anything
+      it "finds bottom" $ do
+        let action = bottom `shouldSatisfy` P.anything
+        action `shouldSatisfy` P.throws @SomeException P.anything
+      it "ignores nested bottom" $ do
+        Just bottom `shouldSatisfy` P.anything
+
+    describe "anythingDeep" $ do
+      it "matches anything" $ do
+        (1 :: Int) `shouldSatisfy` P.anythingDeep
+        "hello" `shouldSatisfy` P.anythingDeep
+      it "finds bottom" $ do
+        let action = bottom `shouldSatisfy` P.anythingDeep
+        action `shouldSatisfy` P.throws @SomeException P.anything
+      it "finds nested bottom" $ do
+        let action = Just bottom `shouldSatisfy` P.anythingDeep
+        action `shouldSatisfy` P.throws @SomeException P.anything
+
+    describe "anyThunk" $ do
+      it "matches anything" $ do
+        (1 :: Int) `shouldSatisfy` P.anyThunk
+        "hello" `shouldSatisfy` P.anyThunk
+      it "ignores bottom" $ do
+        bottom `shouldSatisfy` P.anyThunk
+      it "ignores nested bottom" $ do
+        Just bottom `shouldSatisfy` P.anyThunk
 
   describe "Ord" $ do
     describe "eq" $ do

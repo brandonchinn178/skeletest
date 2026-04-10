@@ -3,6 +3,8 @@ module Skeletest.Predicate (
 
   -- * General
   anything,
+  anythingDeep,
+  anyThunk,
 
   -- * Ord
   eq,

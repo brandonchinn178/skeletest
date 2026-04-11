@@ -831,6 +831,8 @@ throws Predicate{..} =
   dispNeg = "does not throw (" <> predicateDisp <> ")"
 
 -- | Same as 'throws', except matches any exception.
+--
+-- @since 0.4.2
 throwsAny :: (MonadUnliftIO m) => Predicate m (m a)
 throwsAny = throws @SomeException anything
 

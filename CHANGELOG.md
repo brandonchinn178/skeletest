@@ -1,5 +1,7 @@
 ## Unreleased
 
+## v0.4.2
+
 Bug fixes:
 * Fix exporting `P.anythingDeep` / `P.anyThunk`
 

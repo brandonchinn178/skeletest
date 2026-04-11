@@ -26,10 +26,37 @@ instance Exception HttpException
 spec :: Spec
 spec = do
   describe "General" $ do
+    let bottom = error "boom" :: ()
+
     describe "anything" $ do
       it "matches anything" $ do
-        1 `shouldSatisfy` P.anything
+        (1 :: Int) `shouldSatisfy` P.anything
         "hello" `shouldSatisfy` P.anything
+      it "finds bottom" $ do
+        let action = bottom `shouldSatisfy` P.anything
+        action `shouldSatisfy` P.throwsAny
+      it "ignores nested bottom" $ do
+        Just bottom `shouldSatisfy` P.anything
+
+    describe "anythingDeep" $ do
+      it "matches anything" $ do
+        (1 :: Int) `shouldSatisfy` P.anythingDeep
+        "hello" `shouldSatisfy` P.anythingDeep
+      it "finds bottom" $ do
+        let action = bottom `shouldSatisfy` P.anythingDeep
+        action `shouldSatisfy` P.throwsAny
+      it "finds nested bottom" $ do
+        let action = Just bottom `shouldSatisfy` P.anythingDeep
+        action `shouldSatisfy` P.throwsAny
+
+    describe "anyThunk" $ do
+      it "matches anything" $ do
+        (1 :: Int) `shouldSatisfy` P.anyThunk
+        "hello" `shouldSatisfy` P.anyThunk
+      it "ignores bottom" $ do
+        bottom `shouldSatisfy` P.anyThunk
+      it "ignores nested bottom" $ do
+        Just bottom `shouldSatisfy` P.anyThunk
 
   describe "Ord" $ do
     describe "eq" $ do
@@ -381,6 +408,11 @@ spec = do
         snapshotFailure (P.throws (exc 500)) throw404
         snapshotFailure (P.throws (exc 500)) (pure 1)
         snapshotFailure (P.not $ P.throws (exc 404)) throw404
+
+    describe "throwsAny" $ do
+      it "checks exception" $ do
+        throwIO (HttpException 404) `shouldSatisfy` P.throwsAny
+        (error "bad") `shouldSatisfy` P.throwsAny
 
 snapshotFailure :: (HasCallStack) => Predicate IO a -> a -> IO ()
 snapshotFailure p x = runPredicate p x `shouldSatisfy` P.returns (P.con $ PredicateFail P.matchesSnapshot)

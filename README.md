@@ -90,6 +90,8 @@ instance Fixture DbConnFixture where
 
     Options may be specified as `-optF=<name>:<value>`. See [Options](#options).
 
+    * `-threaded` may be needed here. See [Animations aren't running on long tests](#animations-arent-running-on-long-tests)
+
 1. Add `Main.hs`:
 
     ```haskell
@@ -499,3 +501,15 @@ plugins =
   [ myPlugin
   ]
 ```
+
+## Troubleshooting
+
+### Animations aren't running on long tests
+
+Normally if a test is taking a long time, Skeletest displays an animated spinner in the output. But in certain scenarios, the spinner might require `-threaded`:
+
+* Test spawns and waits on a subprocess (e.g. `callProcess`, `readProcess`)
+* Test calls C FFI code
+* Test runs CPU-bound Haskell loops that don't allocate
+
+If your test suite does any of these, add `-threaded` to `ghc-options`. In some cases (e.g. when the C FFI code is `unsafe`), you'll additionally need `-with-rtsopts=-N`.

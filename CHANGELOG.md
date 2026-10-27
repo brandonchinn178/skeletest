@@ -1,5 +1,8 @@
 ## Unreleased
 
+API changes:
+* Add `P.pred`
+
 ## v0.4.2
 
 Bug fixes:

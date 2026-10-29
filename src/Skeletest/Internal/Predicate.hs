@@ -20,6 +20,7 @@ module Skeletest.Internal.Predicate (
   anything,
   anythingDeep,
   anyThunk,
+  pred,
 
   -- * Ord
   eq,
@@ -103,7 +104,7 @@ import UnliftIO.Exception (
   evaluateDeep,
   try,
  )
-import Prelude hiding (abs, all, and, any, elem, not, or, (&&), (||))
+import Prelude hiding (abs, all, and, any, elem, not, or, pred, (&&), (||))
 import Prelude qualified
 
 data Predicate m a = Predicate
@@ -249,6 +250,14 @@ anyThunk =
     , predicateDisp = "any thunk"
     , predicateDispNeg = "not any thunk"
     }
+
+-- | A predicate that matches a value satisfying the given condition.
+--
+-- Equivalent to @f P.>>> P.eq True@.
+--
+-- @since 0.4.3
+pred :: forall a m. (Monad m) => (a -> Bool) -> Predicate m a
+pred f = f >>> eq True
 
 {----- Ord -----}
 

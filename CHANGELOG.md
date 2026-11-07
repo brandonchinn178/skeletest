@@ -1,4 +1,7 @@
-## Unreleased
+## v0.4.3
+
+Bug fixes:
+* Fixed potential issue with user hooks not running
 
 API changes:
 * Add `P.check`

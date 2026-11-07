@@ -23,9 +23,7 @@ Follow these steps to release this project:
 
 1. Create a new branch
     1. Bump version in `skeletest.cabal`
-    1. Curate `CHANGELOG.md`, creating a new section for this version and
-       moving everything previously in `Unreleased` into the new section
-       (keeping `Unreleased` as a section)
+    1. Update `CHANGELOG.md`
     1. Add comments to new features indicating when it was added (e.g.
        `-- @since 2.0.0`)
     1. Run `cabal haddock` and skim through documentation

@@ -100,20 +100,23 @@ defaultHooks =
 
 userHooksRef :: IORef Hooks
 userHooksRef = unsafePerformIO $ newIORef defaultHooks
+{-# OPAQUE userHooksRef #-}
 
 setUserHooks :: Hooks -> IO ()
 setUserHooks = writeIORef userHooksRef
 
 userHooks :: UserHooks
-userHooks = unsafePerformIO $ UserHooks <$> readIORef userHooksRef
+userHooks = UserHooks $ readIORef userHooksRef
 
-newtype UserHooks = UserHooks Hooks
+newtype UserHooks = UserHooks (IO Hooks)
 
 instance
   (HasField field Hooks (Hook ctx inp out)) =>
   HasField field UserHooks (ctx -> inp -> (inp -> IO out) -> IO out)
   where
-  getField (UserHooks hooks) = runHook (getField @field hooks)
+  getField (UserHooks getHooks) ctx inp f = do
+    hooks <- getHooks
+    runHook (getField @field hooks) ctx inp f
 
 {----- modifySpecRegistry -----}
 

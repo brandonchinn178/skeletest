@@ -192,7 +192,7 @@ fixtureRegistryRef = unsafePerformIO $ newIORef emptyFixtureRegistry
       , fileFixtures = Map.empty
       , testFixtures = Map.empty
       }
-{-# NOINLINE fixtureRegistryRef #-}
+{-# OPAQUE fixtureRegistryRef #-}
 
 modifyFixtureRegistry :: (FixtureRegistry -> (FixtureRegistry, a)) -> IO a
 modifyFixtureRegistry = atomicModifyIORef fixtureRegistryRef

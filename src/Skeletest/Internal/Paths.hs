@@ -18,7 +18,7 @@ import System.IO.Unsafe (unsafePerformIO)
 
 originalDirectoryRef :: IORef FilePath
 originalDirectoryRef = unsafePerformIO $ newIORef (invariantViolation "Original directory not set")
-{-# NOINLINE originalDirectoryRef #-}
+{-# OPAQUE originalDirectoryRef #-}
 
 data TestRoot = TestRootBuildDir | TestRootCWD | TestRoot FilePath
 

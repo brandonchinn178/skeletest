@@ -68,7 +68,7 @@ globalTermData = unsafePerformIO $ do
     supportsANSI <- ANSI.hSupportsANSI handle
     let lastInPlaceOutput = Nothing
     Handle <$> newMVar Handle'{..}
-{-# NOINLINE globalTermData #-}
+{-# OPAQUE globalTermData #-}
 
 init :: IO ()
 init = do

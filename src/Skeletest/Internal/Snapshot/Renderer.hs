@@ -57,7 +57,7 @@ defaultSnapshotRenderers =
 
 snapshotRenderersRef :: IORef [SnapshotRenderer]
 snapshotRenderersRef = unsafePerformIO $ newIORef []
-{-# NOINLINE snapshotRenderersRef #-}
+{-# OPAQUE snapshotRenderersRef #-}
 
 setSnapshotRenderers :: [SnapshotRenderer] -> IO ()
 setSnapshotRenderers = writeIORef snapshotRenderersRef

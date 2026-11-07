@@ -472,7 +472,7 @@ insertFlagStore x = Map.insert (typeOf x) (toDyn x)
 
 cliFlagStoreRef :: IORef CLIFlagStore
 cliFlagStoreRef = unsafePerformIO $ newIORef Map.empty
-{-# NOINLINE cliFlagStoreRef #-}
+{-# OPAQUE cliFlagStoreRef #-}
 
 setCliFlagStore :: CLIFlagStore -> IO ()
 setCliFlagStore = writeIORef cliFlagStoreRef

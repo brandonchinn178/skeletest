@@ -40,7 +40,7 @@ type TestInfoMap = Map ThreadId TestInfo
 
 testInfoMapRef :: IORef TestInfoMap
 testInfoMapRef = unsafePerformIO $ newIORef Map.empty
-{-# NOINLINE testInfoMapRef #-}
+{-# OPAQUE testInfoMapRef #-}
 
 withTestInfo :: (MonadUnliftIO m) => TestInfo -> m a -> m a
 withTestInfo info m = do

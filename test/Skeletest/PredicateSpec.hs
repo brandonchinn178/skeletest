@@ -58,6 +58,15 @@ spec = do
       it "ignores nested bottom" $ do
         Just bottom `shouldSatisfy` P.anyThunk
 
+    describe "check" $ do
+      it "checks using callback" $ do
+        1 `shouldSatisfy` P.check odd
+        1 `shouldNotSatisfy` P.check even
+
+      it "shows helpful failure messages" $ do
+        snapshotFailure (P.check (odd . (+ 1))) 1
+        snapshotFailure (P.not $ P.check (odd . (+ 1))) 2
+
   describe "Ord" $ do
     describe "eq" $ do
       it "checks equality" $ do

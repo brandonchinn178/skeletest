@@ -1,7 +1,7 @@
 ## Unreleased
 
 API changes:
-* Add `P.pred`
+* Add `P.check`
 
 ## v0.4.2
 

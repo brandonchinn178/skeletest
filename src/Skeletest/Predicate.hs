@@ -5,7 +5,7 @@ module Skeletest.Predicate (
   anything,
   anythingDeep,
   anyThunk,
-  pred,
+  check,
 
   -- * Ord
   eq,

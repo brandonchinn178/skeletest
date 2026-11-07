@@ -237,7 +237,7 @@ snapshotInfoStoreRef =
       , numSnapshotsUpdated = 0
       , numSnapshotFilesCleanedUp = 0
       }
-{-# NOINLINE snapshotInfoStoreRef #-}
+{-# OPAQUE snapshotInfoStoreRef #-}
 
 getTestIds :: Spec -> [SnapshotTestId]
 getTestIds = concatMap (go Seq.empty) . getSpecTrees

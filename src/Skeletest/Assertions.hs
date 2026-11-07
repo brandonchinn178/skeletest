@@ -97,4 +97,4 @@ failTest' msg = do
 
 failContextRef :: IORef FailContext
 failContextRef = unsafePerformIO $ newIORef []
-{-# NOINLINE failContextRef #-}
+{-# OPAQUE failContextRef #-}

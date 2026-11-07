@@ -1,5 +1,21 @@
 # test/Skeletest/PredicateSpec.hs
 
+## General ≫ check ≫ shows helpful failure messages
+
+```
+1 does not match (odd . (+ 1))
+```
+
+```
+2 matches (odd . (+ 1))
+
+Expected:
+  does not match (odd . (+ 1))
+
+Got:
+  2
+```
+
 ## Ord ≫ eq ≫ shows helpful failure messages
 
 ```

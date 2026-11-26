@@ -392,7 +392,21 @@ The following fixtures are available out of the box:
     ```haskell
     FixtureTmpDir tmpDir <- getFixture
     writeFile (tmpDir </> "myfile.txt") "test"
-    ````
+    ```
+
+* `FixtureCapturedOutput` - Returns functions to read the captured stdout/stderr. See [Output capturing](#output-capturing)
+
+    ```haskell
+    output <- getFixture @FixtureCapturedOutput
+
+    -- Read all of stdout/stderr so far
+    stdout <- output.getStdout
+    stderr <- output.getStderr
+
+    -- Read everything in stdout/stderr since the last read
+    stdout_chunk <- output.readStdout
+    stderr_chunk <- output.readStderr
+    ```
 
 ### Markers
 

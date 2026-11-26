@@ -38,7 +38,7 @@ import System.Console.ANSI qualified as ANSI
 import System.Console.Terminal.Size qualified as TermSize
 import System.IO qualified as IO
 import System.IO.Unsafe (unsafePerformIO)
-import UnliftIO.MVar (MVar, modifyMVar_, newMVar, readMVar, withMVar)
+import UnliftIO.MVar (MVar, modifyMVarMasked_, newMVar, readMVar, withMVar)
 import Prelude hiding (init)
 
 data GlobalTermData = GlobalTermData
@@ -99,7 +99,7 @@ supportsANSI (Handle hvar) = (.supportsANSI) <$> readMVar hvar
 setANSISupport :: Bool -> IO ()
 setANSISupport x =
   forM_ [globalTermData.stdout, globalTermData.stderr] $ \(Handle hvar) -> do
-    modifyMVar_ hvar $ \h -> pure h{supportsANSI = x}
+    modifyMVarMasked_ hvar $ \h -> pure h{supportsANSI = x}
 
 flush :: IO ()
 flush = do
@@ -119,10 +119,10 @@ outputErrN :: Text -> IO ()
 outputErrN = outputNWith globalTermData.stderr
 
 outputWith :: Handle -> Text -> IO ()
-outputWith (Handle hvar) s = modifyMVar_ hvar $ \h -> outputWith' h s
+outputWith (Handle hvar) s = modifyMVarMasked_ hvar $ \h -> outputWith' h s
 
 outputNWith :: Handle -> Text -> IO ()
-outputNWith (Handle hvar) s = modifyMVar_ hvar $ \h -> outputNWith' h s
+outputNWith (Handle hvar) s = modifyMVarMasked_ hvar $ \h -> outputNWith' h s
 
 outputWith' :: Handle' -> Text -> IO Handle'
 outputWith' h s = do
@@ -143,14 +143,14 @@ outputNWith' h s = do
 -- Long-term, should probably be replaced with concurrent-output, but it's
 -- currently hardcoded to IO.stdout.
 outputInPlace :: Text -> IO ()
-outputInPlace s = modifyMVar_ globalTermData.stdout.var $ \h0 -> do
+outputInPlace s = modifyMVarMasked_ globalTermData.stdout.var $ \h0 -> do
   h1 <- clearInPlaceWith' h0
   h2 <- outputNWith' h1 s
   pure h2{lastInPlaceOutput = Just s}
 
 -- | Clear last in-place output. See 'outputInPlace'.
 clearInPlace :: IO ()
-clearInPlace = modifyMVar_ globalTermData.stdout.var $ \h -> clearInPlaceWith' h
+clearInPlace = modifyMVarMasked_ globalTermData.stdout.var $ \h -> clearInPlaceWith' h
 
 clearInPlaceWith' :: Handle' -> IO Handle'
 clearInPlaceWith' h = do

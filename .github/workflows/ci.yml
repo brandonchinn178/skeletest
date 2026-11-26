@@ -16,7 +16,7 @@ jobs:
           - '9.12'
           - '9.14'
         include:
-          - ghc_version: '9.8.1'
+          - ghc_version: '9.8.2'
             oldest: true
 
     name: build_and_test (${{ matrix.ghc_version }})
